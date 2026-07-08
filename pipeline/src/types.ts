@@ -39,7 +39,10 @@ export interface Step0Result {
   pr: number;
   title: string;
   verdict: Verdict;
+  /** Stable code for aggregation (e.g. has_logic_files, no_logic_files(docs)). */
   reason: string;
+  /** Human-readable detail (line counts etc.) — not for aggregation. */
+  reasonDetail: string;
   fileClasses: Partial<Record<FileClass, number>>;
   logicFileCount: number;
   logicChangeLines: number;

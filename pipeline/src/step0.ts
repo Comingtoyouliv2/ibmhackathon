@@ -76,12 +76,12 @@ function main() {
   const order: Record<string, number> = { pass: 0, deferred: 1, excluded: 2 };
   const csvRows = [...results].sort((a, b) => order[a.verdict] - order[b.verdict] || b.pr - a.pr);
   const csv = [
-    ['pr', 'verdict', 'reason', 'signal_strength', 'logic_files', 'logic_lines', 'total_lines',
+    ['pr', 'verdict', 'reason', 'reason_detail', 'signal_strength', 'logic_files', 'logic_lines', 'total_lines',
       'title', 'author', 'bot', 'draft',
       ...CLASSES.map((c) => `files_${c}`), 'files_total', 'updated_at', 'url'].join(','),
     ...csvRows.map((r) =>
       [
-        r.pr, r.verdict, r.reason, r.signalStrength,
+        r.pr, r.verdict, r.reason, esc(r.reasonDetail), r.signalStrength,
         r.logicFileCount, r.logicChangeLines, r.totalChangeLines,
         esc(r.title), esc(r.authorLogin),
         r.authorIsBot ? 'Y' : '', r.isDraft ? 'Y' : '',

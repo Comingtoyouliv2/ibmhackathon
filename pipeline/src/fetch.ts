@@ -213,7 +213,7 @@ async function hydrateTruncatedFiles(slims: SlimResult[]): Promise<RawPr[]> {
     }
     console.log(`  paginating files for #${pr.number} (${pr.changedFiles} total)...`);
     const files = await fetchAllPrFiles(pr.number, pr.files, fileCursor, fileHasNext);
-    out.push({ ...pr, files, filesTruncated: false });
+    out.push({ ...pr, files, filesTruncated: files.length < pr.changedFiles });
   }
   return out;
 }

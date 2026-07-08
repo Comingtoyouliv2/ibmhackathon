@@ -111,6 +111,7 @@ export function classifyPr(pr: RawPr): Step0Result {
 
   let verdict: Verdict;
   let reason: string;
+  let reasonDetail = lineHint;
 
   if (DEPS_BOT.test(pr.authorLogin)) {
     verdict = 'excluded';
@@ -118,19 +119,20 @@ export function classifyPr(pr: RawPr): Step0Result {
   } else if (pr.files.length === 0 && !pr.filesTruncated) {
     verdict = 'excluded';
     reason = 'no_files';
+    reasonDetail = '';
   } else if (logicFileCount === 0 && !pr.filesTruncated) {
     const dominant = dominantClass(fileClasses);
     const lowSignal =
-      totalChangeLines <= LOW_TOTAL_LINE_THRESHOLD ? ',low_signal' : '';
+      totalChangeLines <= LOW_TOTAL_LINE_THRESHOLD ? ', low_signal' : '';
     verdict = 'excluded';
-    reason = `no_logic_files(${dominant},${lineHint}${lowSignal})`;
+    reason = `no_logic_files(${dominant})`;
+    reasonDetail = `${lineHint}${lowSignal}`;
   } else if (pr.mergeable === 'CONFLICTING') {
     verdict = 'deferred';
-    reason = `git_conflict_with_main(${lineHint})`;
+    reason = 'git_conflict_with_main';
   } else {
     verdict = 'pass';
-    const truncatedNote = pr.filesTruncated ? ',file_list_truncated' : '';
-    reason = `has_logic_files(${lineHint}${truncatedNote})`;
+    reason = pr.filesTruncated ? 'has_logic_files(file_list_truncated)' : 'has_logic_files';
   }
 
   return {
@@ -138,6 +140,7 @@ export function classifyPr(pr: RawPr): Step0Result {
     title: pr.title,
     verdict,
     reason,
+    reasonDetail,
     fileClasses,
     logicFileCount,
     logicChangeLines,

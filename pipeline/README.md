@@ -52,7 +52,7 @@ npm run export-seed -- 12345 "short note"
 - **No LLM in Step 0** — deterministic rules only, so every exclusion is auditable (`reason` field).
 - **Exclude only when 100% certain**: a PR is kept if it touches even one logic file; truncated file lists (>100 files) are paginated and fully classified.
 - **Config vs logic**: infra config (`.github/`, root `*.yml`, tooling configs) is excluded; application config under `src/` counts as logic.
-- **Line hints in `reason`**: e.g. `has_logic_files(2 logic files, 24 logic lines / 42 total)` for auditability.
-- **`signalStrength`** (`high`/`low`/`unknown`): Step 1 prioritization hint — high = multiple logic files or ≥10 logic lines; unknown when file list was truncated before pagination.
+- **Line hints in `reasonDetail`**: e.g. `2 logic files, 24 logic lines / 42 total` — kept out of `reason` so report aggregation stays groupable.
+- **`signalStrength`** (`high`/`low`/`unknown`): Step 1 prioritization hint — low = not a pass, or a 1-file <10-line logic sliver inside a >50-line PR; high = any other pass with logic changes; unknown = file list incomplete.
 - **`deferred`** = has logic changes but currently git-conflicts with main. GitHub already catches those; they re-enter after rebase.
 - **Bot PRs excluded** (dependabot/renovate/github-actions only) — AI agent PRs are kept as the target population.
