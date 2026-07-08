@@ -1,0 +1,160 @@
+{
+  "version": 1,
+  "note": "Frozen PR snapshots for Step 0 regression. Survives merge/close — not live GitHub fetches.",
+  "cases": [
+    {
+      "id": "openclaw-101471",
+      "note": "Real: compaction overflow guard skip — 2 logic files, collision case A",
+      "expect": "pass",
+      "reasonIncludes": "has_logic_files",
+      "pr": {
+        "number": 101471,
+        "title": "fix(agents): skip preemptive overflow check when context engine owns compaction",
+        "body": "",
+        "isDraft": false,
+        "mergeable": "MERGEABLE",
+        "additions": 35,
+        "deletions": 7,
+        "changedFiles": 3,
+        "createdAt": "2026-07-07T07:57:42Z",
+        "updatedAt": "2026-07-07T11:45:54Z",
+        "authorLogin": "mpz4life",
+        "authorIsBot": false,
+        "labels": ["agents"],
+        "files": [
+          { "path": "src/agents/embedded-agent-runner/run/attempt.ts", "additions": 1, "deletions": 0 },
+          { "path": "src/agents/embedded-agent-runner/tool-result-context-guard.test.ts", "additions": 18, "deletions": 0 },
+          { "path": "src/agents/embedded-agent-runner/tool-result-context-guard.ts", "additions": 16, "deletions": 7 }
+        ],
+        "filesTruncated": false
+      }
+    },
+    {
+      "id": "openclaw-95272",
+      "note": "Real: session self-compaction action — 8 logic files, collision case B",
+      "expect": "pass",
+      "reasonIncludes": "has_logic_files",
+      "pr": {
+        "number": 95272,
+        "title": "feat(agent): add session self-compaction action",
+        "body": "",
+        "isDraft": true,
+        "mergeable": "MERGEABLE",
+        "additions": 384,
+        "deletions": 26,
+        "changedFiles": 11,
+        "createdAt": "2026-06-20T07:42:53Z",
+        "updatedAt": "2026-07-07T08:26:40Z",
+        "authorLogin": "yu-xin-c",
+        "authorIsBot": false,
+        "labels": ["agents"],
+        "files": [
+          { "path": "src/agents/agent-tools.ts", "additions": 9, "deletions": 0 },
+          { "path": "src/agents/embedded-agent-runner/run/attempt.cwd-split.test.ts", "additions": 16, "deletions": 0 },
+          { "path": "src/agents/embedded-agent-runner/run/attempt.sessions-yield.ts", "additions": 75, "deletions": 3 },
+          { "path": "src/agents/embedded-agent-runner/run/attempt.ts", "additions": 62, "deletions": 16 },
+          { "path": "src/agents/openclaw-tools.session-status.test.ts", "additions": 98, "deletions": 1 },
+          { "path": "src/agents/openclaw-tools.ts", "additions": 10, "deletions": 1 },
+          { "path": "src/agents/prompt-surface.ts", "additions": 1, "deletions": 1 },
+          { "path": "src/agents/tool-description-presets.ts", "additions": 1, "deletions": 0 },
+          { "path": "src/agents/tool-mutation.test.ts", "additions": 16, "deletions": 2 },
+          { "path": "src/agents/tool-mutation.ts", "additions": 4, "deletions": 1 },
+          { "path": "src/agents/tools/session-status-tool.ts", "additions": 92, "deletions": 1 }
+        ],
+        "filesTruncated": false
+      }
+    },
+    {
+      "id": "synthetic-docs-only",
+      "note": "Synthetic: docs-only PR → excluded",
+      "expect": "excluded",
+      "reasonIncludes": "no_logic_files(docs",
+      "pr": {
+        "number": 90001,
+        "title": "docs: update README",
+        "body": "",
+        "isDraft": false,
+        "mergeable": "MERGEABLE",
+        "additions": 5,
+        "deletions": 0,
+        "changedFiles": 1,
+        "createdAt": "2026-01-01T00:00:00Z",
+        "updatedAt": "2026-01-01T00:00:00Z",
+        "authorLogin": "human",
+        "authorIsBot": false,
+        "labels": [],
+        "files": [{ "path": "README.md", "additions": 5, "deletions": 0 }],
+        "filesTruncated": false
+      }
+    },
+    {
+      "id": "synthetic-deps-bot",
+      "note": "Synthetic: dependabot author → excluded regardless of files",
+      "expect": "excluded",
+      "reasonIncludes": "deps_bot_author",
+      "pr": {
+        "number": 90002,
+        "title": "chore(deps): bump lodash",
+        "body": "",
+        "isDraft": false,
+        "mergeable": "MERGEABLE",
+        "additions": 1,
+        "deletions": 1,
+        "changedFiles": 1,
+        "createdAt": "2026-01-01T00:00:00Z",
+        "updatedAt": "2026-01-01T00:00:00Z",
+        "authorLogin": "dependabot[bot]",
+        "authorIsBot": true,
+        "labels": [],
+        "files": [{ "path": "package.json", "additions": 1, "deletions": 1 }],
+        "filesTruncated": false
+      }
+    },
+    {
+      "id": "synthetic-src-yaml",
+      "note": "Synthetic: src/*.yaml is logic (not infra config) → pass",
+      "expect": "pass",
+      "reasonIncludes": "has_logic_files",
+      "pr": {
+        "number": 90003,
+        "title": "feat: add app config schema",
+        "body": "",
+        "isDraft": false,
+        "mergeable": "MERGEABLE",
+        "additions": 3,
+        "deletions": 0,
+        "changedFiles": 1,
+        "createdAt": "2026-01-01T00:00:00Z",
+        "updatedAt": "2026-01-01T00:00:00Z",
+        "authorLogin": "human",
+        "authorIsBot": false,
+        "labels": [],
+        "files": [{ "path": "src/config/app.yaml", "additions": 3, "deletions": 0 }],
+        "filesTruncated": false
+      }
+    },
+    {
+      "id": "synthetic-github-only",
+      "note": "Synthetic: .github-only PR → excluded (infra config)",
+      "expect": "excluded",
+      "reasonIncludes": "no_logic_files(config",
+      "pr": {
+        "number": 90004,
+        "title": "ci: update workflow",
+        "body": "",
+        "isDraft": false,
+        "mergeable": "MERGEABLE",
+        "additions": 2,
+        "deletions": 0,
+        "changedFiles": 1,
+        "createdAt": "2026-01-01T00:00:00Z",
+        "updatedAt": "2026-01-01T00:00:00Z",
+        "authorLogin": "human",
+        "authorIsBot": false,
+        "labels": [],
+        "files": [{ "path": ".github/workflows/ci.yml", "additions": 2, "deletions": 0 }],
+        "filesTruncated": false
+      }
+    }
+  ]
+}

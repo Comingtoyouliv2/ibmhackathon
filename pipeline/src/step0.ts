@@ -76,11 +76,14 @@ function main() {
   const order: Record<string, number> = { pass: 0, deferred: 1, excluded: 2 };
   const csvRows = [...results].sort((a, b) => order[a.verdict] - order[b.verdict] || b.pr - a.pr);
   const csv = [
-    ['pr', 'verdict', 'reason', 'title', 'author', 'bot', 'draft',
+    ['pr', 'verdict', 'reason', 'reason_detail', 'signal_strength', 'logic_files', 'logic_lines', 'total_lines',
+      'title', 'author', 'bot', 'draft',
       ...CLASSES.map((c) => `files_${c}`), 'files_total', 'updated_at', 'url'].join(','),
     ...csvRows.map((r) =>
       [
-        r.pr, r.verdict, r.reason, esc(r.title), esc(r.authorLogin),
+        r.pr, r.verdict, r.reason, esc(r.reasonDetail), r.signalStrength,
+        r.logicFileCount, r.logicChangeLines, r.totalChangeLines,
+        esc(r.title), esc(r.authorLogin),
         r.authorIsBot ? 'Y' : '', r.isDraft ? 'Y' : '',
         ...CLASSES.map((c) => r.fileClasses[c] ?? 0),
         Object.values(r.fileClasses).reduce((a, b) => a + b, 0),
@@ -112,6 +115,10 @@ function main() {
   const dominant = count(results, (r) => dominantClass(r));
   const mergeable = count(prs, (p) => p.mergeable);
   const truncated = prs.filter((p) => p.filesTruncated).length;
+  const signalStrength = count(results, (r) => r.signalStrength);
+  const passHigh = byVerdict.pass.filter((r) => r.signalStrength === 'high').length;
+  const passLow = byVerdict.pass.filter((r) => r.signalStrength === 'low').length;
+  const passUnknown = byVerdict.pass.filter((r) => r.signalStrength === 'unknown').length;
 
   const lines: string[] = [];
   const section = (title: string, rows: Array<[string, number]>, denom = total) => {
@@ -124,11 +131,13 @@ function main() {
   lines.push(`# Step 0 Report — ${process.env.REPO ?? 'openclaw/openclaw'}`);
   lines.push(`\nGenerated: ${new Date().toISOString()} · Open PRs analyzed: **${total}**\n`);
   lines.push(`- **pass: ${byVerdict.pass.length}** (${pct(byVerdict.pass.length, total)}) → input for Step 1`);
+  lines.push(`  - high signal: ${passHigh} · low signal: ${passLow} · unknown: ${passUnknown}`);
   lines.push(`- excluded: ${byVerdict.excluded.length} (${pct(byVerdict.excluded.length, total)})`);
   lines.push(`- deferred: ${byVerdict.deferred.length} (${pct(byVerdict.deferred.length, total)}) — git conflict with main, revisit after rebase`);
   lines.push(`- bot authors: ${bots} (${pct(bots, total)}) · drafts: ${drafts} · file list truncated (>100 files): ${truncated}`);
 
   section('Verdict reasons', top(reasons, 20));
+  section('Signal strength (all PRs)', top(signalStrength, 5));
   section('Title prefix (conventional commits)', top(prefix, 15));
   section('Dominant file class per PR', top(dominant, 10));
   section('Mergeable state', top(mergeable, 5));
