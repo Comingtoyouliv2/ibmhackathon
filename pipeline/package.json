@@ -1,0 +1,20 @@
+{
+  "name": "pr-conflict-pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "fetch": "NODE_OPTIONS=--dns-result-order=ipv4first tsx src/fetch.ts",
+    "step0": "tsx src/step0.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
