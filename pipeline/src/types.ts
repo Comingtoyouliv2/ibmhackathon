@@ -31,6 +31,9 @@ export type FileClass = 'docs' | 'test' | 'deps' | 'config' | 'assets' | 'logic'
 
 export type Verdict = 'pass' | 'excluded' | 'deferred';
 
+/** How strong the logic-change signal is (for Step 1 prioritization). */
+export type SignalStrength = 'high' | 'low' | 'unknown';
+
 /** One PR as stored in data/step0.jsonl — the contract consumed by Step 1. */
 export interface Step0Result {
   pr: number;
@@ -38,8 +41,28 @@ export interface Step0Result {
   verdict: Verdict;
   reason: string;
   fileClasses: Partial<Record<FileClass, number>>;
+  logicFileCount: number;
+  logicChangeLines: number;
+  totalChangeLines: number;
+  signalStrength: SignalStrength;
   isDraft: boolean;
   authorLogin: string;
   authorIsBot: boolean;
   updatedAt: string;
+}
+
+/** Golden-set regression case — frozen PR snapshot, survives merge/close. */
+export interface GoldenCase {
+  id: string;
+  note: string;
+  expect: Verdict;
+  /** Optional substring the reason must contain. */
+  reasonIncludes?: string;
+  pr: RawPr;
+}
+
+export interface GoldenSet {
+  version: number;
+  note: string;
+  cases: GoldenCase[];
 }
