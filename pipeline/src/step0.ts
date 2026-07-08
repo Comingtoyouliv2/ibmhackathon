@@ -118,9 +118,6 @@ function main() {
   const signalStrength = count(results, (r) => r.signalStrength);
   const passHigh = byVerdict.pass.filter((r) => r.signalStrength === 'high').length;
   const passLow = byVerdict.pass.filter((r) => r.signalStrength === 'low').length;
-  const signalStrength = count(results, (r) => r.signalStrength);
-  const passHigh = byVerdict.pass.filter((r) => r.signalStrength === 'high').length;
-  const passLow = byVerdict.pass.filter((r) => r.signalStrength === 'low').length;
   const passUnknown = byVerdict.pass.filter((r) => r.signalStrength === 'unknown').length;
 
   const lines: string[] = [];
@@ -134,10 +131,10 @@ function main() {
   lines.push(`# Step 0 Report — ${process.env.REPO ?? 'openclaw/openclaw'}`);
   lines.push(`\nGenerated: ${new Date().toISOString()} · Open PRs analyzed: **${total}**\n`);
   lines.push(`- **pass: ${byVerdict.pass.length}** (${pct(byVerdict.pass.length, total)}) → input for Step 1`);
+  lines.push(`  - high signal: ${passHigh} · low signal: ${passLow} · unknown: ${passUnknown}`);
   lines.push(`- excluded: ${byVerdict.excluded.length} (${pct(byVerdict.excluded.length, total)})`);
   lines.push(`- deferred: ${byVerdict.deferred.length} (${pct(byVerdict.deferred.length, total)}) — git conflict with main, revisit after rebase`);
   lines.push(`- bot authors: ${bots} (${pct(bots, total)}) · drafts: ${drafts} · file list truncated (>100 files): ${truncated}`);
-  lines.push(`- pass signal strength: high=${passHigh}, low=${passLow}, unknown=${passUnknown}`);
 
   section('Verdict reasons', top(reasons, 20));
   section('Signal strength (all PRs)', top(signalStrength, 5));

@@ -15,45 +15,44 @@ npm install
 ## Run
 
 ```bash
-npm run fetch       # collect open PRs → data/prs.jsonl (resumable; Ctrl-C safe)
-npm run step0       # classify + survey report → data/step0.jsonl, data/passed.jsonl, data/report.md
-npm run regression  # golden-set regression against seeds/golden-set.json
+npm run fetch        # collect open PRs → data/prs.jsonl (resumable; Ctrl-C safe)
+npm run step0        # classify + survey report → data/step0.jsonl, data/passed.jsonl, data/report.md
+npm run regression   # golden-set regression against seeds/golden-set.json
 ```
 
 Quick experiment on a subset first: `MAX_PRS=300 npm run fetch`
-
-### Add a golden-set case
-
-Snapshot a live PR (with full file pagination) and paste into `seeds/golden-set.json`:
-
-```bash
-npm run export-seed -- 101471 "Real: openclaw #101471" pass has_logic_files
-```
-
-Golden-set fixtures are **frozen snapshots** — they survive PR merge/close and are never fetched live during regression.
 
 ## Outputs
 
 | file | contents |
 |---|---|
-| `data/prs.jsonl` | raw PRs, one JSON per line |
-| `data/step0.jsonl` | every PR + `verdict` (`pass`/`excluded`/`deferred`) + `reason` — audit trail |
-| `data/step0.csv` | Excel-friendly export with `logicChangeLines`, `signalStrength` |
+| `data/prs.jsonl` | raw PRs, one JSON per line (full file list, paginated beyond 100) |
+| `data/step0.jsonl` | every PR + `verdict` (`pass`/`excluded`/`deferred`) + `reason` + line stats + `signalStrength` |
+| `data/step0.csv` | Excel-friendly export with `logic_files`, `logic_lines`, `total_lines`, `signal_strength` |
 | `data/passed.jsonl` | raw PRs that passed → **input contract for Step 1 (Intent Card)** |
-| `data/report.md` | survey: PR-type distribution, bot share, exclusion reasons, signal strength, audit sample |
-| `seeds/golden-set.json` | frozen PR snapshots for `npm run regression` |
+| `data/report.md` | survey: PR-type distribution, signal strength, exclusion reasons, audit sample |
 
-## Step 0 improvements
+## Regression (golden set)
 
-- **File pagination**: PRs with >100 changed files are fully paginated via GraphQL (no truncated false negatives).
-- **Config rule fix**: root-level `*.yaml`/`*.toml` are config; `src/**` application config falls through to logic.
-- **Line-count hints**: `reason` includes logic file count and line counts (e.g. `has_logic_files(2 logic files, 24 logic lines / 42 total)`).
-- **Signal strength**: `high` / `low` / `unknown` on each result — helps Step 1 prioritize borderline passes.
-- **Golden-set regression**: 6 frozen cases (2 real openclaw PRs + 4 synthetic) run offline via `npm run regression`.
+Frozen PR snapshots in `seeds/golden-set.json` survive merge/close — regression
+does not hit live GitHub. Cases include:
+
+- Real: openclaw #101471, #95272 (known collision pair)
+- Synthetic: docs-only, deps bot, `src/*.yaml` (logic), `.github`-only (config)
+
+Add new cases with:
+
+```bash
+npm run export-seed -- 12345 "short note"
+# paste output into seeds/golden-set.json, set expect + reasonIncludes
+```
 
 ## Design decisions
 
 - **No LLM in Step 0** — deterministic rules only, so every exclusion is auditable (`reason` field).
-- **Exclude only when 100% certain**: a PR is kept if it touches even one logic file; truncated file lists (>100 files) always pass.
+- **Exclude only when 100% certain**: a PR is kept if it touches even one logic file; truncated file lists (>100 files) are paginated and fully classified.
+- **Config vs logic**: infra config (`.github/`, root `*.yml`, tooling configs) is excluded; application config under `src/` counts as logic.
+- **Line hints in `reason`**: e.g. `has_logic_files(2 logic files, 24 logic lines / 42 total)` for auditability.
+- **`signalStrength`** (`high`/`low`/`unknown`): Step 1 prioritization hint — high = multiple logic files or ≥10 logic lines; unknown when file list was truncated before pagination.
 - **`deferred`** = has logic changes but currently git-conflicts with main. GitHub already catches those; they re-enter after rebase.
-- **Bot PRs excluded** (dependabot/renovate/etc.) — recorded in the report as evidence of AI/bot PR volume.
+- **Bot PRs excluded** (dependabot/renovate/github-actions only) — AI agent PRs are kept as the target population.
