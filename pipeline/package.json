@@ -3,13 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "fetch": "NODE_OPTIONS=--dns-result-order=ipv4first tsx src/fetch.ts",
     "step0": "tsx src/step0.ts",
     "regression": "tsx src/regression.ts",
     "export-seed": "NODE_OPTIONS=--dns-result-order=ipv4first tsx src/export-seed.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "survey-export": "tsx src/survey-export.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5"

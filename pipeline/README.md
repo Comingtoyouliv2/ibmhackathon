@@ -18,6 +18,7 @@ npm install
 npm run fetch        # collect open PRs → data/prs.jsonl (resumable; Ctrl-C safe)
 npm run step0        # classify + survey report → data/step0.jsonl, data/passed.jsonl, data/report.md
 npm run regression   # golden-set regression against seeds/golden-set.json
+npm run survey-export # one line per open PR -> data/survey_<repo>_allPR.txt (vocabulary discovery input)
 ```
 
 Quick experiment on a subset first: `MAX_PRS=300 npm run fetch`
