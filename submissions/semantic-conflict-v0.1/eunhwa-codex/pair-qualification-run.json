@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "pair-qualification-run-v0.1",
+  "systemName": "Contract Radar Codex Evaluator",
+  "version": "contract-radar-v0.4 / codex-cli 0.135.0",
+  "model": "gpt-5.4",
+  "promptSha256": "d0eb938811d1778b114c9db483f8d4f52a9ee65afc451641c60cfa7d5dbf1c90",
+  "startedAt": "2026-07-16T12:21:23.592Z",
+  "finishedAt": "2026-07-16T12:30:24.251Z",
+  "totalLatencyMs": 1108625,
+  "totalTokens": null,
+  "totalCostUsd": null,
+  "failedCases": 0,
+  "notes": "One isolated Codex call per case with the fixed system and user prompt. Cases 19, 24, and 38 were reissued only after pre-turn CLI transport-limit failures, using the complete unchanged case.json mounted read-only; no semantic output was retried. Evidence was checked against the supplied case; invalid transport quotes were replaced only with verbatim changed lines from the same side."
+}
