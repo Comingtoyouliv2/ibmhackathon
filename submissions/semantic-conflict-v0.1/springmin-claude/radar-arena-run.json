@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "radar-arena-run-v0.1",
+  "systemName": "assumption-radar-e2e",
+  "version": "0.1.0",
+  "model": "claude-opus-4-8",
+  "taskPromptSha256": "87d2dca2f61f9aae1ec77501c091eb2fb8b9f8de696d2f06accd83efada6c88e",
+  "startedAt": "2026-07-16T11:00:59.561Z",
+  "finishedAt": "2026-07-16T11:01:43.846Z",
+  "totalLatencyMs": 44285,
+  "totalTokens": null,
+  "totalCostUsd": null,
+  "failedEpisodes": 0,
+  "episodeRuns": [
+    {
+      "episodeId": "radar-arena-v0.1-episode-01",
+      "prCount": 40,
+      "pairCount": 780,
+      "latencyMs": 44285
+    },
+    {
+      "episodeId": "radar-arena-v0.1-episode-02",
+      "prCount": 40,
+      "pairCount": 780,
+      "latencyMs": 44285
+    }
+  ],
+  "notes": "Two-stage system: (1) deterministic analysis parses all 780 pairs/episode, keeps only same-module pairs (cross-module pairs are isolated by construction), scores each by shared-file + changed-symbol + def<->call overlap; exactly 20 same-module candidate pairs surfaced per episode. (2) One Claude (Opus 4.8) agent per episode read the candidate dossier and ranked all 20 by pair-induced-conflict likelihood with decision/confidence/explanation. latencyMs is agent wall-clock (ranked-file write span). Token/cost not aggregated by wrapper -> null."
+}
