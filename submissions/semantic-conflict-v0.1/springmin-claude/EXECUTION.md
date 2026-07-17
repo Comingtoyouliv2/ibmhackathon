@@ -11,7 +11,7 @@
 
 ## Model settings
 
-- Temperature / determinism: the judging ran through the Claude Code subagent harness, which does **not** expose a temperature knob to the caller, so temperature could not be pinned to 0. This is disclosed here rather than fabricated. No sampling parameters were tuned.
+- Temperature / determinism: **`claude-opus-4-8` does not accept `temperature`, `top_p`, or `top_k` — sending any of them returns HTTP 400.** Per the rule "temperature is 0 **or the most deterministic setting the model supports**", the compliant configuration on this model is to send **no sampling parameters** and pin `output_config.effort` instead. That is what the API runner does (`work/run-pair-judge.mjs`, `work/run-e2e-rank.mjs`). The judging reported below additionally ran through the Claude Code subagent harness, which likewise exposes no sampling knob. No sampling parameters were tuned.
 - No retries were scripted; every case/episode succeeded on first execution (0 failures). One-time, post-hoc *format* repairs were applied to already-produced outputs (see "Failures / repairs") — no re-judging or prompt tuning occurred.
 - Parallelism: pair cases were judged concurrently under the harness concurrency cap (~10 simultaneous subagents); episodes ranked concurrently (2 subagents).
 

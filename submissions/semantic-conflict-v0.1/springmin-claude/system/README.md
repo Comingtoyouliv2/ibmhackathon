@@ -1,63 +1,78 @@
-# assumption-radar — 평가 실행 시스템 (재현용 코드)
+# assumption-radar — 평가 실행 시스템 (실제 러너 포함)
 
-이 폴더는 semantic-conflict 평가 스위트 v0.1의 두 테스트를 실행해 `submission/`을 만든 **실제 코드**다.
-설계 핵심은 **결정적 분석으로 후보를 좁히고, AI(LLM)는 판정/랭킹에만** 쓰는 것.
+semantic-conflict 평가 스위트 v0.1 의 두 테스트를 **끝까지 자동 실행**해 `submission/` 을 만드는 코드다.
+설계 핵심: **결정적 분석으로 후보/근거를 좁히고, LLM 은 판정·랭킹만** 담당.
 
 ## 구성
 
-| 파일 | 역할 | 단계 |
+| 파일 | 역할 | 종류 |
 |---|---|---|
 | `analyze-pairs.mjs` | Test1: 40쌍 → 케이스별 dossier(공유파일·교차심볼) | 결정적 |
-| `assemble-pair.mjs` | Test1: pred-NN.json → `submission/pair-qualification-predictions.jsonl` | 결정적 |
-| `fix-json2.mjs` | Test1: AI 출력의 제어문자(탭/줄바꿈) 이스케이프 (형식 보정) | 결정적 |
-| `sanitize-evidence.mjs` | Test1: verbatim 아닌 근거 제거(필수 라벨은 보존) | 결정적 |
+| **`run-pair-judge.mjs`** | **Test1: 실제 LLM 호출 40회 → pred-NN.json** | **AI 러너** |
+| `fix-json2.mjs` | AI 출력의 제어문자(탭/줄바꿈) 이스케이프 (형식 보정) | 결정적 |
+| `sanitize-evidence.mjs` | verbatim 아닌 근거 제거(필수 라벨은 보존) | 결정적 |
+| `assemble-pair.mjs` | → `submission/pair-qualification-predictions.jsonl` | 결정적 |
 | `analyze-episodes.mjs` | Test2: 780쌍 → 모듈 필터 → 같은모듈 20쌍 후보 dossier | 결정적 |
-| `assemble-e2e.mjs` | Test2: 랭킹 → `submission/radar-arena-predictions.jsonl` | 결정적 |
+| **`run-e2e-rank.mjs`** | **Test2: 실제 LLM 호출 2회 → episode-0X-ranked.json** | **AI 러너** |
+| `assemble-e2e.mjs` | → `submission/radar-arena-predictions.jsonl` | 결정적 |
 | `score.mjs` | 채점기(gold 있으면 정확도, 없으면 분포) | 결정적 |
 
-**AI 판정/랭킹 단계는 스크립트가 아니라 LLM 호출**이다(아래 참고). 여기 스크립트는 그 앞뒤의 결정적 부분.
+## 설치
 
-## 실행 방법
-
-이 스크립트들은 **평가 스위트 루트**(inputs.jsonl / episodes / SYSTEM_PROMPT 가 보이는 곳) 기준 상대경로를 쓴다.
-→ 스위트 루트에 `work/` 폴더로 두고, 루트에서 실행한다.
+스크립트는 **평가 스위트 루트** 기준 상대경로를 쓴다. `work/` 폴더로 두고 **루트에서** 실행한다.
 
 ```bash
-# 스위트 루트 기준
+# <스위트 루트>/ 에 package.json 을, <스위트 루트>/work/ 에 *.mjs 를 배치
+npm install                       # @anthropic-ai/sdk
+export ANTHROPIC_API_KEY=sk-ant-...   # 필수 (없으면 러너가 인증 실패)
 mkdir -p work/pair work/e2e submission
+```
 
-# ── Test 1 · Pair Judgment ──
-node work/analyze-pairs.mjs           # 케이스별 dossier 40개 → work/pair/case-NN.md
-#   ▶ AI 단계: 각 case-NN.md 를 고정 SYSTEM_PROMPT.txt 로 LLM에 판정시켜
-#     work/pair/pred-NN.json (스키마: schemaVersion/id/prediction/confidence/
-#     assumptionA/assumptionB/failureMechanism/explanation/evidence) 로 저장.
-#     (우리는 케이스당 Claude Opus 4.8 격리 호출 1회 사용 — 모델은 교체 가능)
-node work/fix-json2.mjs               # (필요 시) 제어문자 보정
-node work/sanitize-evidence.mjs       # verbatim 아닌 근거 정리
-node work/assemble-pair.mjs           # → submission/pair-qualification-predictions.jsonl
+## 실행
+
+```bash
+# ── Test 1 · Pair Judgment (40건) ──
+node work/analyze-pairs.mjs        # dossier (참고용; 러너는 원본 CASE_JSON 사용)
+node work/run-pair-judge.mjs       # ★ 실제 LLM 호출 40회
+#   --limit 2   먼저 2건만 스모크 테스트
+#   --only 07   특정 케이스만 재실행
+node work/fix-json2.mjs            # (필요 시) 제어문자 보정
+node work/sanitize-evidence.mjs    # verbatim 아닌 근거 정리
+node work/assemble-pair.mjs        # → submission/pair-qualification-predictions.jsonl
 node semantic-conflict-pair-judgment-v0.1/validate-submission.mjs \
   semantic-conflict-pair-judgment-v0.1/inputs.jsonl \
   submission/pair-qualification-predictions.jsonl \
   submission/pair-qualification-run.json
 
-# ── Test 2 · End-to-End Radar ──
-node work/analyze-episodes.mjs        # 후보 dossier → work/e2e/episode-0X-candidates.md (+ -top.json)
-#   ▶ AI 단계: 각 candidates.md 를 고정 TASK_PROMPT.txt 로 LLM에 랭킹시켜
-#     work/e2e/episode-0X-ranked.json ([{prA,prB,decision,confidence,explanation}] x20) 로 저장.
-node work/assemble-e2e.mjs            # → submission/radar-arena-predictions.jsonl
+# ── Test 2 · End-to-End Radar (에피소드 2개) ──
+node work/analyze-episodes.mjs     # 후보 20쌍/에피소드 → dossier + -top.json
+node work/run-e2e-rank.mjs         # ★ 실제 LLM 호출 2회
+node work/assemble-e2e.mjs         # → submission/radar-arena-predictions.jsonl
 node semantic-conflict-end-to-end-v0.1/validate-submission.mjs \
   semantic-conflict-end-to-end-v0.1/episodes \
   submission/radar-arena-predictions.jsonl \
   submission/radar-arena-run.json
 ```
 
-`run.json` 2개는 이번 실행값이 들어 있으니, 재실행 시 startedAt/finishedAt/model 등을 자기 실행에 맞게 갱신하면 된다.
+러너는 실측 latency/token 을 `work/pair-run-meta.json` · `work/e2e-run-meta.json` 에 남긴다 → run.json 작성 시 그대로 사용(추정 금지).
 
-## AI 단계 상세 (모델 교체 지점)
+## 규칙 준수 (러너 구현 근거)
 
-- **Test 1**: 입력 = `SYSTEM_PROMPT.txt`(고정) + 한 케이스 dossier. 출력 = 예측 JSON 1건. **케이스당 독립 호출**(다른 케이스 정보 유입 금지).
-- **Test 2**: 입력 = `TASK_PROMPT.txt`(고정) + 에피소드 후보 dossier. 출력 = 20쌍 랭킹 JSON.
-- 우리 실행은 전 판정 **claude-opus-4-8**. 이 두 지점만 다른 모델(GPT 등)로 바꾸면 **동일 하네스에서 모델 비교**가 된다.
+- **Test1**: `SYSTEM_PROMPT.txt` 를 system 으로 **변경 없이** 사용. `USER_PROMPT_TEMPLATE.txt` 의 `{{CASE_JSON}}` **만** 해당 입력 줄(전체 레코드)로 치환. 입력 한 줄당 **AI 호출 1회**, 케이스 간 정보 유입 없음.
+- **Test2**: `TASK_PROMPT.txt` 를 system 으로 변경 없이 사용. 에피소드 원본이 3.3MB/**8.3MB**(후자는 1M 컨텍스트 초과)라 전량 주입 불가 → TASK_PROMPT 의 *"Development freedom: deterministic analysis / heuristics / LLM calls 조합 가능"* 조항에 따라 결정적 전처리로 후보를 좁힌 뒤 랭킹시킨다.
+- **temperature**: **Opus 4.8 은 `temperature`/`top_p`/`top_k` 를 거부한다(전송 시 400).** 규칙의 *"temperature 는 0 또는 사용 모델이 지원하는 가장 결정적인 설정"* 에 따라 **샘플링 파라미터를 전송하지 않고** `output_config.effort` 를 고정한다. 이것이 이 모델에서 가능한 가장 결정적인 설정이다.
+- **token/cost**: 응답 `usage` 에서 실측해 기록. 추정하지 않는다.
+
+## 모델 교체 지점 (팀 비교용)
+
+AI 호출은 **딱 두 곳**이다 — `run-pair-judge.mjs` 의 `client.messages.create(...)` 와 `run-e2e-rank.mjs` 의 동일 호출.
+이 두 곳의 클라이언트/모델만 바꾸면 **동일 하네스에서 모델 비교**가 된다(GPT 등). 프롬프트·입력·조립·검증은 전부 공유되므로 비교가 공정하다.
+
+## 구현 함정 (실측으로 확인됨)
+
+- **`String.replace(pattern, 문자열)` 금지** — 치환값 안의 `$&`, `` $` ``, `$'`, `$$` 를 특수 패턴으로 해석해 프롬프트를 오염시킨다. 실제로 **케이스 03·29·38** 의 패치에 이 문자열이 있어 재현됨. 반드시 **함수 replacer** (`replace(p, () => value)`) 를 쓸 것.
+- **AI 출력의 제어문자** — 패치에서 탭/줄바꿈을 그대로 인용하면 JSON 문자열 안에 생 제어문자가 들어가 `JSON.parse` 가 깨진다. 러너에 복구 로직 내장(값 내용 보존 → verbatim 매칭 영향 없음).
+- **비용/규모(실측 문자수 기준 대략치)** — Test1 입력 합계 ≈ **2.9M 토큰**, 최대 단일 프롬프트 **2.77MB ≈ 725k 토큰**(케이스 24, 1M 컨텍스트 이내). 입력 비용 대략 **$15** 선. `--limit` 로 먼저 스모크 테스트할 것.
 
 ## 채점 (gold 받으면)
 
@@ -72,4 +87,4 @@ node work/score.mjs work/gold-pair.jsonl work/gold-e2e.jsonl
 
 - 고정 프롬프트/입력 수정 금지, gold·fixing commit·웹검색·repo checkout 금지.
 - 결과 보고 프롬프트/규칙 튜닝 후 재제출(test-time tuning) 금지.
-- 측정 못 하는 값(token/cost 등)은 추정 말고 `null`.
+- 측정 못 하는 값은 추정 말고 `null`.
