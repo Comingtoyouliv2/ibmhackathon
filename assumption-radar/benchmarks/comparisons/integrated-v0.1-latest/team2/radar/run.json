@@ -4,9 +4,9 @@
   "version": "intent-resource-prototype-v0.1",
   "model": "intent-resource-retrieval-only",
   "taskPromptSha256": "87d2dca2f61f9aae1ec77501c091eb2fb8b9f8de696d2f06accd83efada6c88e",
-  "startedAt": "2026-07-17T02:55:33.304Z",
-  "finishedAt": "2026-07-17T02:55:41.045Z",
-  "totalLatencyMs": 7739.92625,
+  "startedAt": "2026-07-17T09:40:06.800Z",
+  "finishedAt": "2026-07-17T09:40:14.344Z",
+  "totalLatencyMs": 7542.893042,
   "totalTokens": 0,
   "totalCostUsd": 0,
   "failedEpisodes": 0,
@@ -15,13 +15,13 @@
       "episodeId": "radar-arena-v0.1-episode-01",
       "prCount": 40,
       "pairCount": 780,
-      "latencyMs": 3824.883417
+      "latencyMs": 3819.6875840000002
     },
     {
       "episodeId": "radar-arena-v0.1-episode-02",
       "prCount": 40,
       "pairCount": 780,
-      "latencyMs": 3882.7640410000004
+      "latencyMs": 3692.598625
     }
   ],
   "notes": "Intent/resource retrieval prototype; ranking only, without the planned LLM pair judge."

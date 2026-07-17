@@ -1,9 +1,14 @@
-import { prepareAnalysis } from "./analyzer.mjs";
 import { explainCoordination } from "./coordination.mjs";
+import { prepareIntegratedAnalysis } from "./integrated.mjs";
 import { GitMergeTreePreflight } from "./preflight.mjs";
 
 function rawNumber(pr, index) {
   return Number(pr.number ?? index + 1);
+}
+
+function needsPairContext(comparison) {
+  return comparison.witnesses.length > 0
+    || ((comparison.retrievalScore || 0) > 0 && (comparison.retrievalFeatures?.priority ?? 3) <= 1);
 }
 
 export function applyMergeTreeResults(prepared, inspections) {
@@ -55,20 +60,23 @@ export function applyMergeTreeResults(prepared, inspections) {
       observability: "merge-tree-required",
       preflight: inspection,
     };
-  }).sort((a, b) => rank[a.verdict] - rank[b.verdict] || b.witnesses.length - a.witnesses.length);
+  }).sort((a, b) => rank[a.verdict] - rank[b.verdict]
+    || (a.retrievalFeatures?.priority ?? 3) - (b.retrievalFeatures?.priority ?? 3)
+    || (b.retrievalScore || 0) - (a.retrievalScore || 0)
+    || b.witnesses.length - a.witnesses.length);
   return {
     ...prepared,
     comparisons,
-    candidates: comparisons.filter((item) => item.verdict !== "independent" && item.witnesses.length),
+    candidates: comparisons.filter((item) => item.verdict !== "independent" && needsPairContext(item)),
   };
 }
 
 export async function prepareAnalysisPipeline(prs, options = {}) {
-  let prepared = prepareAnalysis(prs, options);
+  let prepared = prepareIntegratedAnalysis(prs, options);
   const metadata = { status: "disabled", stacks: [], suppressedPrNumbers: [], basePreparedPrs: 0, baseConflictPrNumbers: [], baseUnavailablePrNumbers: [], inspectedPairs: 0, cleanPairs: 0, textualConflictPairs: 0, baseConflictPairs: 0, unavailablePairs: 0 };
   if (!options.useMergePreflight || !options.repository) return { prepared, preflight: metadata };
 
-  const interactionComparisons = prepared.comparisons.filter((item) => item.witnesses.length);
+  const interactionComparisons = prepared.comparisons.filter(needsPairContext);
   const relevantIds = new Set(interactionComparisons.flatMap((item) => item.prIds));
   const relevantPrs = prepared.prs.filter((pr) => relevantIds.has(pr.id));
   if (relevantPrs.length < 2) return { prepared, preflight: { ...metadata, status: "skipped", reason: "no interacting PR pairs" } };
@@ -80,10 +88,10 @@ export async function prepareAnalysisPipeline(prs, options = {}) {
     const suppressedNumbers = new Set(stacks.map((stack) => stack.ancestorNumber));
     if (suppressedNumbers.size) {
       const collapsed = prs.filter((pr, index) => !suppressedNumbers.has(rawNumber(pr, index)));
-      prepared = prepareAnalysis(collapsed, options);
+      prepared = prepareIntegratedAnalysis(collapsed, options);
     }
     const baseMerges = engine.prepareBaseMerges ? await engine.prepareBaseMerges(prepared.prs) : prepared.prs.map((pr) => ({ prNumber: pr.number, status: "clean" }));
-    const inspectable = prepared.comparisons.filter((item) => item.witnesses.length);
+    const inspectable = prepared.comparisons.filter(needsPairContext);
     const inspections = await engine.inspectPairs(inspectable, prepared.prs);
     prepared = applyMergeTreeResults(prepared, inspections);
     return {

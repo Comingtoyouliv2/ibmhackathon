@@ -14,10 +14,11 @@ v0.2부터 전역 위험 점수를 사용하지 않습니다. v0.3은 관련성 
 
 ## 바로 실행
 
-Node.js 20 이상이면 외부 패키지 설치 없이 동작합니다.
+Node.js 20 이상이 필요합니다.
 
 ```bash
 cd assumption-radar
+npm install
 npm start
 ```
 
@@ -44,6 +45,10 @@ GITHUB_TOKEN=... npm run scan -- owner/repository
 # AI 강화 + deterministic conflict가 있으면 exit code 2
 GITHUB_TOKEN=... OPENAI_API_KEY=... \
   npm run scan -- owner/repository --ai --fail-on conflict
+
+# Claude를 판정기로 선택
+GITHUB_TOKEN=... ANTHROPIC_API_KEY=... \
+  npm run scan -- owner/repository --ai --ai-provider anthropic --fail-on conflict
 ```
 
 `.github/workflows/assumption-radar.yml`은 PR이 바뀔 때마다 전체 open PR을 다시 비교하는 최소 GitHub Actions 예제입니다. 이 프로젝트를 다른 저장소의 하위 폴더로 넣는다면 workflow의 `working-directory`와 npm cache 경로를 조정해야 합니다.
@@ -68,7 +73,8 @@ Git preflight ────────── stack collapse / current-base norma
       ├──────────────► deterministic verdict: conflict / review / independent
       │
       ▼
-OpenAI comparison ────── review만 conflict / compatible / uncertain으로 판정
+Bounded AI second-look ─ review + 관련성 높은 independent 후보를 판정
+      │                  OpenAI 또는 Anthropic, 양측 verbatim evidence 필수
       │
       ▼
 Radar UI / CLI gate

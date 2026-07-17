@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-17T02:55:55.863Z",
+  "generatedAt": "2026-07-17T09:40:29.245Z",
   "results": [
     {
       "system": "current",
@@ -11,7 +11,7 @@
         "blockerRecall": 0.85,
         "falseBlockerRate": 0,
         "workReduction": 0.55,
-        "latencyP50Ms": 16.145999999999958
+        "latencyP50Ms": 19.363124999999854
       },
       "radar": {
         "meanAveragePrecisionAt20": 0.35654484404484404,
@@ -61,7 +61,7 @@
         "blockerRecall": 0,
         "falseBlockerRate": 0,
         "workReduction": 0,
-        "latencyP50Ms": 18.669167
+        "latencyP50Ms": 17.95595800000001
       },
       "radar": {
         "meanAveragePrecisionAt20": 0.6443343462093463,
@@ -86,7 +86,7 @@
         "blockerRecall": 0.85,
         "falseBlockerRate": 0,
         "workReduction": 0.55,
-        "latencyP50Ms": 17.508667000000003
+        "latencyP50Ms": 18.15033299999959
       },
       "radar": {
         "meanAveragePrecisionAt20": 0.9429487179487179,

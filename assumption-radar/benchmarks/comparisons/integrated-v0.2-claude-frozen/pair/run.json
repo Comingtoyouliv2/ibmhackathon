@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "pair-qualification-run-v0.1",
+  "systemName": "integrated-v0.2-claude-frozen",
+  "version": "integrated-v0.2",
+  "model": "deterministic+retrieval+frozen-claude-opus-4-8-second-look",
+  "startedAt": "2026-07-17T09:39:07.163Z",
+  "finishedAt": "2026-07-17T09:39:07.163Z",
+  "totalLatencyMs": 0,
+  "totalTokens": 0,
+  "totalCostUsd": 0,
+  "failedCases": 0,
+  "notes": "Fusion-policy regression only. Claude judgments are the teammate's frozen submission, not fresh API calls. Do not use latency or generalization claims from this run."
+}

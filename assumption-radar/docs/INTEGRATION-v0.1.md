@@ -71,3 +71,31 @@ To use a different frozen Team 1 submission:
 ```bash
 node eval/run-integrated-comparison.mjs OUTPUT_DIR TEAM1_RESULT_DIR
 ```
+
+## v0.2 — Claude submission integration
+
+The teammate's runnable Claude submission was rescored with the same private gold before integration:
+
+- pair judgment: precision 90.0%, recall 90.0%, F1 90.0%
+- end-to-end radar: MAP@20 82.6%, Recall@10 80.0%, Recall@20 100.0%
+
+Its pair judge found three positives missed by the deterministic judge, while the existing integrated retrieval still ranked pairs better. v0.2 therefore keeps the v0.1 ranking and adds only the transferable parts of the Claude system:
+
+- bounded second-look lane for high-retrieval pairs currently labelled independent
+- compact per-pair dossiers built from shared files, modules, symbols, witnesses, and Contract Cards
+- isolated Anthropic calls with a concurrency cap
+- robust JSON control-character repair
+- a bilateral evidence gate: an AI blocker needs a verbatim quote from both PRs
+- provider selection between OpenAI and Anthropic
+
+The benchmark-only `modules/m-*` shortcut was deliberately not integrated. Repository modules are inferred through the existing generic resource model instead.
+
+Using the teammate's frozen Claude outputs to test the fusion policy gives pair precision 90.9%, recall 100.0%, F1 95.2%, blocker precision/recall 100.0%/100.0%. This is a regression experiment, not a fresh model run or an OSS generalization claim. Reproduce it with:
+
+```bash
+npm run compare:claude-fusion
+node eval/evaluate-pair-qualification.mjs \
+  benchmarks/semantic-clean-v0.1/frozen-v0.1/gold.jsonl \
+  benchmarks/comparisons/integrated-v0.2-claude-frozen/pair/predictions.jsonl \
+  benchmarks/comparisons/integrated-v0.2-claude-frozen/pair-score
+```

@@ -4,7 +4,7 @@ import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fetchOpenPullRequests, parseRepository } from "./github.mjs";
 import { finishAnalysis } from "./analyzer.mjs";
-import { analyzeWithAI } from "./openai.mjs";
+import { analyzeWithAI, semanticJudgeProvider } from "./ai.mjs";
 import { prepareAnalysisPipeline } from "./pipeline.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
@@ -35,7 +35,7 @@ async function analyze(prs, options = {}) {
   const prepared = pipeline.prepared;
   let aiConflicts = [];
   let aiError = null;
-  if (options.useAI && (options.apiKey || process.env.OPENAI_API_KEY)) {
+  if (options.useAI && (options.apiKey || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY)) {
     try { aiConflicts = await analyzeWithAI(prepared, options); }
     catch (error) { aiError = error.message; }
   }
@@ -49,8 +49,10 @@ async function handler(req, res) {
       return json(res, 200, {
         githubConfigured: Boolean(process.env.GITHUB_TOKEN),
         openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
+        anthropicConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
         mergeTreePreflight: true,
-        model: process.env.OPENAI_MODEL || "gpt-5.6-terra",
+        aiProvider: semanticJudgeProvider(),
+        model: semanticJudgeProvider() === "anthropic" ? process.env.ANTHROPIC_MODEL || "claude-opus-4-8" : process.env.OPENAI_MODEL || "gpt-5.6-terra",
       });
     }
     if (req.method === "POST" && url.pathname === "/api/demo") {

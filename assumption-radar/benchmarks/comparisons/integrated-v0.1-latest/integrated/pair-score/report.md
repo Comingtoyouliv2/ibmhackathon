@@ -12,7 +12,7 @@
 - Work reduction: 55.0%
 - Decisive coverage: 97.5%
 - Selective accuracy: 92.3%
-- Latency p50/p95: 17.51 / 916.35 ms
+- Latency p50/p95: 18.15 / 1021.99 ms
 
 ## Errors
 

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-17T02:55:55.481Z",
+  "generatedAt": "2026-07-17T09:40:28.965Z",
   "dataset": {
     "total": 40,
     "evaluated": 40,
@@ -71,8 +71,8 @@
   },
   "operations": {
     "samples": 40,
-    "latencyP50Ms": 16.145999999999958,
-    "latencyP95Ms": 911.6875,
+    "latencyP50Ms": 19.363124999999854,
+    "latencyP95Ms": 918.1255000000001,
     "tokensMean": 0,
     "costMeanUsd": 0
   },

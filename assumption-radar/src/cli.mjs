@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { fetchOpenPullRequests, parseRepository } from "./github.mjs";
 import { finishAnalysis } from "./analyzer.mjs";
-import { analyzeWithAI } from "./openai.mjs";
+import { analyzeWithAI } from "./ai.mjs";
 import { prepareAnalysisPipeline } from "./pipeline.mjs";
 
 const args = process.argv.slice(2);
@@ -18,13 +18,15 @@ function help() {
   console.log(`Assumption Radar CLI
 
 Usage:
-  npm run scan -- owner/repository [--limit 20] [--preflight] [--ai] [--json] [--fail-on conflict]
+  npm run scan -- owner/repository [--limit 20] [--preflight] [--ai] [--ai-provider openai|anthropic] [--json] [--fail-on conflict]
   npm run scan -- --demo [--json]
 
 Environment:
   GITHUB_TOKEN     private repository access / higher API limits
   OPENAI_API_KEY   enables --ai
-  OPENAI_MODEL     defaults to gpt-5.6-terra`);
+  ANTHROPIC_API_KEY enables --ai with --ai-provider anthropic
+  OPENAI_MODEL     defaults to gpt-5.6-terra
+  ANTHROPIC_MODEL  defaults to claude-opus-4-8`);
 }
 
 function printReport(result, repository) {
@@ -57,7 +59,7 @@ async function main() {
   if (prs.length < 2) throw new Error("분석할 open PR이 2개 이상 필요합니다.");
   const pipeline = await prepareAnalysisPipeline(prs, { repository: has("--demo") ? null : repository, useMergePreflight: has("--preflight") });
   const prepared = pipeline.prepared;
-  const aiConflicts = has("--ai") ? await analyzeWithAI(prepared) : [];
+  const aiConflicts = has("--ai") ? await analyzeWithAI(prepared, { aiProvider: value("--ai-provider") }) : [];
   const result = { ...finishAnalysis(prepared, aiConflicts), repository, mode: aiConflicts.length ? "ai+heuristic" : "heuristic", preflight: pipeline.preflight };
   if (has("--json")) console.log(JSON.stringify(result, null, 2));
   else printReport(result, repository);
