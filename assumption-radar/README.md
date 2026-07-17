@@ -1,8 +1,8 @@
 # Assumption Radar
 
-Open PR을 하나씩 리뷰하는 대신 **동시에** 읽어, 각 변경이 암묵적으로 기대하는 계약이 어디서 충돌하는지 merge 전에 설명하는 레이더입니다.
+Open PR을 하나씩 리뷰하는 대신 **동시에** 읽어 함께 테스트할 쌍을 우선순위화하고, 각 변경의 전제가 어디서 충돌하는지 설명하며, 지원되는 저장소에서는 Base/A/B/A+B 실행으로 결합 회귀를 검증하는 레이더입니다.
 
-v0.2부터 전역 위험 점수를 사용하지 않습니다. v0.3은 관련성 신호와 인과 충돌 증거를 분리하고, v0.4는 Git conflict를 resolution-risk·duplicate-implementation 같은 조율 유형으로 설명합니다. v0.5는 모든 PR을 동일한 최신 target base에 정규화한 뒤 비교해 오래된 branch history가 pair conflict로 섞이는 문제를 막습니다. 판정은 재현 가능한 witness와 semantic review로 구성되며, 현재 성능과 한계는 [v0.5.0 상태](docs/STATUS-v0.5.0.md), 확장 계약은 [Framework 설계](docs/FRAMEWORK.md)를 참고하세요.
+v1.0은 세 팀 접근의 강점을 하나의 실행 경로로 연결합니다. 기존 directional contract witness와 merge-tree 정규화, patch read/write 상호작용, Contract Card 기반 검색, bounded AI second-look, 격리된 결합 실행 검증을 순서대로 사용합니다. 판정은 재현 가능한 witness와 semantic review로 구성되며, 확장 계약은 [Framework 설계](docs/FRAMEWORK.md), 통합 내역은 [Integration 문서](docs/INTEGRATION-v1.0.md)를 참고하세요.
 
 > 현재 개발 프로젝트는 이 폴더입니다. 상위 디렉터리의 `ibmhackathon/`은 이전 연구 파이프라인과 데이터를 보존하는 별도 공간입니다.
 
@@ -53,6 +53,14 @@ GITHUB_TOKEN=... ANTHROPIC_API_KEY=... \
 # 로그인된 Codex CLI를 판정기로 선택(API key 불필요)
 GITHUB_TOKEN=... npm run scan -- owner/repository \
   --preflight --ai --ai-provider codex --fail-on conflict
+
+# 상위 3쌍을 Docker에서 Base/A/B/A+B로 실행하고 JSONL에 기록
+GITHUB_TOKEN=... npm run scan -- owner/repository \
+  --preflight --ai --ai-provider codex --verify --verify-limit 3
+
+# 자동 프로필이 맞지 않는 저장소
+GITHUB_TOKEN=... npm run scan -- owner/repository \
+  --verify --verification-profile config/my-verification-profiles.json
 ```
 
 `.github/workflows/assumption-radar.yml`은 PR이 바뀔 때마다 전체 open PR을 다시 비교하는 최소 GitHub Actions 예제입니다. 이 프로젝트를 다른 저장소의 하위 폴더로 넣는다면 workflow의 `working-directory`와 npm cache 경로를 조정해야 합니다.
@@ -78,10 +86,13 @@ Git preflight ────────── stack collapse / current-base norma
       │
       ▼
 Bounded AI second-look ─ review + 관련성 높은 independent 후보를 판정
-      │                  OpenAI 또는 Anthropic, 양측 verbatim evidence 필수
+      │                  OpenAI / Anthropic / Codex, 양측 verbatim evidence 필수
       │
       ▼
-Radar UI / CLI gate
+Docker verification ─── Base / A / B / A+B / repeated failure signature
+      │
+      ▼
+Radar UI / CLI gate + append-only JSONL
 ```
 
 ### 1. 수집
@@ -130,6 +141,12 @@ AI가 실패하거나 키가 없어도 witness framework가 결과를 반환합�
 - 권장 merge 순서 또는 계약 테스트
 - diff에서 추출한 근거
 
+### 5. 결합 실행 검증
+
+`--verify`는 상위 후보만 Docker에서 실행합니다. Base, A, B가 통과하고 A+B가 실패한 뒤 같은 failure signature가 한 번 더 재현될 때만 `confirmed-conflict`로 승격합니다. Base나 단독 PR 실패, 설치 오류, timeout은 `inconclusive`이며 blocker가 아닙니다. 테스트 컨테이너에는 네트워크를 제공하지 않고 host credential이나 Docker socket을 전달하지 않습니다.
+
+`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, Python 프로젝트는 자동 인식합니다. 저장소 고유 명령은 [`config/verification-profiles.example.json`](config/verification-profiles.example.json)을 복사해 지정합니다. 결과는 기본적으로 `.cache/verification-runs/*.jsonl`에 commit SHA, 도구 버전, 실행 명령, 전제, 영향, evidence ID와 함께 append-only로 기록됩니다.
+
 ## API
 
 ### `POST /api/analyze`
@@ -137,7 +154,9 @@ AI가 실패하거나 키가 없어도 witness framework가 결과를 반환합�
 ```json
 {
   "repository": "owner/repository",
-  "useAI": true
+  "useAI": true,
+  "useVerification": true,
+  "verificationLimit": 3
 }
 ```
 
@@ -172,7 +191,8 @@ npm run eval -- benchmarks/your-benchmark.jsonl
 
 | 경로 | 내용 |
 |---|---|
-| `src/` | analyzer, GitHub 수집, AI resolver, CLI/server |
+| `src/` | analyzer, GitHub 수집, AI resolver, Docker verifier, CLI/server |
+| `config/` | 저장소별 결합 실행 프로필 예시 |
 | `public/` | 로컬 Radar UI |
 | `demo/` | `synthetic-prs.json` UI 시연 전용 가상 PR 데이터 |
 | `docs/` | framework와 평가 설계 문서 |
@@ -217,4 +237,4 @@ GITHUB_TOKEN="$(gh auth token -h github.com)" npm run filter:replay -- \
 - diff 내용은 AI 모드를 켰을 때만 OpenAI API로 전송됩니다. 민감 저장소는 조직 정책과 API 데이터 정책을 먼저 확인하세요.
 - 토큰은 서버 환경변수로만 두고 UI나 URL에 넣지 마세요.
 - 규칙 엔진은 언어 독립적 패턴을 우선해 AST 수준의 완전한 의미 분석은 하지 않습니다.
-- 두 PR이 같은 base에서 테스트됐다는 사실은 통합 상태의 안전을 보장하지 않습니다. 이 레이더는 조율할 대상을 좁히는 도구이지, 테스트를 대체하지 않습니다.
+- A/B/A+B 통과는 선택한 명령과 환경 범위의 증거이며 전체 안전의 수학적 증명은 아닙니다. 결합 실행은 기존 CI를 대체하지 않고 pair-aware 계층을 추가합니다.

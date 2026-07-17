@@ -1,0 +1,193 @@
+import crypto from "node:crypto";
+import { appendFile, mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
+
+const pairKey = (ids) => [...ids].map(String).sort().join(":");
+
+function isRunnable(comparison) {
+  return comparison.mechanicalMerge !== "conflict"
+    && comparison.mechanicalMerge !== "base-conflict"
+    && comparison.semanticBenchmarkEligibility !== "excluded";
+}
+
+/**
+ * Selects the highest-ranked semantic findings for expensive executable
+ * verification. Retrieval remains broad; Docker execution stays bounded.
+ */
+export function selectVerificationCandidates(prepared, analysis, options = {}) {
+  const limit = Math.max(0, Number(options.limit ?? 3));
+  const findings = new Map((analysis.findings || []).map((item) => [pairKey(item.prIds), item]));
+  return prepared.comparisons
+    .filter(isRunnable)
+    .filter((comparison) => findings.has(comparison.key))
+    .map((comparison) => ({ ...comparison, semanticFinding: findings.get(comparison.key) }))
+    .slice(0, limit);
+}
+
+function executionFinding(verification, existing) {
+  const base = {
+    ...existing,
+    verification,
+    executionEvidence: verification.classification.evidence,
+    verifiedAt: verification.verifiedAt,
+  };
+  if (verification.classification.verdict === "conflict") {
+    return {
+      ...base,
+      verdict: "conflict",
+      relationship: "confirmed-conflict",
+      title: "A와 B 단독 통과 후 A+B에서 반복 실패",
+      summary: verification.classification.rationale,
+      consequence: verification.impact?.summary || existing.consequence,
+      recommendation: "재현된 failure signature와 양쪽 변경 근거를 함께 검토한 뒤 merge 순서 또는 구현 계약을 조정하세요.",
+      basis: "base-a-b-ab-execution",
+      source: "combined-verifier",
+      goldEvidence: "executable",
+    };
+  }
+  if (verification.classification.verdict === "compatible") {
+    return {
+      ...base,
+      verdict: "independent",
+      relationship: "compatible",
+      title: "A/B/A+B 실행 통과",
+      summary: verification.classification.rationale,
+      consequence: "선택한 테스트 범위에서는 pair-induced regression이 재현되지 않았습니다.",
+      recommendation: "기존 CI를 유지하고 새로운 관련 변경이 생기면 재검증하세요.",
+      basis: "base-a-b-ab-execution",
+      source: "combined-verifier",
+      goldEvidence: "executable",
+    };
+  }
+  return {
+    ...base,
+    verdict: "review",
+    relationship: "inconclusive",
+    title: "결합 실행으로 판정하지 못함",
+    summary: verification.classification.rationale,
+    consequence: "환경 실패나 단독 PR 실패를 두 PR의 상호작용으로 오인하면 안 됩니다.",
+    recommendation: "실행 환경 또는 단독 PR 실패를 해결한 뒤 같은 commit SHA로 다시 검증하세요.",
+    basis: "base-a-b-ab-inconclusive",
+    source: "combined-verifier",
+  };
+}
+
+/** Applies executable outcomes without discarding the static/AI audit trail. */
+export function applyVerificationResults(analysis, verifications = []) {
+  const byPair = new Map(verifications.map((item) => [pairKey(item.prIds), item]));
+  const original = new Map((analysis.findings || []).map((item) => [pairKey(item.prIds), item]));
+  const resolved = [...original.entries()].map(([key, finding]) => {
+    const verification = byPair.get(key);
+    return verification ? executionFinding(verification, finding) : finding;
+  });
+  const findings = resolved.filter((item) => ["conflict", "coordination", "review"].includes(item.verdict));
+  const compatibleVerifications = resolved.filter((item) => item.verdict === "independent" && item.verification);
+  const conflictCount = findings.filter((item) => item.verdict === "conflict").length;
+  const coordinationCount = findings.filter((item) => item.verdict === "coordination").length;
+  const reviewCount = findings.filter((item) => item.verdict === "review").length;
+  const confirmedConflictCount = verifications.filter((item) => item.classification.verdict === "conflict").length;
+  const verifiedCompatibleCount = verifications.filter((item) => item.classification.verdict === "compatible").length;
+  const inconclusiveVerificationCount = verifications.length - confirmedConflictCount - verifiedCompatibleCount;
+  return {
+    ...analysis,
+    findings,
+    conflicts: findings,
+    compatibleVerifications,
+    verifications,
+    summary: {
+      ...analysis.summary,
+      conflictCount,
+      coordinationCount,
+      reviewCount,
+      verifiedPairCount: verifications.length,
+      confirmedConflictCount,
+      verifiedCompatibleCount,
+      inconclusiveVerificationCount,
+      verdict: confirmedConflictCount ? "실행으로 pair-induced regression 확인"
+        : conflictCount ? "정적·AI 충돌 witness 확인"
+          : coordinationCount ? "Git merge 조율 필요"
+            : reviewCount ? "의미 검토 필요" : "직접 충돌 근거 없음",
+    },
+  };
+}
+
+function evidenceRecords(finding = {}) {
+  const counters = { A: 0, B: 0 };
+  const structured = (finding.evidenceObjects || []).flatMap((item) => {
+    if (!item || !["A", "B"].includes(item.side) || !item.quote) return [];
+    counters[item.side] += 1;
+    return [{ id: `${item.side}${counters[item.side]}`, ...item }];
+  });
+  if (structured.length) return structured;
+  return (finding.evidence || []).filter(Boolean).slice(0, 12).map((quote, index) => ({
+    id: `W${index + 1}`,
+    side: "witness",
+    file: "",
+    symbol: "",
+    quote,
+  }));
+}
+
+function impactFromVerification(verification) {
+  const failed = verification.runs.filter((run) => run.status === "failed");
+  const signatures = [...new Set(failed.flatMap((run) => run.failureSignatures || []))];
+  return {
+    type: verification.classification.verdict === "conflict" ? "pair-induced-regression"
+      : verification.classification.verdict === "compatible" ? "no-observed-regression" : "inconclusive",
+    severity: verification.classification.verdict === "conflict" ? "unassessed" : "none",
+    failedRuns: failed.map((run) => run.label),
+    failureSignatures: signatures.slice(0, 20),
+    summary: verification.classification.rationale,
+  };
+}
+
+/** Converts one immutable verification into the append-only JSONL case schema. */
+export function verificationCaseRecord({ repository, verification, finding, metadata = {} }) {
+  const evidence = evidenceRecords(finding);
+  const runs = Object.fromEntries(verification.runs.map((run) => [run.label, {
+    status: run.status,
+    command: run.command,
+    exitCode: run.exitCode,
+    durationMs: run.durationMs,
+    failureSignatures: run.failureSignatures,
+  }]));
+  return {
+    schemaVersion: "1.0",
+    eventId: crypto.randomUUID(),
+    caseId: `${repository.replaceAll("/", "-")}-${verification.prNumbers[0]}x${verification.prNumbers[1]}`,
+    revision: verification.verifiedAt,
+    repository,
+    baseSha: verification.baseSha,
+    prA: { number: verification.prNumbers[0], headSha: verification.headShaA },
+    prB: { number: verification.prNumbers[1], headSha: verification.headShaB },
+    relationship: verification.classification.verdict === "conflict" ? "confirmed-conflict"
+      : verification.classification.verdict === "compatible" ? "compatible" : "inconclusive",
+    mechanism: finding?.category || "unclassified",
+    brokenContract: {
+      assumptionA: finding?.assumptionA || "",
+      assumptionB: finding?.assumptionB || "",
+      violatingChange: finding?.consequence || "",
+    },
+    impact: impactFromVerification(verification),
+    evidence,
+    verification: {
+      profile: verification.profile,
+      classification: verification.classification,
+      runs,
+      repetitions: verification.runs.filter((run) => run.label.startsWith("combined")).length,
+      goldEvidence: "executable",
+    },
+    metadata: {
+      analyzerVersion: metadata.analyzerVersion || "unknown",
+      promptVersion: metadata.promptVersion || null,
+      model: metadata.model || null,
+      generatedAt: verification.verifiedAt,
+    },
+  };
+}
+
+export async function appendVerificationRecords(path, records) {
+  if (!path || !records.length) return;
+  await mkdir(dirname(path), { recursive: true });
+  await appendFile(path, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`, "utf8");
+}

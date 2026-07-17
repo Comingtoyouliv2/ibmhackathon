@@ -24,6 +24,7 @@ function setLoading(active) {
     "diff에서 계약 신호를 추출하고 있습니다…",
     "공유 데이터와 API 경계를 연결하고 있습니다…",
     "각 PR이 믿는 전제를 대조하고 있습니다…",
+    "선택한 PR 쌍을 격리된 환경에서 결합 검증하고 있습니다…",
     "설명 가능한 충돌만 남기고 있습니다…",
   ];
   let index = 0;
@@ -50,10 +51,13 @@ function metric(label, value, className = "") {
 }
 
 function renderMetrics(summary) {
+  const verification = summary.verifiedPairCount
+    ? `${summary.confirmedConflictCount} CONFIRMED / ${summary.verifiedCompatibleCount} CLEAN`
+    : "NOT RUN";
   $("#metrics").innerHTML = [
     metric("OPEN PULL REQUESTS", summary.prCount),
     metric("PAIRS EXAMINED", summary.pairCount),
-    metric("CONFLICT / COORD / REVIEW", `${summary.conflictCount} / ${summary.coordinationCount || 0} / ${summary.reviewCount}`),
+    metric("PAIR EXECUTION", verification),
     metric("MERGE VERDICT", summary.verdict, "verdict"),
   ].join("");
 }
@@ -142,6 +146,10 @@ function renderRadar() {
 function renderDetail(conflict) {
   const a = prById(conflict.prIds[0]);
   const b = prById(conflict.prIds[1]);
+  const runs = conflict.verification?.runs || [];
+  const execution = runs.length ? `<div class="detail-block"><b>BASE / A / B / A+B</b><div class="evidence-list">${runs
+    .filter((run) => run.label !== "combined_confirmation")
+    .map((run) => `<span>${escapeHtml(run.label.toUpperCase())}: ${escapeHtml(run.status)}</span>`).join("")}</div></div>` : "";
   $("#detailCard").innerHTML = `
     <div class="detail-content">
       <div class="detail-top">
@@ -157,6 +165,7 @@ function renderDetail(conflict) {
       </div>
       <div class="detail-block"><b>IF MERGED TOGETHER</b><p>${escapeHtml(conflict.consequence)}</p></div>
       <div class="detail-block"><b>SAFEST NEXT MOVE</b><p>${escapeHtml(conflict.recommendation)}</p></div>
+      ${execution}
       <div class="detail-block"><b>EVIDENCE</b><div class="evidence-list">${conflict.evidence.map((item) => `<span>${escapeHtml(item)}</span>`).join("") || "<span>diff context</span>"}</div></div>
     </div>`;
 }
@@ -222,6 +231,7 @@ function render(data, title) {
   if (data.findings[0]) renderDetail(data.findings[0]);
   else $("#detailCard").innerHTML = `<div class="empty-detail"><span class="crosshair">✓</span><h3>충돌 신호 없음</h3><p>현재 diff 신호에서는 교차 PR 전제 충돌을 찾지 못했습니다. 통합 테스트는 계속 실행하세요.</p></div>`;
   if (data.aiError) showToast(`AI 분석은 실패해 규칙 기반 결과로 표시했습니다: ${data.aiError}`);
+  if (data.verificationError) showToast(`결합 실행은 완료하지 못했습니다: ${data.verificationError}`);
   $("#workspace").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -231,7 +241,12 @@ $("#repoForm").addEventListener("submit", async (event) => {
   if (!repository) return showToast("분석할 GitHub 저장소를 입력해 주세요.");
   setLoading(true);
   try {
-    const data = await api("/api/analyze", { repository, useAI: $("#useAI").checked });
+    const data = await api("/api/analyze", {
+      repository,
+      useAI: $("#useAI").checked,
+      useVerification: $("#useVerification").checked,
+      verificationLimit: 3,
+    });
     render(data, data.repository);
   } catch (error) {
     showToast(error.message);
@@ -256,5 +271,6 @@ fetch("/api/status").then((response) => response.json()).then((status) => {
   const parts = [status.githubConfigured ? "GitHub token 연결됨" : "공개 저장소 모드"];
   parts.push(status.openaiConfigured ? `${status.model} 연결됨` : "AI 키 없음 — 규칙 엔진 사용");
   if (status.mergeTreePreflight) parts.push("merge-tree preflight");
+  if (status.combinedVerification) parts.push("A/B/A+B verifier");
   $("#configHint").textContent = parts.join(" · ");
 }).catch(() => { $("#configHint").textContent = "로컬 엔진"; });

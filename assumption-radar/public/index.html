@@ -39,6 +39,7 @@
         </div>
         <div class="form-foot">
           <label><input id="useAI" type="checkbox" checked><span></span> AI 심층 추론</label>
+          <label title="상위 후보를 Docker에서 Base/A/B/A+B로 실행합니다"><input id="useVerification" type="checkbox"><span></span> 결합 실행 검증</label>
           <span id="configHint">토큰 상태 확인 중…</span>
           <button type="button" id="demoButton" class="text-button">샘플 레이더 보기</button>
         </div>
@@ -96,7 +97,7 @@
         <div class="method-steps">
           <div><b>01</b><h3>신호 추출</h3><p>API, 스키마, 이벤트, 플래그, 삭제·이름 변경을 diff에서 구조화합니다.</p></div>
           <div><b>02</b><h3>후보 압축</h3><p>공유 계약이 있는 PR 쌍만 골라 조합 폭발과 AI 비용을 막습니다.</p></div>
-          <div><b>03</b><h3>전제 대조</h3><p>각 PR이 따로 믿는 세계를 대칭 문장으로 만들고 충돌의 영향을 설명합니다.</p></div>
+          <div><b>03</b><h3>실행 검증</h3><p>상위 쌍은 Base/A/B/A+B로 실행해 단독 CI가 놓치는 결합 회귀를 재현합니다.</p></div>
         </div>
       </section>
     </section>

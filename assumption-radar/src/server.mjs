@@ -6,6 +6,14 @@ import { fetchOpenPullRequests, parseRepository } from "./github.mjs";
 import { finishAnalysis } from "./analyzer.mjs";
 import { analyzeWithAI, semanticJudgeProvider } from "./ai.mjs";
 import { prepareAnalysisPipeline } from "./pipeline.mjs";
+import { DockerCombinedVerifier, loadVerificationProfiles } from "./docker-verifier.mjs";
+import { GitMergeTreePreflight } from "./preflight.mjs";
+import {
+  appendVerificationRecords,
+  applyVerificationResults,
+  selectVerificationCandidates,
+  verificationCaseRecord,
+} from "./verification.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const PUBLIC = join(ROOT, "public");
@@ -31,7 +39,12 @@ async function body(req) {
 
 async function analyze(prs, options = {}) {
   if (!Array.isArray(prs) || prs.length < 2) throw new Error("분석하려면 open PR이 2개 이상 필요합니다.");
-  const pipeline = await prepareAnalysisPipeline(prs, options);
+  const preflightEngine = options.useVerification && options.repository ? new GitMergeTreePreflight(options.repository) : null;
+  const pipeline = await prepareAnalysisPipeline(prs, {
+    ...options,
+    useMergePreflight: options.useMergePreflight || options.useVerification,
+    ...(preflightEngine ? { preflightEngine } : {}),
+  });
   const prepared = pipeline.prepared;
   let aiConflicts = [];
   let aiError = null;
@@ -39,7 +52,40 @@ async function analyze(prs, options = {}) {
     try { aiConflicts = await analyzeWithAI(prepared, options); }
     catch (error) { aiError = error.message; }
   }
-  return { ...finishAnalysis(prepared, aiConflicts), mode: aiConflicts.length ? "ai+heuristic" : "heuristic", aiError, preflight: pipeline.preflight };
+  let result = { ...finishAnalysis(prepared, aiConflicts), mode: aiConflicts.length ? "ai+heuristic" : "heuristic", aiError, preflight: pipeline.preflight };
+  if (options.useVerification && options.repository) {
+    try {
+      const profiles = await loadVerificationProfiles(process.env.VERIFICATION_PROFILE_PATH);
+      const candidates = selectVerificationCandidates(prepared, result, { limit: Math.max(1, Math.min(10, Number(options.verificationLimit) || 3)) });
+      const verifier = new DockerCombinedVerifier(options.repository, { preflightEngine, profiles });
+      const verified = await verifier.verify(prepared, candidates);
+      const beforeExecution = result;
+      result = applyVerificationResults(result, verified.verifications);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const output = join(ROOT, ".cache", "verification-runs", `${options.repository.replaceAll("/", "__")}-${timestamp}.jsonl`);
+      const findings = new Map((beforeExecution.findings || []).map((item) => [[...item.prIds].sort().join(":"), item]));
+      const records = verified.verifications.map((verification) => verificationCaseRecord({
+        repository: options.repository,
+        verification,
+        finding: findings.get([...verification.prIds].sort().join(":")),
+        metadata: {
+          analyzerVersion: "1.0.0",
+          promptVersion: options.useAI ? "semantic-judge-v0.2" : null,
+          model: options.useAI ? (() => {
+            const provider = semanticJudgeProvider(options);
+            if (provider === "anthropic") return process.env.ANTHROPIC_MODEL || "claude-opus-4-8";
+            if (provider === "codex") return process.env.CODEX_MODEL || "gpt-5.4";
+            return process.env.OPENAI_MODEL || "gpt-5.6-terra";
+          })() : null,
+        },
+      }));
+      await appendVerificationRecords(output, records);
+      result = { ...result, verificationErrors: verified.errors, verificationOutput: records.length ? output : null };
+    } catch (error) {
+      result = { ...result, verificationError: error.message, verificationErrors: [{ key: "runner", error: error.message }] };
+    }
+  }
+  return result;
 }
 
 async function handler(req, res) {
@@ -51,6 +97,7 @@ async function handler(req, res) {
         openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
         anthropicConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
         mergeTreePreflight: true,
+        combinedVerification: true,
         aiProvider: semanticJudgeProvider(),
         model: semanticJudgeProvider() === "anthropic" ? process.env.ANTHROPIC_MODEL || "claude-opus-4-8"
           : semanticJudgeProvider() === "codex" ? process.env.CODEX_MODEL || "gpt-5.4" : process.env.OPENAI_MODEL || "gpt-5.6-terra",
@@ -66,7 +113,14 @@ async function handler(req, res) {
       const repository = parseRepository(input.repository);
       const limit = Math.max(2, Math.min(100, Number(input.limit) || 20));
       const prs = await fetchOpenPullRequests(repository, process.env.GITHUB_TOKEN, { limit });
-      const result = await analyze(prs, { repository, useAI: input.useAI !== false, aiProvider: input.aiProvider, useMergePreflight: input.useMergePreflight !== false });
+      const result = await analyze(prs, {
+        repository,
+        useAI: input.useAI !== false,
+        aiProvider: input.aiProvider,
+        useMergePreflight: input.useMergePreflight !== false,
+        useVerification: input.useVerification === true,
+        verificationLimit: input.verificationLimit,
+      });
       return json(res, 200, { ...result, repository });
     }
     if (req.method !== "GET") return json(res, 404, { error: "Not found" });

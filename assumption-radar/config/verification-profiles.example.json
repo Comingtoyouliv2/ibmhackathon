@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "repositories": {
+    "owner/repository": {
+      "profile": "custom-node",
+      "image": "node:22-bookworm",
+      "installCommand": "npm ci --ignore-scripts --cache /cache/npm",
+      "testCommand": "npm test",
+      "timeoutSeconds": 900,
+      "memory": "6g",
+      "cpus": "2",
+      "pids": 512
+    }
+  }
+}
