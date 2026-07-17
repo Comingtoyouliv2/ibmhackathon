@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "pair-qualification-run-v0.1",
+  "systemName": "team1-contract-radar-codex",
+  "version": "comparison-adapter-v0.2",
+  "model": "gpt-5.4",
+  "promptSha256": "d0eb938811d1778b114c9db483f8d4f52a9ee65afc451641c60cfa7d5dbf1c90",
+  "startedAt": "2026-07-17T00:50:30.119Z",
+  "finishedAt": "2026-07-17T00:54:15.012Z",
+  "totalLatencyMs": 892437.555251,
+  "totalTokens": null,
+  "totalCostUsd": null,
+  "failedCases": 0,
+  "notes": "Team 1 frozen behavior: one isolated read-only Codex call per pair. Public suite input only; no gold path is accepted by this runner."
+}

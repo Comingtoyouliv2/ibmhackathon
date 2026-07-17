@@ -1,0 +1,52 @@
+[
+  {
+    "id": "101", "number": 101, "title": "Checkout v2 응답에 주문 합계 추가", "author": "mina", "head": "checkout-v2", "base": "main", "updatedAt": "2026-07-15T02:20:00Z", "additions": 148, "deletions": 31, "url": "https://github.com/acme/commerce/pull/101",
+    "body": "새 checkout endpoint가 orders.total_amount를 읽어 원화 합계를 반환합니다. 기존 클라이언트도 동일한 응답을 받습니다.",
+    "files": [
+      { "filename": "src/checkout/service.ts", "status": "modified", "patch": "@@ -21,5 +21,10 @@\n+const order = await db.query('SELECT id, total_amount FROM orders WHERE id = ?', [id]);\n+return { orderId: order.id, total: order.total_amount, currency: 'KRW' };" },
+      { "filename": "src/checkout/routes.ts", "status": "modified", "patch": "@@ -8,3 +8,6 @@\n+router.post('/api/checkout', requireUser, checkoutV2);" },
+      { "filename": "src/checkout/service.test.ts", "status": "modified", "patch": "@@ -9,3 +9,6 @@\n+expect(result.total).toBe(12900);" }
+    ]
+  },
+  {
+    "id": "108", "number": 108, "title": "금액 컬럼을 amount_cents로 표준화", "author": "dan", "head": "money-in-cents", "base": "main", "updatedAt": "2026-07-15T01:42:00Z", "additions": 92, "deletions": 54, "url": "https://github.com/acme/commerce/pull/108",
+    "body": "모든 금액을 정수 cents 단위로 통일합니다. 배포 시 migration이 먼저 실행됩니다.",
+    "files": [
+      { "filename": "migrations/20260715_rename_order_total.sql", "status": "added", "patch": "@@ -0,0 +1,3 @@\n+ALTER TABLE orders RENAME COLUMN total_amount TO amount_cents;\n+ALTER TABLE orders ALTER COLUMN amount_cents SET NOT NULL;" },
+      { "filename": "src/orders/repository.ts", "status": "modified", "patch": "@@ -18,5 +18,5 @@\n-SELECT id, total_amount FROM orders\n+SELECT id, amount_cents FROM orders" },
+      { "filename": "src/checkout/service.ts", "status": "modified", "patch": "@@ -21,4 +21,4 @@\n-return { total: order.total_amount };\n+return { total: order.amount_cents };" }
+    ]
+  },
+  {
+    "id": "112", "number": 112, "title": "결제 완료 이벤트 payload 경량화", "author": "jiho", "head": "payment-event-v3", "base": "main", "updatedAt": "2026-07-14T23:10:00Z", "additions": 73, "deletions": 45, "url": "https://github.com/acme/commerce/pull/112",
+    "body": "payment.captured 이벤트에서 중복 필드를 제거하고 amountCents를 보냅니다.",
+    "files": [
+      { "filename": "src/payments/capture.ts", "status": "modified", "patch": "@@ -31,8 +31,6 @@\n-publish('payment.captured', { paymentId, amount, currency, orderId });\n+publish('payment.captured', { paymentId, amountCents, orderId });" },
+      { "filename": "src/events/contracts.ts", "status": "modified", "patch": "@@ -4,5 +4,5 @@\n-export type PaymentCaptured = { paymentId: string; amount: number; currency: string; orderId: string };\n+export type PaymentCaptured = { paymentId: string; amountCents: number; orderId: string };" }
+    ]
+  },
+  {
+    "id": "117", "number": 117, "title": "영수증 워커 재시도 안정화", "author": "alex", "head": "receipt-retry", "base": "main", "updatedAt": "2026-07-14T20:05:00Z", "additions": 121, "deletions": 19, "url": "https://github.com/acme/commerce/pull/117",
+    "body": "영수증 워커가 payment.captured를 받아 amount와 currency로 문서를 생성하고 실패 시 재시도합니다.",
+    "files": [
+      { "filename": "workers/receipt/consumer.ts", "status": "modified", "patch": "@@ -15,5 +15,11 @@\n+subscribe('payment.captured', async ({ paymentId, amount, currency, orderId }) => {\n+  await createReceipt({ paymentId, total: amount, currency, orderId });\n+});" },
+      { "filename": "workers/receipt/retry.ts", "status": "added", "patch": "@@ -0,0 +1,4 @@\n+export const retry = { attempts: 5, backoff: 'exponential' };" }
+    ]
+  },
+  {
+    "id": "121", "number": 121, "title": "Checkout v2 점진 배포 플래그", "author": "sora", "head": "checkout-rollout", "base": "main", "updatedAt": "2026-07-14T18:22:00Z", "additions": 64, "deletions": 8, "url": "https://github.com/acme/commerce/pull/121",
+    "body": "CHECKOUT_V2_ENABLED가 없으면 안전하게 v1으로 폴백합니다.",
+    "files": [
+      { "filename": "src/checkout/routes.ts", "status": "modified", "patch": "@@ -8,3 +8,8 @@\n+const useV2 = process.env.CHECKOUT_V2_ENABLED === 'true';\n+router.post('/api/checkout', useV2 ? checkoutV2 : checkoutV1);" },
+      { "filename": "deploy/app.env", "status": "modified", "patch": "@@ -4,2 +4,3 @@\n+CHECKOUT_V2_ENABLED=false" }
+    ]
+  },
+  {
+    "id": "124", "number": 124, "title": "관리자 주문 조회 권한 캐시", "author": "yuna", "head": "admin-auth-cache", "base": "main", "updatedAt": "2026-07-14T16:04:00Z", "additions": 88, "deletions": 22, "url": "https://github.com/acme/commerce/pull/124",
+    "body": "관리자 권한 판정을 30초 캐시해 조회 API 지연을 줄입니다.",
+    "files": [
+      { "filename": "src/admin/orders.ts", "status": "modified", "patch": "@@ -12,4 +12,8 @@\n+router.get('/api/admin/orders', requireRole('admin'), listOrders);" },
+      { "filename": "src/auth/permission-cache.ts", "status": "added", "patch": "@@ -0,0 +1,8 @@\n+export const permissionTtl = 30_000;\n+export async function requireRole(role: string) { return cache.get(role); }" }
+    ]
+  }
+]

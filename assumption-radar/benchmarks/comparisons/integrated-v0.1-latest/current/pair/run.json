@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "pair-qualification-run-v0.1",
+  "systemName": "current",
+  "version": "assumption-radar-v0.9.0",
+  "model": "deterministic-heuristics+SCIR",
+  "promptSha256": "cdb13e4fe49ccc79ac2f8555b0743ac304cfb0aee11dc22c712c9658687c44f6",
+  "startedAt": "2026-07-17T02:55:10.368Z",
+  "finishedAt": "2026-07-17T02:55:16.883Z",
+  "totalLatencyMs": 6514.832917,
+  "totalTokens": 0,
+  "totalCostUsd": 0,
+  "failedCases": 0,
+  "notes": "Local deterministic run on the frozen suite."
+}

@@ -1,0 +1,105 @@
+{
+  "generatedAt": "2026-07-17T02:55:55.863Z",
+  "results": [
+    {
+      "system": "current",
+      "pair": {
+        "triagePrecision": 0.9444444444444444,
+        "triageRecall": 0.85,
+        "triageF1": 0.8947368421052632,
+        "blockerPrecision": 1,
+        "blockerRecall": 0.85,
+        "falseBlockerRate": 0,
+        "workReduction": 0.55,
+        "latencyP50Ms": 16.145999999999958
+      },
+      "radar": {
+        "meanAveragePrecisionAt20": 0.35654484404484404,
+        "recallAt5": 0.1,
+        "precisionAt5": 0.2,
+        "pairReductionAt5": 0.9935897435897436,
+        "recallAt10": 0.5,
+        "precisionAt10": 0.5,
+        "pairReductionAt10": 0.9871794871794872,
+        "recallAt20": 0.8,
+        "precisionAt20": 0.4,
+        "pairReductionAt20": 0.9743589743589743
+      }
+    },
+    {
+      "system": "team1",
+      "pair": {
+        "triagePrecision": 0.8,
+        "triageRecall": 0.6,
+        "triageF1": 0.6857142857142857,
+        "blockerPrecision": 0.5,
+        "blockerRecall": 0.05,
+        "falseBlockerRate": 0.05,
+        "workReduction": 0.625,
+        "latencyP50Ms": 18269.939458
+      },
+      "radar": {
+        "meanAveragePrecisionAt20": 0.7056390111866118,
+        "recallAt5": 0.3,
+        "precisionAt5": 0.6,
+        "pairReductionAt5": 0.9935897435897436,
+        "recallAt10": 0.6,
+        "precisionAt10": 0.6,
+        "pairReductionAt10": 0.9871794871794872,
+        "recallAt20": 1,
+        "precisionAt20": 0.5,
+        "pairReductionAt20": 0.9743589743589743
+      }
+    },
+    {
+      "system": "team2-design-prototype",
+      "pair": {
+        "triagePrecision": 0.5,
+        "triageRecall": 1,
+        "triageF1": 0.6666666666666666,
+        "blockerPrecision": null,
+        "blockerRecall": 0,
+        "falseBlockerRate": 0,
+        "workReduction": 0,
+        "latencyP50Ms": 18.669167
+      },
+      "radar": {
+        "meanAveragePrecisionAt20": 0.6443343462093463,
+        "recallAt5": 0.30000000000000004,
+        "precisionAt5": 0.6000000000000001,
+        "pairReductionAt5": 0.9935897435897436,
+        "recallAt10": 0.55,
+        "precisionAt10": 0.55,
+        "pairReductionAt10": 0.9871794871794872,
+        "recallAt20": 1,
+        "precisionAt20": 0.5,
+        "pairReductionAt20": 0.9743589743589743
+      }
+    },
+    {
+      "system": "integrated",
+      "pair": {
+        "triagePrecision": 0.9444444444444444,
+        "triageRecall": 0.85,
+        "triageF1": 0.8947368421052632,
+        "blockerPrecision": 1,
+        "blockerRecall": 0.85,
+        "falseBlockerRate": 0,
+        "workReduction": 0.55,
+        "latencyP50Ms": 17.508667000000003
+      },
+      "radar": {
+        "meanAveragePrecisionAt20": 0.9429487179487179,
+        "recallAt5": 0.5,
+        "precisionAt5": 1,
+        "pairReductionAt5": 0.9935897435897436,
+        "recallAt10": 0.8500000000000001,
+        "precisionAt10": 0.8500000000000001,
+        "pairReductionAt10": 0.9871794871794872,
+        "recallAt20": 1,
+        "precisionAt20": 0.5,
+        "pairReductionAt20": 0.9743589743589743
+      }
+    }
+  ]
+}

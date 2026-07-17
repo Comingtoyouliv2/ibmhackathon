@@ -1,0 +1,121 @@
+{
+  "generatedAt": "2026-07-17T02:55:55.514Z",
+  "dataset": {
+    "episodes": 2,
+    "prs": 80,
+    "prsPerEpisode": [
+      40,
+      40
+    ],
+    "candidatePairs": 1560,
+    "conflicts": 20,
+    "historicalHardNegatives": 20,
+    "isolatedModuleControls": 1520
+  },
+  "macro": {
+    "meanAveragePrecisionAt20": 0.35654484404484404,
+    "recallAt5": 0.1,
+    "precisionAt5": 0.2,
+    "pairReductionAt5": 0.9935897435897436,
+    "recallAt10": 0.5,
+    "precisionAt10": 0.5,
+    "pairReductionAt10": 0.9871794871794872,
+    "recallAt20": 0.8,
+    "precisionAt20": 0.4,
+    "pairReductionAt20": 0.9743589743589743
+  },
+  "episodes": [
+    {
+      "episodeId": "radar-arena-v0.1-episode-01",
+      "candidatePairs": 780,
+      "positives": 10,
+      "recallAt5": 0.1,
+      "precisionAt5": 0.2,
+      "pairReductionAt5": 0.9935897435897436,
+      "recallAt10": 0.5,
+      "precisionAt10": 0.5,
+      "pairReductionAt10": 0.9871794871794872,
+      "recallAt20": 0.8,
+      "precisionAt20": 0.4,
+      "pairReductionAt20": 0.9743589743589743,
+      "averagePrecisionAt20": 0.3682664557664558,
+      "historicalHardNegativesAt20": 0,
+      "isolatedModuleControlsAt20": 12
+    },
+    {
+      "episodeId": "radar-arena-v0.1-episode-02",
+      "candidatePairs": 780,
+      "positives": 10,
+      "recallAt5": 0.1,
+      "precisionAt5": 0.2,
+      "pairReductionAt5": 0.9935897435897436,
+      "recallAt10": 0.5,
+      "precisionAt10": 0.5,
+      "pairReductionAt10": 0.9871794871794872,
+      "recallAt20": 0.8,
+      "precisionAt20": 0.4,
+      "pairReductionAt20": 0.9743589743589743,
+      "averagePrecisionAt20": 0.3448232323232323,
+      "historicalHardNegativesAt20": 0,
+      "isolatedModuleControlsAt20": 12
+    }
+  ],
+  "missedAt20": [
+    {
+      "schemaVersion": "radar-arena-gold-v0.1",
+      "id": "radar-arena-v0.1-episode-01:PR-022:PR-037",
+      "episodeId": "radar-arena-v0.1-episode-01",
+      "prA": "PR-022",
+      "prB": "PR-037",
+      "gold": "conflict",
+      "controlType": "historical-conflict",
+      "sourceCaseId": "maxcom/lorsource@3b18a208be97c96071e2bcb4668c45c2b545bae2",
+      "sourceRepo": "maxcom/lorsource",
+      "language": "Java",
+      "archetype": "remove-vs-reference",
+      "evidenceGrade": "contract-backed"
+    },
+    {
+      "schemaVersion": "radar-arena-gold-v0.1",
+      "id": "radar-arena-v0.1-episode-01:PR-025:PR-040",
+      "episodeId": "radar-arena-v0.1-episode-01",
+      "prA": "PR-025",
+      "prB": "PR-040",
+      "gold": "conflict",
+      "controlType": "historical-conflict",
+      "sourceCaseId": "gwtbootstrap3/gwtbootstrap3@5c0d1eab79ec3b3d0e8c11cf7ee05e9364bbb5f1",
+      "sourceRepo": "gwtbootstrap3/gwtbootstrap3",
+      "language": "Java",
+      "archetype": "behavioral-composition",
+      "evidenceGrade": "contract-backed"
+    },
+    {
+      "schemaVersion": "radar-arena-gold-v0.1",
+      "id": "radar-arena-v0.1-episode-02:PR-002:PR-013",
+      "episodeId": "radar-arena-v0.1-episode-02",
+      "prA": "PR-002",
+      "prB": "PR-013",
+      "gold": "conflict",
+      "controlType": "historical-conflict",
+      "sourceCaseId": "caelum/vraptor4@3a85ce5195ce9267fa62376fad561df02f8f609b",
+      "sourceRepo": "caelum/vraptor4",
+      "language": "Java",
+      "archetype": "behavioral-composition",
+      "evidenceGrade": "contract-backed"
+    },
+    {
+      "schemaVersion": "radar-arena-gold-v0.1",
+      "id": "radar-arena-v0.1-episode-02:PR-037:PR-039",
+      "episodeId": "radar-arena-v0.1-episode-02",
+      "prA": "PR-037",
+      "prB": "PR-039",
+      "gold": "conflict",
+      "controlType": "historical-conflict",
+      "sourceCaseId": "timmolter/XChart@ad5dbe3fce847bda44a2a16f39f383777e601504",
+      "sourceRepo": "timmolter/XChart",
+      "language": "Java",
+      "archetype": "rename-vs-reference",
+      "evidenceGrade": "contract-backed"
+    }
+  ]
+}

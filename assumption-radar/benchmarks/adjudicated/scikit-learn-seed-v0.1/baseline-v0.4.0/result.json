@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "seed-evaluation-v0.1",
+  "generatedAt": "2026-07-15T02:47:18.406Z",
+  "dataset": {
+    "total": 5,
+    "relationshipEvaluated": 3,
+    "relationshipExcluded": 2,
+    "silentSemanticEvaluated": 1,
+    "repositories": 1
+  },
+  "filtering": {
+    "expectedFiltered": 2,
+    "predictedFiltered": 2,
+    "correctlyFiltered": 2,
+    "incorrectlyFiltered": 0,
+    "recall": 1,
+    "precision": 1
+  },
+  "relationship": {
+    "exact": 3,
+    "total": 3,
+    "accuracy": 1,
+    "byGold": {
+      "compatible": {
+        "total": 1,
+        "exact": 1,
+        "accuracy": 1,
+        "predictions": {
+          "compatible": 1
+        }
+      },
+      "coordination-required": {
+        "total": 2,
+        "exact": 2,
+        "accuracy": 1,
+        "predictions": {
+          "coordination-required": 2
+        }
+      }
+    }
+  },
+  "coordination": {
+    "total": 2,
+    "detected": 2,
+    "recall": 1,
+    "subtypeAnnotated": 2,
+    "subtypeExact": 2,
+    "subtypeAccuracy": 1,
+    "actionAnnotated": 2,
+    "actionExact": 2,
+    "actionAccuracy": 1
+  },
+  "silentSemantic": {
+    "total": 1,
+    "conflicts": 0,
+    "compatible": 1,
+    "triageRecall": null,
+    "harmlessReviewRate": 0,
+    "compatibleExactRate": 1
+  },
+  "errors": [],
+  "explanationGaps": []
+}

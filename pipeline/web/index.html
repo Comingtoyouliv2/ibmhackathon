@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PR Conflict Radar</title>
+  <meta name="description" content="Repository-local PR to PR semantic conflict candidate scanner">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <div class="brand-row">
+      <div>
+        <p class="eyebrow">CROSS-PR SEMANTIC REVIEW</p>
+        <h1>PR Conflict Radar <span id="repo-label">openclaw/openclaw</span></h1>
+      </div>
+      <div class="run-state"><span id="status-dot" class="dot ready"></span><span id="run-status">OpenClaw results ready</span></div>
+    </div>
+    <form id="scan-form" class="scan-form">
+      <label class="repo-field">
+        <span>GitHub repository</span>
+        <input id="repo-input" value="https://github.com/openclaw/openclaw.git" autocomplete="off" spellcheck="false" required>
+      </label>
+      <label class="token-field">
+        <span>GitHub token</span>
+        <input id="token-input" type="password" placeholder="Required only for a new scan" autocomplete="off">
+      </label>
+      <label class="number-field">
+        <span>Review budget</span>
+        <input id="budget-input" type="number" min="10" max="1000" value="100">
+      </label>
+      <button id="scan-button" class="primary" type="submit">Start analysis</button>
+    </form>
+    <div class="form-foot">
+      <span>The token is passed only to the analysis process and is never stored.</span>
+      <button id="advanced-toggle" class="link-button" type="button">Run a quick sample</button>
+      <label id="max-prs-wrap" class="max-prs hidden">Collect the latest <input id="max-prs-input" type="number" min="10" value="100"> PRs only</label>
+    </div>
+    <div id="funnel" class="funnel" aria-label="analysis funnel">
+      <div class="fstep loading"><strong>—</strong><span>open PRs</span></div><div class="fstep loading"><strong>—</strong><span>Step 0 pass</span></div><div class="fstep loading"><strong>—</strong><span>main-conflict deferred</span></div><div class="fstep loading"><strong>—</strong><span>possible pairs</span></div><div class="fstep loading"><strong>—</strong><span>retrieval candidates</span></div><div class="fstep loading accent"><strong>—</strong><span>review queue</span></div>
+    </div>
+  </header>
+
+  <nav class="viewbar">
+    <button class="tab active" data-view="queue">Review queue <span id="queue-count">0</span></button>
+    <button class="tab" data-view="map">Hierarchy map</button>
+    <button class="tab" data-view="runs">Runs</button>
+    <div class="search-wrap">
+      <input id="search-input" placeholder="Search by PR, title, or resource" aria-label="Search review queue">
+    </div>
+    <div class="filter-wrap">
+      <button class="filter active" data-filter="all">All</button>
+      <button class="filter" data-filter="independent">Independent</button>
+      <button class="filter" data-filter="dependency">Dependency</button>
+      <button class="filter" data-filter="unreviewed">Unreviewed</button>
+    </div>
+  </nav>
+
+  <main>
+    <section id="content" class="content">
+      <div id="progress-card" class="progress-card hidden">
+        <div class="progress-copy"><b id="progress-stage">Queued</b><span id="progress-pct">0%</span></div>
+        <div class="progress-track"><i id="progress-bar"></i></div>
+        <pre id="run-log"></pre>
+        <button id="cancel-button" class="secondary" type="button">Cancel run</button>
+      </div>
+      <div id="queue-view"><div class="loading-panel"><span class="loader-radar"></span><b>Loading OpenClaw analysis results</b><small>Preparing candidate pairs and review evidence.</small></div></div>
+      <div id="map-view" class="hidden"></div>
+      <div id="runs-view" class="hidden"></div>
+    </section>
+    <aside id="detail-panel">
+      <div id="detail-empty" class="detail-empty">
+        <div class="radar-mark"></div>
+        <h2>Select a candidate pair</h2>
+        <p>Inspect shared resources, classification evidence, assumptions, and relevant diffs here.</p>
+      </div>
+      <div id="detail-content" class="hidden"></div>
+    </aside>
+  </main>
+  <div id="pair-overlay" class="pair-overlay hidden" role="dialog" aria-modal="true" aria-label="Pull request pair assessment">
+    <section id="pair-modal" class="pair-modal"></section>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

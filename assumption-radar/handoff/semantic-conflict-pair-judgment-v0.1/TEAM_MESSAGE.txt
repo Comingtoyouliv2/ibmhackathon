@@ -1,0 +1,9 @@
+첨부된 폴더의 README.md를 읽고 Pair Qualification 40건을 전부 실행해줘.
+
+SYSTEM_PROMPT.txt와 USER_PROMPT_TEMPLATE.txt는 수정하지 말고 모든 케이스에 동일하게 사용해. 외부 검색, repository checkout, fixing commit, gold 정답, 기존 prediction은 사용하지 마.
+
+최종 결과를 pair-qualification-predictions.jsonl과 pair-qualification-run.json에 저장하고 아래 validator를 통과시켜.
+
+node validate-submission.mjs inputs.jsonl pair-qualification-predictions.jsonl pair-qualification-run.json
+
+완료 후 두 결과 파일과 실제 실행 명령을 반환해.

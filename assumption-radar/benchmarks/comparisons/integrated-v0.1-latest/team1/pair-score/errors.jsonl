@@ -1,0 +1,11 @@
+{"id":"caelum/vraptor4@3a85ce5195ce9267fa62376fad561df02f8f609b","gold":"conflict","prediction":"independent","repo":"caelum/vraptor4","language":"Java","archetype":"behavioral-composition"}
+{"id":"caelum/vraptor4@eff0f0cec9d5ff971bb6b95fc79aa608f3b68726","gold":"conflict","prediction":"independent","repo":"caelum/vraptor4","language":"Java","archetype":"signature-vs-callsite"}
+{"id":"essentials/Essentials@06334f9b484d6e8d8ca2291e91462066cbcc57d2","gold":"conflict","prediction":"independent","repo":"essentials/Essentials","language":"Java","archetype":"initialization-order"}
+{"id":"ninjaframework/ninja@94b2365be30bfa5b88f2d6c2f0097ad438426198","gold":"conflict","prediction":"independent","repo":"ninjaframework/ninja","language":"Java","archetype":"import-vs-use"}
+{"id":"Spoutcraft/Spoutcraft@9c6973d44311958d43b4cb6073c58b9466dcafb0","gold":"conflict","prediction":"independent","repo":"Spoutcraft/Spoutcraft","language":"Java","archetype":"behavioral-composition"}
+{"id":"tinkerpop/rexster@fd1733b8ed502f24fd844e235e6dff88ccdc3cd3","gold":"conflict","prediction":"independent","repo":"tinkerpop/rexster","language":"Java","archetype":"duplicate-addition"}
+{"id":"xtreemfs/xtreemfs@432c7e4273cbc3e86b24204f4fa9a8a80ac69764","gold":"conflict","prediction":"independent","repo":"xtreemfs/xtreemfs","language":"Java","archetype":"import-vs-use"}
+{"id":"yegor256/s3auth@b8bcb4a244f4048c84b744d2f7a88094ee419d5c","gold":"conflict","prediction":"independent","repo":"yegor256/s3auth","language":"Java","archetype":"duplicate-addition"}
+{"id":"atmosphere/atmosphere@ffc0c6e274094c6423e29d1c45bab1593b8fac7d","gold":"harmless","prediction":"review","repo":"atmosphere/atmosphere","language":"Java","archetype":"compatible-control-flow"}
+{"id":"jchambers/pushy@58901c846e4f0874977c5aabbc34bcb4de3670e0","gold":"harmless","prediction":"review","repo":"jchambers/pushy","language":"Java","archetype":"compatible-refactoring"}
+{"id":"Netflix/SimianArmy@345ad9513aafff397050d613fa87ad06ddffe99d","gold":"harmless","prediction":"conflict","repo":"Netflix/SimianArmy","language":"Java","archetype":"compatible-control-flow"}

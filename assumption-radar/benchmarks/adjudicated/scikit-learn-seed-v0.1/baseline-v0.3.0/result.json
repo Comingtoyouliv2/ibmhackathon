@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "seed-evaluation-v0.1",
+  "generatedAt": "2026-07-15T02:27:09.074Z",
+  "dataset": {
+    "total": 5,
+    "relationshipEvaluated": 3,
+    "relationshipExcluded": 2,
+    "silentSemanticEvaluated": 1,
+    "repositories": 1
+  },
+  "filtering": {
+    "expectedFiltered": 2,
+    "predictedFiltered": 2,
+    "correctlyFiltered": 2,
+    "incorrectlyFiltered": 0,
+    "recall": 1,
+    "precision": 1
+  },
+  "relationship": {
+    "exact": 3,
+    "total": 3,
+    "accuracy": 1,
+    "byGold": {
+      "compatible": {
+        "total": 1,
+        "exact": 1,
+        "accuracy": 1,
+        "predictions": {
+          "compatible": 1
+        }
+      },
+      "coordination-required": {
+        "total": 2,
+        "exact": 2,
+        "accuracy": 1,
+        "predictions": {
+          "coordination-required": 2
+        }
+      }
+    }
+  },
+  "coordination": {
+    "total": 2,
+    "detected": 2,
+    "recall": 1,
+    "subtypeAnnotated": 2,
+    "subtypeExact": 0,
+    "subtypeAccuracy": 0,
+    "actionAnnotated": 2,
+    "actionExact": 0,
+    "actionAccuracy": 0
+  },
+  "silentSemantic": {
+    "total": 1,
+    "conflicts": 0,
+    "compatible": 1,
+    "triageRecall": null,
+    "harmlessReviewRate": 0,
+    "compatibleExactRate": 1
+  },
+  "errors": [],
+  "explanationGaps": [
+    {
+      "id": "scikit-learn/scikit-learn#34393x34464",
+      "dimension": "coordination-subtype",
+      "expected": "resolution-risk",
+      "actual": "missing"
+    },
+    {
+      "id": "scikit-learn/scikit-learn#34393x34464",
+      "dimension": "required-action",
+      "expected": "preserve-regression-fix",
+      "actual": "resolve-textual-conflict"
+    },
+    {
+      "id": "scikit-learn/scikit-learn#32511x34465",
+      "dimension": "coordination-subtype",
+      "expected": "duplicate-implementation",
+      "actual": "missing"
+    },
+    {
+      "id": "scikit-learn/scikit-learn#32511x34465",
+      "dimension": "required-action",
+      "expected": "deduplicate",
+      "actual": "resolve-textual-conflict"
+    }
+  ]
+}

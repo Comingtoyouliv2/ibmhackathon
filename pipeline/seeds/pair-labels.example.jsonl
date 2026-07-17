@@ -1,0 +1,2 @@
+{"prA":1001,"prB":1002,"expected":"review","verdict":"conflict","note":"Both closed PRs changed the same contract incompatibly."}
+{"prA":1001,"prB":1003,"expected":"ignore","verdict":"no_conflict","note":"Hard negative: same sector, different responsibilities and resources."}

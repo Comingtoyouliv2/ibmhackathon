@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "radar-arena-build-v0.1",
+  "generatedAt": "2026-07-16T08:22:15.225Z",
+  "episodes": 2,
+  "prsPerEpisode": [
+    40,
+    40
+  ],
+  "candidatePairs": 1560,
+  "positives": 20,
+  "historicalHardNegatives": 20,
+  "isolatedModuleControls": 1520
+}
