@@ -9,7 +9,8 @@
     "./adapters": "./src/adapters/registry.mjs",
     "./integrated": "./src/integrated.mjs",
     "./combined-verifier": "./src/combined-verifier.mjs",
-    "./semantic-judge": "./src/semantic-judge.mjs"
+    "./semantic-judge": "./src/semantic-judge.mjs",
+    "./codex": "./src/codex.mjs"
   },
   "scripts": {
     "start": "node src/server.mjs",
@@ -30,6 +31,7 @@
     "compare:team1": "node eval/run-team1-codex-v0.2.mjs",
     "compare:integrated": "node eval/run-integrated-comparison.mjs",
     "compare:claude-fusion": "node eval/run-frozen-claude-fusion.mjs",
+    "compare:codex-live": "node eval/run-live-codex-fusion.mjs",
     "run:local-system": "node eval/run-local-system.mjs",
     "compare:summarize": "node eval/summarize-system-comparison.mjs",
     "eval:smoke": "node eval/evaluate.mjs test/fixtures/evaluator-smoke.jsonl",
@@ -41,7 +43,7 @@
     "import:scam": "node eval/import-scam-corpus.mjs",
     "build:semantic-clean": "node eval/build-semantic-clean-benchmark.mjs",
     "test": "node --test",
-    "check": "node --check src/server.mjs && node --check src/analyzer.mjs && node --check src/integrated.mjs && node --check src/semantic-judge.mjs && node --check src/anthropic.mjs && node --check src/ai.mjs && node --check src/combined-verifier.mjs && node --check src/scir/index.mjs && node --check src/adapters/binding.mjs && node --check src/adapters/generic.mjs && node --check src/adapters/java.mjs && node --check src/adapters/python.mjs && node --check src/adapters/typescript.mjs && node --check src/adapters/registry.mjs && node --check src/coordination.mjs && node --check src/github.mjs && node --check src/openai.mjs && node --check src/preflight.mjs && node --check src/pipeline.mjs && node --check src/history-mining.mjs && node --check src/history-lineage.mjs && node --check src/merge-history.mjs && node --check src/replay-filter.mjs && node --check src/mine-history.mjs && node --check src/trace-history.mjs && node --check src/scan-merge-history.mjs && node --check src/filter-replay.mjs && node --check src/mine.mjs && node --check public/app.js && node --check eval/evaluate.mjs && node --check eval/evaluate-seed.mjs && node --check eval/evaluate-pair-qualification.mjs && node --check eval/run-current-pair-qualification.mjs && node --check eval/build-radar-arena.mjs && node --check eval/run-current-radar-arena.mjs && node --check eval/run-team1-codex-v0.2.mjs && node --check eval/run-comparison-v0.2.mjs && node --check eval/run-local-system.mjs && node --check eval/run-integrated-comparison.mjs && node --check eval/run-frozen-claude-fusion.mjs && node --check eval/summarize-system-comparison.mjs && node --check eval/evaluate-radar-arena.mjs && node --check eval/verify-history-pairs.mjs && node --check eval/import-sam-corpus.mjs && node --check eval/import-scam-corpus.mjs && node --check eval/build-semantic-clean-benchmark.mjs"
+    "check": "node --check src/server.mjs && node --check src/analyzer.mjs && node --check src/integrated.mjs && node --check src/semantic-judge.mjs && node --check src/anthropic.mjs && node --check src/codex.mjs && node --check src/ai.mjs && node --check src/combined-verifier.mjs && node --check src/scir/index.mjs && node --check src/adapters/binding.mjs && node --check src/adapters/generic.mjs && node --check src/adapters/java.mjs && node --check src/adapters/python.mjs && node --check src/adapters/typescript.mjs && node --check src/adapters/registry.mjs && node --check src/coordination.mjs && node --check src/github.mjs && node --check src/openai.mjs && node --check src/preflight.mjs && node --check src/pipeline.mjs && node --check src/history-mining.mjs && node --check src/history-lineage.mjs && node --check src/merge-history.mjs && node --check src/replay-filter.mjs && node --check src/mine-history.mjs && node --check src/trace-history.mjs && node --check src/scan-merge-history.mjs && node --check src/filter-replay.mjs && node --check src/mine.mjs && node --check public/app.js && node --check eval/evaluate.mjs && node --check eval/evaluate-seed.mjs && node --check eval/evaluate-pair-qualification.mjs && node --check eval/run-current-pair-qualification.mjs && node --check eval/build-radar-arena.mjs && node --check eval/run-current-radar-arena.mjs && node --check eval/run-team1-codex-v0.2.mjs && node --check eval/run-comparison-v0.2.mjs && node --check eval/run-local-system.mjs && node --check eval/run-integrated-comparison.mjs && node --check eval/run-frozen-claude-fusion.mjs && node --check eval/run-live-codex-fusion.mjs && node --check eval/summarize-system-comparison.mjs && node --check eval/evaluate-radar-arena.mjs && node --check eval/verify-history-pairs.mjs && node --check eval/import-sam-corpus.mjs && node --check eval/import-scam-corpus.mjs && node --check eval/build-semantic-clean-benchmark.mjs"
   },
   "engines": {
     "node": ">=20"

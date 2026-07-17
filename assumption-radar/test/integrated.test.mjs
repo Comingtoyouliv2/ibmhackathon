@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { analyzeWithAnthropic, extractJsonObject } from "../src/anthropic.mjs";
+import { analyzeWithCodex } from "../src/codex.mjs";
 import { classifyCombinedRuns, failureSignatures } from "../src/combined-verifier.mjs";
 import { prepareIntegratedAnalysis, prepareIntentPrototypeAnalysis } from "../src/integrated.mjs";
 import { buildSemanticJudgeCases, normalizeSemanticJudgments, selectSemanticJudgeCandidates } from "../src/semantic-judge.mjs";
@@ -83,4 +84,30 @@ test("Anthropic adapter repairs control characters and uses the shared evidence 
   const judgments = await analyzeWithAnthropic(prepared, { client, concurrency: 1 });
   assert.equal(judgments[0].verdict, "conflict");
   assert.equal(judgments[0].source, "anthropic");
+});
+
+test("Codex adapter uses the same second-look and bilateral evidence contract", async () => {
+  const prepared = prepareIntegratedAnalysis([
+    pr("1", "src/Service.java", "@@ -1 +1 @@\n-old\n+newCall(oldArg);"),
+    pr("2", "src/Service.java", "@@ -2 +2 @@\n-old\n+void newCall(NewArg arg) {}"),
+  ]);
+  const runner = async (caseInput) => ({
+    prIds: caseInput.prIds,
+    verdict: "conflict",
+    category: "api",
+    title: "signature mismatch",
+    summary: "A uses the old contract while B replaces it.",
+    assumptionA: "old argument remains accepted",
+    assumptionB: "only NewArg is accepted",
+    failureMechanism: "the combined call no longer compiles",
+    recommendation: "update the callsite",
+    confidence: 0.9,
+    evidence: [
+      { side: "A", file: "src/Service.java", symbol: "newCall", quote: "newCall(oldArg);" },
+      { side: "B", file: "src/Service.java", symbol: "newCall", quote: "void newCall(NewArg arg) {}" },
+    ],
+  });
+  const judgments = await analyzeWithCodex(prepared, { runner, concurrency: 1 });
+  assert.equal(judgments[0].verdict, "conflict");
+  assert.equal(judgments[0].source, "codex");
 });

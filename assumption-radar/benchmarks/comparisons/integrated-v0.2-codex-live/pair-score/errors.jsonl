@@ -1,0 +1,3 @@
+{"id":"caelum/vraptor4@3a85ce5195ce9267fa62376fad561df02f8f609b","gold":"conflict","prediction":"independent","repo":"caelum/vraptor4","language":"Java","archetype":"behavioral-composition"}
+{"id":"hector-client/hector@a33a46506656a39d1b0f7780973905665d3b6145","gold":"harmless","prediction":"review","repo":"hector-client/hector","language":"Java","archetype":"compatible-refactoring"}
+{"id":"Netflix/eureka@6b09030e95e118a784ca7ec616398a4f0e384bcd","gold":"harmless","prediction":"review","repo":"Netflix/eureka","language":"Java","archetype":"compatible-control-flow"}

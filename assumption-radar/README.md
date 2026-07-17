@@ -49,6 +49,10 @@ GITHUB_TOKEN=... OPENAI_API_KEY=... \
 # Claude를 판정기로 선택
 GITHUB_TOKEN=... ANTHROPIC_API_KEY=... \
   npm run scan -- owner/repository --ai --ai-provider anthropic --fail-on conflict
+
+# 로그인된 Codex CLI를 판정기로 선택(API key 불필요)
+GITHUB_TOKEN=... npm run scan -- owner/repository \
+  --preflight --ai --ai-provider codex --fail-on conflict
 ```
 
 `.github/workflows/assumption-radar.yml`은 PR이 바뀔 때마다 전체 open PR을 다시 비교하는 최소 GitHub Actions 예제입니다. 이 프로젝트를 다른 저장소의 하위 폴더로 넣는다면 workflow의 `working-directory`와 npm cache 경로를 조정해야 합니다.

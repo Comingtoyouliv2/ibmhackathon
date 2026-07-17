@@ -99,3 +99,25 @@ node eval/evaluate-pair-qualification.mjs \
   benchmarks/comparisons/integrated-v0.2-claude-frozen/pair/predictions.jsonl \
   benchmarks/comparisons/integrated-v0.2-claude-frozen/pair-score
 ```
+
+## v0.2 — live Codex replacement run
+
+The same second-look interface can use an authenticated local Codex CLI without an Anthropic or OpenAI API key. A fresh, gold-blind run used 23 isolated Codex calls for the 40-case pair suite; deterministic blockers bypassed the model.
+
+- model: `gpt-5.4`, reasoning effort `medium`
+- wall time: 123.6 seconds
+- precision 90.5%, recall 95.0%, F1 92.7%
+- blocker precision 100.0%, blocker recall 95.0%
+- false blocker rate 0.0%
+
+This improves on the deterministic pair F1 of 89.5%, but remains below the frozen Claude-fusion F1 of 95.2%. One positive remained missed and two harmless cases were routed to review. Reproduce a fresh run with:
+
+This is a system-level ablation, not a same-prompt model-only comparison: deterministic findings are preserved, and Codex sees the integrated detector's compact second-look case and internal prompt. The public suite prompt hash in `run.json` identifies the input/output protocol; `notes` records this internal-prompt distinction explicitly.
+
+```bash
+npm run compare:codex-live -- --model gpt-5.4 --concurrency 4
+node eval/evaluate-pair-qualification.mjs \
+  benchmarks/semantic-clean-v0.1/frozen-v0.1/gold.jsonl \
+  benchmarks/comparisons/integrated-v0.2-codex-live/pair/predictions.jsonl \
+  benchmarks/comparisons/integrated-v0.2-codex-live/pair-score
+```

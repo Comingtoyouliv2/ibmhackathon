@@ -35,7 +35,7 @@ async function analyze(prs, options = {}) {
   const prepared = pipeline.prepared;
   let aiConflicts = [];
   let aiError = null;
-  if (options.useAI && (options.apiKey || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY)) {
+  if (options.useAI && (options.aiProvider === "codex" || process.env.SEMANTIC_JUDGE_PROVIDER === "codex" || options.apiKey || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY)) {
     try { aiConflicts = await analyzeWithAI(prepared, options); }
     catch (error) { aiError = error.message; }
   }
@@ -52,20 +52,21 @@ async function handler(req, res) {
         anthropicConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
         mergeTreePreflight: true,
         aiProvider: semanticJudgeProvider(),
-        model: semanticJudgeProvider() === "anthropic" ? process.env.ANTHROPIC_MODEL || "claude-opus-4-8" : process.env.OPENAI_MODEL || "gpt-5.6-terra",
+        model: semanticJudgeProvider() === "anthropic" ? process.env.ANTHROPIC_MODEL || "claude-opus-4-8"
+          : semanticJudgeProvider() === "codex" ? process.env.CODEX_MODEL || "gpt-5.4" : process.env.OPENAI_MODEL || "gpt-5.6-terra",
       });
     }
     if (req.method === "POST" && url.pathname === "/api/demo") {
       const prs = JSON.parse(await readFile(DEMO_PATH, "utf8"));
       const input = await body(req);
-      return json(res, 200, await analyze(prs, { useAI: Boolean(input.useAI), useMergePreflight: false }));
+      return json(res, 200, await analyze(prs, { useAI: Boolean(input.useAI), aiProvider: input.aiProvider, useMergePreflight: false }));
     }
     if (req.method === "POST" && url.pathname === "/api/analyze") {
       const input = await body(req);
       const repository = parseRepository(input.repository);
       const limit = Math.max(2, Math.min(100, Number(input.limit) || 20));
       const prs = await fetchOpenPullRequests(repository, process.env.GITHUB_TOKEN, { limit });
-      const result = await analyze(prs, { repository, useAI: input.useAI !== false, useMergePreflight: input.useMergePreflight !== false });
+      const result = await analyze(prs, { repository, useAI: input.useAI !== false, aiProvider: input.aiProvider, useMergePreflight: input.useMergePreflight !== false });
       return json(res, 200, { ...result, repository });
     }
     if (req.method !== "GET") return json(res, 404, { error: "Not found" });

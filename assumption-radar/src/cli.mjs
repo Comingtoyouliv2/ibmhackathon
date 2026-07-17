@@ -18,13 +18,14 @@ function help() {
   console.log(`Assumption Radar CLI
 
 Usage:
-  npm run scan -- owner/repository [--limit 20] [--preflight] [--ai] [--ai-provider openai|anthropic] [--json] [--fail-on conflict]
+  npm run scan -- owner/repository [--limit 20] [--preflight] [--ai] [--ai-provider openai|anthropic|codex] [--json] [--fail-on conflict]
   npm run scan -- --demo [--json]
 
 Environment:
   GITHUB_TOKEN     private repository access / higher API limits
   OPENAI_API_KEY   enables --ai
   ANTHROPIC_API_KEY enables --ai with --ai-provider anthropic
+  CODEX_MODEL      defaults to gpt-5.4 for --ai-provider codex
   OPENAI_MODEL     defaults to gpt-5.6-terra
   ANTHROPIC_MODEL  defaults to claude-opus-4-8`);
 }
