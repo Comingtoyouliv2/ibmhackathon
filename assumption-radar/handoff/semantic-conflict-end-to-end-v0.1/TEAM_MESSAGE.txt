@@ -1,0 +1,9 @@
+첨부된 폴더의 README.md를 읽고 End-to-End Radar Arena를 실행해줘.
+
+TASK_PROMPT.txt는 수정하지 말고 최상위 과업 지시로 사용해. 내부 구현 방식은 자유지만 episodes 폴더 외의 데이터, 웹 검색, repository checkout, gold 정답, 기존 prediction은 사용하지 마.
+
+두 episode 각각에서 가능한 모든 PR pair를 분석한 뒤 semantic conflict 가능성이 높은 상위 20쌍을 순서대로 radar-arena-predictions.jsonl에 기록하고, 실제 실행 정보는 radar-arena-run.json에 기록해. 마지막으로 아래 validator가 통과할 때까지 제출 형식 오류를 수정해.
+
+node validate-submission.mjs episodes radar-arena-predictions.jsonl radar-arena-run.json
+
+완료 후 radar-arena-predictions.jsonl, radar-arena-run.json, 실제 실행 명령을 반환해.

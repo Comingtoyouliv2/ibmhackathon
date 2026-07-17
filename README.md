@@ -1,5 +1,7 @@
 # PR×PR — 열린 PR 간 의미 충돌 탐지기
 
+> **Workspace status:** `pipeline/`은 TypeScript 연구·수집 파이프라인이고, [`assumption-radar/`](assumption-radar/)는 통합 탐지기와 공통 평가 하네스입니다. `pipeline/data/`는 재라벨 전까지 현재 benchmark가 아닙니다.
+
 > 따로 보면 멀쩡한데 합쳐지면 서로의 전제를 깨뜨리는 PR 쌍을, 병합 전에 찾아서 이유와 함께 보여준다.
 
 ## 문제

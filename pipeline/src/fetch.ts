@@ -22,7 +22,7 @@ const [OWNER, NAME] = REPO.split('/');
 const PAGE_SIZE = Number(process.env.PAGE_SIZE ?? 50);
 const MAX_PRS = Number(process.env.MAX_PRS ?? Infinity);
 
-const DATA_DIR = path.resolve('data');
+const DATA_DIR = path.resolve(process.env.DATA_DIR ?? 'data');
 const RAW_PATH = path.join(DATA_DIR, 'prs.jsonl');
 const CKPT_PATH = path.join(DATA_DIR, 'checkpoint.json');
 
@@ -218,8 +218,8 @@ async function hydrateTruncatedFiles(slims: SlimResult[]): Promise<RawPr[]> {
   return out;
 }
 
-async function fetchPage(cursor: string | null): Promise<Page> {
-  const json = await gqlRequest(QUERY, { owner: OWNER, name: NAME, pageSize: PAGE_SIZE, cursor });
+async function fetchPage(cursor: string | null, pageSize = PAGE_SIZE): Promise<Page> {
+  const json = await gqlRequest(QUERY, { owner: OWNER, name: NAME, pageSize, cursor });
   const prs = json.data.repository.pullRequests;
   const hydrated = await hydrateTruncatedFiles(prs.nodes.map(slim));
   return {
@@ -252,7 +252,8 @@ async function main() {
 
   console.log(`Fetching open PRs from ${REPO} (page size ${PAGE_SIZE})...`);
   while (count < MAX_PRS) {
-    const page = await fetchPage(cursor);
+    const remaining = Number.isFinite(MAX_PRS) ? Math.max(1, MAX_PRS - count) : PAGE_SIZE;
+    const page = await fetchPage(cursor, Math.min(PAGE_SIZE, remaining));
     if (page.prs.length > 0) {
       fs.appendFileSync(RAW_PATH, page.prs.map((p) => JSON.stringify(p)).join('\n') + '\n');
     }

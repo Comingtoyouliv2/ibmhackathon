@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "seed-baseline-run-v0.1",
+  "dataset": "scikit-learn-seed-v0.1",
+  "pipelineVersion": "0.3.0",
+  "repository": "scikit-learn/scikit-learn",
+  "sourceRun": "benchmarks/candidates/scikit-learn__scikit-learn-2026-07-15-merge-preflight",
+  "sourceSnapshot": "source-prs.jsonl",
+  "mergeTreePreflight": true,
+  "stackCollapse": true,
+  "causalProofPolicy": "causal-proof-v0.1",
+  "predictionProvenance": "Mechanical results are frozen from the verified preflight run; clean semantic pairs were reanalyzed from the frozen source snapshot with v0.3.0.",
+  "notes": "This is a five-case regression seed, not a repository-general performance estimate."
+}

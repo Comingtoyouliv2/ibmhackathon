@@ -1,0 +1,64 @@
+{
+  "generatedAt": "2026-07-17T09:40:29.125Z",
+  "dataset": {
+    "episodes": 2,
+    "prs": 80,
+    "prsPerEpisode": [
+      40,
+      40
+    ],
+    "candidatePairs": 1560,
+    "conflicts": 20,
+    "historicalHardNegatives": 20,
+    "isolatedModuleControls": 1520
+  },
+  "macro": {
+    "meanAveragePrecisionAt20": 0.6443343462093463,
+    "recallAt5": 0.30000000000000004,
+    "precisionAt5": 0.6000000000000001,
+    "pairReductionAt5": 0.9935897435897436,
+    "recallAt10": 0.55,
+    "precisionAt10": 0.55,
+    "pairReductionAt10": 0.9871794871794872,
+    "recallAt20": 1,
+    "precisionAt20": 0.5,
+    "pairReductionAt20": 0.9743589743589743
+  },
+  "episodes": [
+    {
+      "episodeId": "radar-arena-v0.1-episode-01",
+      "candidatePairs": 780,
+      "positives": 10,
+      "recallAt5": 0.2,
+      "precisionAt5": 0.4,
+      "pairReductionAt5": 0.9935897435897436,
+      "recallAt10": 0.5,
+      "precisionAt10": 0.5,
+      "pairReductionAt10": 0.9871794871794872,
+      "recallAt20": 1,
+      "precisionAt20": 0.5,
+      "pairReductionAt20": 0.9743589743589743,
+      "averagePrecisionAt20": 0.5457466144966144,
+      "historicalHardNegativesAt20": 10,
+      "isolatedModuleControlsAt20": 0
+    },
+    {
+      "episodeId": "radar-arena-v0.1-episode-02",
+      "candidatePairs": 780,
+      "positives": 10,
+      "recallAt5": 0.4,
+      "precisionAt5": 0.8,
+      "pairReductionAt5": 0.9935897435897436,
+      "recallAt10": 0.6,
+      "precisionAt10": 0.6,
+      "pairReductionAt10": 0.9871794871794872,
+      "recallAt20": 1,
+      "precisionAt20": 0.5,
+      "pairReductionAt20": 0.9743589743589743,
+      "averagePrecisionAt20": 0.742922077922078,
+      "historicalHardNegativesAt20": 10,
+      "isolatedModuleControlsAt20": 0
+    }
+  ],
+  "missedAt20": []
+}

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "radar-arena-run-v0.1",
+  "systemName": "current",
+  "version": "assumption-radar-v0.9.0",
+  "model": "deterministic-heuristics+SCIR",
+  "taskPromptSha256": "87d2dca2f61f9aae1ec77501c091eb2fb8b9f8de696d2f06accd83efada6c88e",
+  "startedAt": "2026-07-17T09:39:52.285Z",
+  "finishedAt": "2026-07-17T09:39:59.958Z",
+  "totalLatencyMs": 7671.859583,
+  "totalTokens": 0,
+  "totalCostUsd": 0,
+  "failedEpisodes": 0,
+  "episodeRuns": [
+    {
+      "episodeId": "radar-arena-v0.1-episode-01",
+      "prCount": 40,
+      "pairCount": 780,
+      "latencyMs": 3880.936416
+    },
+    {
+      "episodeId": "radar-arena-v0.1-episode-02",
+      "prCount": 40,
+      "pairCount": 780,
+      "latencyMs": 3761.8349999999996
+    }
+  ],
+  "notes": "Local deterministic run on the frozen arena."
+}

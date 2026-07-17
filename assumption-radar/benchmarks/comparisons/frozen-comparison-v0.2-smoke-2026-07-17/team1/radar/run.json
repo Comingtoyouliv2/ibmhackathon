@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "radar-arena-run-v0.1",
+  "systemName": "team1-contract-radar-codex",
+  "version": "comparison-adapter-v0.2",
+  "model": "gpt-5.4",
+  "taskPromptSha256": "87d2dca2f61f9aae1ec77501c091eb2fb8b9f8de696d2f06accd83efada6c88e",
+  "startedAt": "2026-07-17T00:54:15.080Z",
+  "finishedAt": "2026-07-17T00:58:51.804Z",
+  "totalLatencyMs": 545570.2529170001,
+  "totalTokens": null,
+  "totalCostUsd": null,
+  "failedEpisodes": 0,
+  "episodeRuns": [
+    {
+      "episodeId": "radar-arena-v0.1-episode-01",
+      "prCount": 40,
+      "pairCount": 780,
+      "latencyMs": 276670.254208
+    },
+    {
+      "episodeId": "radar-arena-v0.1-episode-02",
+      "prCount": 40,
+      "pairCount": 780,
+      "latencyMs": 268899.998709
+    }
+  ],
+  "notes": "Team 1 frozen behavior: one isolated read-only Codex ranking call per episode. No dataset-specific module hint is injected by the adapter."
+}

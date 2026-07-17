@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "pair-qualification-run-v0.1",
+  "systemName": "team2",
+  "version": "intent-resource-prototype-v0.1",
+  "model": "intent-resource-retrieval-only",
+  "promptSha256": "cdb13e4fe49ccc79ac2f8555b0743ac304cfb0aee11dc22c712c9658687c44f6",
+  "startedAt": "2026-07-17T09:40:00.069Z",
+  "finishedAt": "2026-07-17T09:40:06.751Z",
+  "totalLatencyMs": 6681.716208,
+  "totalTokens": 0,
+  "totalCostUsd": 0,
+  "failedCases": 0,
+  "notes": "Runnable prototype of the design-stage Intent Card/resource retrieval. It has no implemented Step-3 semantic judge, so related pairs are routed to review rather than conflict."
+}

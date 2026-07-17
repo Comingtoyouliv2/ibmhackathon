@@ -1,0 +1,38 @@
+{
+  "version": "1.0.0",
+  "principle": "No composite score. Evaluate retrieval, blocking, abstention, evidence, generalization, and operations separately.",
+  "labels": ["conflict", "harmless"],
+  "predictions": ["conflict", "coordination", "review", "independent", "insufficient"],
+  "taxonomy": {
+    "archetypes": [
+      "api-contract", "data-schema", "event-schema", "configuration", "behavioral-invariant",
+      "ordering-rollout", "resource-lifecycle", "authorization", "concurrency", "time-units",
+      "serialization", "public-signature", "dependency-build", "unknown"
+    ],
+    "distances": ["same-line", "same-declaration", "same-file", "cross-file", "cross-module", "cross-service", "unknown"],
+    "difficulty": ["direct-witness", "repository-context", "behavioral-reasoning", "runtime-only", "unknown"]
+  },
+  "metrics": {
+    "triage": ["conflict_recall", "harmless_review_rate", "work_reduction"],
+    "blocking": ["blocker_precision", "blocker_recall", "false_blocker_rate"],
+    "abstention": ["decisive_coverage", "selective_accuracy", "insufficient_rate"],
+    "evidence": ["valid_witness_rate", "exact_localization_rate", "rationale_completeness"],
+    "generalization": ["macro_by_repo", "macro_by_language", "macro_by_archetype", "macro_by_distance", "worst_supported_slice"],
+    "operations": ["latency_p50_ms", "latency_p95_ms", "tokens_mean", "cost_mean_usd"]
+    ,"detectors": ["activations", "conflict_coverage", "harmless_activation_rate", "unique_conflict_contribution", "blocker_tp_contribution", "blocker_fp_contribution"]
+  },
+  "maturityGates": {
+    "triage-ready": {
+      "minimumData": { "total": 200, "repos": 10, "languages": 4, "conflictsPerSupportedSlice": 20 },
+      "targets": { "triageRecall": 0.9, "harmlessReviewRateMax": 0.5, "validWitnessRate": 0.85 }
+    },
+    "advisory-ready": {
+      "minimumData": { "total": 500, "repos": 20, "languages": 6, "conflictsPerSupportedSlice": 30 },
+      "targets": { "triageRecall": 0.93, "blockerPrecision": 0.85, "falseBlockerRateMax": 0.05, "exactLocalizationRate": 0.8 }
+    },
+    "merge-gate-ready": {
+      "minimumData": { "total": 1000, "repos": 30, "languages": 8, "conflictsPerSupportedSlice": 50 },
+      "targets": { "triageRecall": 0.95, "blockerPrecisionLower95": 0.9, "blockerRecall": 0.5, "falseBlockerRateMax": 0.02, "exactLocalizationRate": 0.9, "worstSupportedSliceRecall": 0.8 }
+    }
+  }
+}

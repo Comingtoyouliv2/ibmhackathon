@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://assumption-radar.local/schemas/prediction-v0.1.json",
+  "title": "Semantic conflict pair prediction",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "prediction",
+    "confidence",
+    "assumptionA",
+    "assumptionB",
+    "failureMechanism",
+    "explanation",
+    "evidence"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "pair-qualification-prediction-v0.1"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "prediction": {
+      "enum": ["conflict", "review", "independent", "insufficient", "coordination"]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "assumptionA": {
+      "type": "string"
+    },
+    "assumptionB": {
+      "type": "string"
+    },
+    "failureMechanism": {
+      "type": "string"
+    },
+    "explanation": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["side", "file", "symbol", "quote"],
+        "properties": {
+          "side": {
+            "enum": ["A", "B"]
+          },
+          "file": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "quote": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "latencyMs": {
+      "type": "number",
+      "minimum": 0
+    },
+    "tokens": {
+      "type": "number",
+      "minimum": 0
+    },
+    "costUsd": {
+      "type": "number",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false
+}

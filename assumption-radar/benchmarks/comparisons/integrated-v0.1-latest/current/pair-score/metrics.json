@@ -1,0 +1,723 @@
+{
+  "generatedAt": "2026-07-17T09:40:28.965Z",
+  "dataset": {
+    "total": 40,
+    "evaluated": 40,
+    "excluded": 0,
+    "conflicts": 20,
+    "harmless": 20,
+    "repos": 33,
+    "languages": 1,
+    "archetypes": 12
+  },
+  "blocker": {
+    "tp": 17,
+    "fp": 0,
+    "tn": 20,
+    "fn": 3,
+    "precision": 1,
+    "recall": 0.85,
+    "f1": 0.9189189189189189,
+    "accuracy": 0.925,
+    "falsePositiveRate": 0,
+    "precision95": {
+      "low": 0.8156763396284354,
+      "high": 1
+    },
+    "recall95": {
+      "low": 0.6395767041130426,
+      "high": 0.9476322080405041
+    }
+  },
+  "triage": {
+    "tp": 17,
+    "fp": 1,
+    "tn": 19,
+    "fn": 3,
+    "precision": 0.9444444444444444,
+    "recall": 0.85,
+    "f1": 0.8947368421052632,
+    "accuracy": 0.9,
+    "falsePositiveRate": 0.05,
+    "precision95": {
+      "low": 0.7424220019799247,
+      "high": 0.9901250641690756
+    },
+    "recall95": {
+      "low": 0.6395767041130426,
+      "high": 0.9476322080405041
+    }
+  },
+  "routing": {
+    "conflict": 17,
+    "coordination": 0,
+    "review": 1,
+    "independent": 22,
+    "insufficient": 0,
+    "triageRecall": 0.85,
+    "harmlessReviewRate": 0.05,
+    "conflictReviewCapture": 0,
+    "workReduction": 0.55,
+    "decisiveCoverage": 0.975,
+    "selectiveAccuracy": 0.9230769230769231,
+    "insufficientRate": 0
+  },
+  "evidence": {
+    "annotated": 0,
+    "validWitnessRate": null,
+    "exactWitnessRate": null,
+    "exactLocalizationRate": null,
+    "rationaleCompleteness": null
+  },
+  "operations": {
+    "samples": 40,
+    "latencyP50Ms": 19.363124999999854,
+    "latencyP95Ms": 918.1255000000001,
+    "tokensMean": 0,
+    "costMeanUsd": 0
+  },
+  "detectors": {},
+  "slices": {
+    "repo": {
+      "values": {
+        "AsyncHttpClient/async-http-client": {
+          "total": 1,
+          "goldConflicts": 1,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "caelum/vraptor4": {
+          "total": 2,
+          "goldConflicts": 2,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 0.5,
+          "falseBlockerRate": null,
+          "triageRecall": 0.5,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 0.5
+        },
+        "CloudSlang/score": {
+          "total": 1,
+          "goldConflicts": 1,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "essentials/Essentials": {
+          "total": 1,
+          "goldConflicts": 1,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "gephi/gephi": {
+          "total": 1,
+          "goldConflicts": 1,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "gwtbootstrap3/gwtbootstrap3": {
+          "total": 1,
+          "goldConflicts": 1,
+          "goldHarmless": 0,
+          "blockerPrecision": null,
+          "blockerRecall": 0,
+          "falseBlockerRate": null,
+          "triageRecall": 0,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 0
+        },
+        "maxcom/lorsource": {
+          "total": 2,
+          "goldConflicts": 2,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 0.5,
+          "falseBlockerRate": null,
+          "triageRecall": 0.5,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 0.5
+        },
+        "ninjaframework/ninja": {
+          "total": 2,
+          "goldConflicts": 2,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "perwendel/spark": {
+          "total": 1,
+          "goldConflicts": 1,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "sanity/tahrir": {
+          "total": 1,
+          "goldConflicts": 1,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "spotify/helios": {
+          "total": 1,
+          "goldConflicts": 1,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "Spoutcraft/Spoutcraft": {
+          "total": 1,
+          "goldConflicts": 1,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "square/okio": {
+          "total": 1,
+          "goldConflicts": 1,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "timmolter/XChart": {
+          "total": 1,
+          "goldConflicts": 1,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "tinkerpop/rexster": {
+          "total": 1,
+          "goldConflicts": 1,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "xtreemfs/xtreemfs": {
+          "total": 1,
+          "goldConflicts": 1,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "yegor256/s3auth": {
+          "total": 1,
+          "goldConflicts": 1,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "Activiti/Activiti": {
+          "total": 1,
+          "goldConflicts": 0,
+          "goldHarmless": 1,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "atmosphere/atmosphere": {
+          "total": 1,
+          "goldConflicts": 0,
+          "goldHarmless": 1,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "elastic/elasticsearch": {
+          "total": 2,
+          "goldConflicts": 0,
+          "goldHarmless": 2,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "hector-client/hector": {
+          "total": 3,
+          "goldConflicts": 0,
+          "goldHarmless": 3,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0.3333333333333333,
+          "decisiveCoverage": 0.6666666666666666,
+          "selectiveAccuracy": 1
+        },
+        "jchambers/pushy": {
+          "total": 1,
+          "goldConflicts": 0,
+          "goldHarmless": 1,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "libgdx/libgdx": {
+          "total": 1,
+          "goldConflicts": 0,
+          "goldHarmless": 1,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "metamx/druid": {
+          "total": 1,
+          "goldConflicts": 0,
+          "goldHarmless": 1,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "Netflix/eureka": {
+          "total": 1,
+          "goldConflicts": 0,
+          "goldHarmless": 1,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "Netflix/SimianArmy": {
+          "total": 1,
+          "goldConflicts": 0,
+          "goldHarmless": 1,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "richardwilly98/elasticsearch-river-mongodb": {
+          "total": 1,
+          "goldConflicts": 0,
+          "goldHarmless": 1,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "spring-projects/spring-boot": {
+          "total": 1,
+          "goldConflicts": 0,
+          "goldHarmless": 1,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "square/okhttp": {
+          "total": 2,
+          "goldConflicts": 0,
+          "goldHarmless": 2,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "square/retrofit": {
+          "total": 1,
+          "goldConflicts": 0,
+          "goldHarmless": 1,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "thinkaurelius/titan": {
+          "total": 1,
+          "goldConflicts": 0,
+          "goldHarmless": 1,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "antlr/antlr4": {
+          "total": 1,
+          "goldConflicts": 0,
+          "goldHarmless": 1,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "unclebob/fitnesse": {
+          "total": 1,
+          "goldConflicts": 0,
+          "goldHarmless": 1,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        }
+      },
+      "macro": {
+        "blockerPrecision": 1,
+        "blockerRecall": 0.8823529411764706,
+        "falseBlockerRate": 0,
+        "triageRecall": 0.8823529411764706,
+        "harmlessReviewRate": 0.020833333333333332,
+        "decisiveCoverage": 0.9898989898989901,
+        "selectiveAccuracy": 0.9393939393939394
+      }
+    },
+    "language": {
+      "values": {
+        "Java": {
+          "total": 40,
+          "goldConflicts": 20,
+          "goldHarmless": 20,
+          "blockerPrecision": 1,
+          "blockerRecall": 0.85,
+          "falseBlockerRate": 0,
+          "triageRecall": 0.85,
+          "harmlessReviewRate": 0.05,
+          "decisiveCoverage": 0.975,
+          "selectiveAccuracy": 0.9230769230769231
+        }
+      },
+      "macro": {
+        "blockerPrecision": 1,
+        "blockerRecall": 0.85,
+        "falseBlockerRate": 0,
+        "triageRecall": 0.85,
+        "harmlessReviewRate": 0.05,
+        "decisiveCoverage": 0.975,
+        "selectiveAccuracy": 0.9230769230769231
+      }
+    },
+    "archetype": {
+      "values": {
+        "behavioral-composition": {
+          "total": 4,
+          "goldConflicts": 4,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 0.5,
+          "falseBlockerRate": null,
+          "triageRecall": 0.5,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 0.5
+        },
+        "signature-vs-callsite": {
+          "total": 5,
+          "goldConflicts": 5,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "duplicate-addition": {
+          "total": 5,
+          "goldConflicts": 5,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "initialization-order": {
+          "total": 1,
+          "goldConflicts": 1,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "remove-vs-reference": {
+          "total": 1,
+          "goldConflicts": 1,
+          "goldHarmless": 0,
+          "blockerPrecision": null,
+          "blockerRecall": 0,
+          "falseBlockerRate": null,
+          "triageRecall": 0,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 0
+        },
+        "import-vs-use": {
+          "total": 2,
+          "goldConflicts": 2,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "rename-vs-reference": {
+          "total": 2,
+          "goldConflicts": 2,
+          "goldHarmless": 0,
+          "blockerPrecision": 1,
+          "blockerRecall": 1,
+          "falseBlockerRate": null,
+          "triageRecall": 1,
+          "harmlessReviewRate": null,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "compatible-control-flow": {
+          "total": 7,
+          "goldConflicts": 0,
+          "goldHarmless": 7,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "compatible-refactoring": {
+          "total": 6,
+          "goldConflicts": 0,
+          "goldHarmless": 6,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0.16666666666666666,
+          "decisiveCoverage": 0.8333333333333334,
+          "selectiveAccuracy": 1
+        },
+        "compatible-state-partition": {
+          "total": 4,
+          "goldConflicts": 0,
+          "goldHarmless": 4,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "compatible-side-effect": {
+          "total": 1,
+          "goldConflicts": 0,
+          "goldHarmless": 1,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        },
+        "compatible-intended-union": {
+          "total": 2,
+          "goldConflicts": 0,
+          "goldHarmless": 2,
+          "blockerPrecision": null,
+          "blockerRecall": null,
+          "falseBlockerRate": 0,
+          "triageRecall": null,
+          "harmlessReviewRate": 0,
+          "decisiveCoverage": 1,
+          "selectiveAccuracy": 1
+        }
+      },
+      "macro": {
+        "blockerPrecision": 1,
+        "blockerRecall": 0.7857142857142857,
+        "falseBlockerRate": 0,
+        "triageRecall": 0.7857142857142857,
+        "harmlessReviewRate": 0.03333333333333333,
+        "decisiveCoverage": 0.9861111111111112,
+        "selectiveAccuracy": 0.875
+      }
+    },
+    "distance": {
+      "values": {
+        "same-declaration-or-contract": {
+          "total": 40,
+          "goldConflicts": 20,
+          "goldHarmless": 20,
+          "blockerPrecision": 1,
+          "blockerRecall": 0.85,
+          "falseBlockerRate": 0,
+          "triageRecall": 0.85,
+          "harmlessReviewRate": 0.05,
+          "decisiveCoverage": 0.975,
+          "selectiveAccuracy": 0.9230769230769231
+        }
+      },
+      "macro": {
+        "blockerPrecision": 1,
+        "blockerRecall": 0.85,
+        "falseBlockerRate": 0,
+        "triageRecall": 0.85,
+        "harmlessReviewRate": 0.05,
+        "decisiveCoverage": 0.975,
+        "selectiveAccuracy": 0.9230769230769231
+      }
+    },
+    "difficulty": {
+      "values": {
+        "hard": {
+          "total": 40,
+          "goldConflicts": 20,
+          "goldHarmless": 20,
+          "blockerPrecision": 1,
+          "blockerRecall": 0.85,
+          "falseBlockerRate": 0,
+          "triageRecall": 0.85,
+          "harmlessReviewRate": 0.05,
+          "decisiveCoverage": 0.975,
+          "selectiveAccuracy": 0.9230769230769231
+        }
+      },
+      "macro": {
+        "blockerPrecision": 1,
+        "blockerRecall": 0.85,
+        "falseBlockerRate": 0,
+        "triageRecall": 0.85,
+        "harmlessReviewRate": 0.05,
+        "decisiveCoverage": 0.975,
+        "selectiveAccuracy": 0.9230769230769231
+      }
+    }
+  }
+}

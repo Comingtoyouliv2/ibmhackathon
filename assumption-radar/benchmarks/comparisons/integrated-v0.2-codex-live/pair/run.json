@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "pair-qualification-run-v0.1",
+  "systemName": "integrated-v0.2-codex-live",
+  "version": "integrated-v0.2",
+  "model": "gpt-5.4",
+  "startedAt": "2026-07-17T09:47:44.689Z",
+  "finishedAt": "2026-07-17T09:49:48.327Z",
+  "totalLatencyMs": 123636.804458,
+  "totalTokens": null,
+  "totalCostUsd": null,
+  "failedCases": 0,
+  "modelCalls": 23,
+  "notes": "Fresh isolated Codex CLI calls over public pair inputs. The prompt hash identifies the public evaluation protocol; deterministic blockers bypass AI, while high-retrieval unresolved pairs use the system's bounded internal Codex second-look prompt.",
+  "promptSha256": "d0eb938811d1778b114c9db483f8d4f52a9ee65afc451641c60cfa7d5dbf1c90"
+}

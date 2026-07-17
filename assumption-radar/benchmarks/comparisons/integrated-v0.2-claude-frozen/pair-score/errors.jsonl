@@ -1,0 +1,2 @@
+{"id":"hector-client/hector@a33a46506656a39d1b0f7780973905665d3b6145","gold":"harmless","prediction":"review","repo":"hector-client/hector","language":"Java","archetype":"compatible-refactoring"}
+{"id":"richardwilly98/elasticsearch-river-mongodb@6b6ce8e851c6613213c4508c3f277a80649e0c7b","gold":"harmless","prediction":"review","repo":"richardwilly98/elasticsearch-river-mongodb","language":"Java","archetype":"compatible-side-effect"}

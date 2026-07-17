@@ -1,0 +1,10 @@
+Judge the following PR pair using the system contract.
+
+Map `prs[0]` to side `A` and `prs[1]` to side `B`. Preserve the case `id` exactly in the response.
+
+For `conflict`, `review`, or `coordination`, provide at least one verbatim evidence quote from each side. For `independent` or `insufficient`, evidence may be empty, but include concrete evidence when available.
+
+Return one JSON object matching `prediction.schema.json`.
+
+CASE_JSON
+{{CASE_JSON}}

@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://assumption-radar.local/schemas/ar-scs-v0.1.schema.json",
+  "title": "Assumption Radar Semantic Change IR v0.1",
+  "type": "object",
+  "required": ["schemaVersion", "changeSetId", "adapters", "languages", "entities", "operations", "dependencies", "assumptions", "evidence"],
+  "properties": {
+    "schemaVersion": { "const": "ar-scs-0.1" },
+    "changeSetId": { "type": "string", "minLength": 1 },
+    "adapters": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "languages": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "entities": { "type": "array", "items": { "$ref": "#/$defs/entity" } },
+    "operations": { "type": "array", "items": { "$ref": "#/$defs/operation" } },
+    "dependencies": { "type": "array", "items": { "$ref": "#/$defs/dependency" } },
+    "assumptions": { "type": "array", "items": { "$ref": "#/$defs/assumption" } },
+    "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "entity": {
+      "type": "object",
+      "required": ["id", "kind", "name", "scope", "language"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["module", "type", "callable", "field", "parameter", "binding", "database-column", "api-endpoint", "event", "config-key", "file", "symbol"] },
+        "name": { "type": "string", "minLength": 1 },
+        "scope": { "type": "string", "minLength": 1 },
+        "language": { "type": "string", "minLength": 1 },
+        "identityStatus": { "enum": ["provisional", "resolved"] },
+        "metadata": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "operation": {
+      "type": "object",
+      "required": ["id", "kind", "entityId", "evidenceIds", "proofGrade"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["add", "remove", "rename", "move", "change-signature", "change-type", "change-default", "change-visibility", "change-behavior"] },
+        "entityId": { "type": "string", "minLength": 1 },
+        "before": {},
+        "after": {},
+        "evidenceIds": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+        "proofGrade": { "$ref": "#/$defs/proofGrade" },
+        "metadata": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "dependency": {
+      "type": "object",
+      "required": ["id", "relation", "target", "status", "evidenceIds", "proofGrade"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "relation": { "enum": ["calls", "imports", "references", "reads", "writes", "extends", "implements", "produces", "consumes", "serializes", "configures", "asserts", "requires-binding"] },
+        "sourceEntityId": { "type": ["string", "null"] },
+        "target": { "$ref": "#/$defs/target" },
+        "status": { "enum": ["added", "removed", "existing"] },
+        "evidenceIds": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+        "proofGrade": { "$ref": "#/$defs/proofGrade" },
+        "metadata": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "required": ["kind", "name", "scope"],
+      "properties": {
+        "entityId": { "type": "string" },
+        "kind": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "scope": { "type": "string", "minLength": 1 },
+        "arity": { "type": ["integer", "null"], "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "assumption": {
+      "type": "object",
+      "required": ["id", "kind", "target", "evidenceIds", "proofGrade"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["requires", "provides", "invalidates", "preserves"] },
+        "target": { "$ref": "#/$defs/target" },
+        "evidenceIds": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+        "proofGrade": { "$ref": "#/$defs/proofGrade" },
+        "metadata": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["id", "kind", "grade", "path", "summary"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["diff", "ast", "symbol-resolution", "merge-tree", "compiler", "test", "contract"] },
+        "grade": { "$ref": "#/$defs/proofGrade" },
+        "path": { "type": "string", "minLength": 1 },
+        "line": { "type": ["integer", "null"], "minimum": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "excerpt": { "type": "string" },
+        "metadata": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "proofGrade": { "enum": ["proximity", "structural", "resolved", "executable"] }
+  }
+}

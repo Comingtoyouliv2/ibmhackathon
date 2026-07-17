@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "pair-qualification-run-v0.1",
+  "systemName": "assumption-radar-pair-judge",
+  "version": "0.1.0",
+  "model": "claude-opus-4-8",
+  "promptSha256": "d0eb938811d1778b114c9db483f8d4f52a9ee65afc451641c60cfa7d5dbf1c90",
+  "startedAt": "2026-07-16T10:45:45.381Z",
+  "finishedAt": "2026-07-16T10:54:12.507Z",
+  "totalLatencyMs": 507126,
+  "totalTokens": null,
+  "totalCostUsd": null,
+  "failedCases": 0,
+  "notes": "Each of 40 cases judged by an isolated Claude (Opus 4.8) subagent seeing only that case dossier + the fixed SYSTEM_PROMPT. Deterministic preprocessing extracted shared-file hunks and cross-symbol signals per pair; AI made the label decision. totalLatencyMs is batch wall-clock (span of prediction-file write times across concurrency-capped waves). Per-subagent token counts were emitted by the harness but not aggregated by the wrapper, so totals are null."
+}

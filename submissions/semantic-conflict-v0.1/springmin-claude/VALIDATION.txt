@@ -1,0 +1,23 @@
+===================================================================
+VALIDATION LOG — Semantic Conflict Evaluation Suite v0.1
+===================================================================
+
+### Test 1: Pair Judgment validator ###
+$ node semantic-conflict-pair-judgment-v0.1/validate-submission.mjs \
+    semantic-conflict-pair-judgment-v0.1/inputs.jsonl \
+    submission/pair-qualification-predictions.jsonl \
+    submission/pair-qualification-run.json
+--- stdout/stderr ---
+Submission valid: 40 predictions, 40 unique input cases.
+Prompt SHA-256: d0eb938811d1778b114c9db483f8d4f52a9ee65afc451641c60cfa7d5dbf1c90
+
+### Test 2: End-to-End (Radar Arena) validator ###
+$ node semantic-conflict-end-to-end-v0.1/validate-submission.mjs \
+    semantic-conflict-end-to-end-v0.1/episodes \
+    submission/radar-arena-predictions.jsonl \
+    submission/radar-arena-run.json
+--- stdout/stderr ---
+Submission valid: 2 episodes, 40 ranked pairs.
+Task prompt SHA-256: 87d2dca2f61f9aae1ec77501c091eb2fb8b9f8de696d2f06accd83efada6c88e
+
+Both validators reported success.

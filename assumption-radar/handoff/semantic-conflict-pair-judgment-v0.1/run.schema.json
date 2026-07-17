@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://assumption-radar.local/schemas/run-v0.1.json",
+  "title": "Semantic conflict qualification run",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "systemName",
+    "version",
+    "model",
+    "promptSha256",
+    "startedAt",
+    "finishedAt",
+    "totalLatencyMs",
+    "failedCases"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "pair-qualification-run-v0.1"
+    },
+    "systemName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "promptSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "startedAt": {
+      "type": "string"
+    },
+    "finishedAt": {
+      "type": "string"
+    },
+    "totalLatencyMs": {
+      "type": "number",
+      "minimum": 0
+    },
+    "totalTokens": {
+      "type": ["number", "null"],
+      "minimum": 0
+    },
+    "totalCostUsd": {
+      "type": ["number", "null"],
+      "minimum": 0
+    },
+    "failedCases": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

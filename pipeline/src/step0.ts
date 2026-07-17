@@ -11,7 +11,7 @@ import path from 'node:path';
 import { classifyPr } from './classify.js';
 import type { FileClass, RawPr, Step0Result } from './types.js';
 
-const DATA_DIR = path.resolve('data');
+const DATA_DIR = path.resolve(process.env.DATA_DIR ?? 'data');
 const RAW_PATH = path.join(DATA_DIR, 'prs.jsonl');
 
 function loadPrs(): RawPr[] {

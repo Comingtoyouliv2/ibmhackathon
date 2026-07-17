@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Open PR 사이의 숨은 전제 충돌을 merge 전에 찾는 레이더">
+  <title>Assumption Radar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="noise"></div>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Assumption Radar 홈">
+      <span class="brand-mark"><i></i><i></i><i></i></span>
+      <span>ASSUMPTION<br><b>RADAR</b></span>
+    </a>
+    <div class="top-meta">
+      <span class="live-dot"></span>
+      <span id="systemMode">LOCAL ANALYSIS READY</span>
+      <span class="divider"></span>
+      <span>PRE-MERGE INTELLIGENCE</span>
+    </div>
+    <a class="ghost-link" href="#method">분석 원리 <span>↗</span></a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="eyebrow"><span>01</span> MERGE 전에 묻지 않은 질문</div>
+      <h1>코드는 충돌하지 않아도,<br><em>전제는 충돌합니다.</em></h1>
+      <p>열려 있는 PR을 함께 읽고, 각 변경이 당연하다고 믿는 데이터·API·순서·기본값의 어긋남을 근거와 함께 설명합니다.</p>
+      <form id="repoForm" class="repo-form">
+        <div class="repo-input-wrap">
+          <span class="prompt-mark">$</span>
+          <input id="repository" name="repository" autocomplete="off" placeholder="owner/repository 또는 GitHub URL" aria-label="GitHub 저장소">
+          <button type="submit">PR 스캔 <span>→</span></button>
+        </div>
+        <div class="form-foot">
+          <label><input id="useAI" type="checkbox" checked><span></span> AI 심층 추론</label>
+          <label title="상위 후보를 Docker에서 Base/A/B/A+B로 실행합니다"><input id="useVerification" type="checkbox"><span></span> 결합 실행 검증</label>
+          <span id="configHint">토큰 상태 확인 중…</span>
+          <button type="button" id="demoButton" class="text-button">샘플 레이더 보기</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="workspace" class="workspace hidden" aria-live="polite">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow"><span>02</span> CROSS-PR SCAN</div>
+          <h2 id="workspaceTitle">충돌 지형</h2>
+        </div>
+        <div class="scan-stamp"><span>LAST SCAN</span><b id="lastScan">—</b></div>
+      </div>
+
+      <div class="metrics" id="metrics"></div>
+
+      <div class="analysis-grid">
+        <section class="radar-card panel">
+          <div class="panel-head">
+            <div><span class="panel-index">A</span><h3>PR 관계 레이더</h3></div>
+            <div class="legend"><span><i class="critical"></i>CONFLICT</span><span><i class="coordination"></i>COORDINATION</span><span><i class="medium"></i>REVIEW</span></div>
+          </div>
+          <div class="radar-wrap">
+            <svg id="radar" viewBox="0 0 720 610" role="img" aria-label="Pull request 충돌 관계도"></svg>
+            <div class="radar-caption"><span>NODE = OPEN PR</span><span>LINE = EVIDENCE-BACKED INTERACTION</span></div>
+          </div>
+        </section>
+
+        <aside class="detail-card panel" id="detailCard">
+          <div class="empty-detail">
+            <span class="crosshair">＋</span>
+            <h3>신호를 선택하세요</h3>
+            <p>레이더의 연결선이나 아래 충돌 카드를 누르면 두 PR의 숨은 전제를 나란히 볼 수 있습니다.</p>
+          </div>
+        </aside>
+      </div>
+
+      <section class="conflicts-section">
+        <div class="section-head compact">
+          <div>
+            <div class="eyebrow"><span>03</span> COLLISION BRIEFS</div>
+            <h2>설명 가능한 경고</h2>
+          </div>
+          <div class="filters" id="filters"></div>
+        </div>
+        <div id="conflictList" class="conflict-list"></div>
+      </section>
+
+      <section id="method" class="method panel">
+        <div class="method-copy">
+          <div class="eyebrow"><span>04</span> HOW IT THINKS</div>
+          <h2>diff가 아니라<br>계약을 비교합니다.</h2>
+        </div>
+        <div class="method-steps">
+          <div><b>01</b><h3>신호 추출</h3><p>API, 스키마, 이벤트, 플래그, 삭제·이름 변경을 diff에서 구조화합니다.</p></div>
+          <div><b>02</b><h3>후보 압축</h3><p>공유 계약이 있는 PR 쌍만 골라 조합 폭발과 AI 비용을 막습니다.</p></div>
+          <div><b>03</b><h3>실행 검증</h3><p>상위 쌍은 Base/A/B/A+B로 실행해 단독 CI가 놓치는 결합 회귀를 재현합니다.</p></div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <div id="loading" class="loading hidden" role="status">
+    <div class="loader-radar"><i></i><i></i><i></i><b></b></div>
+    <h2>PR 사이를 스캔하는 중</h2>
+    <p id="loadingText">diff에서 계약 신호를 추출하고 있습니다…</p>
+  </div>
+  <div id="toast" class="toast hidden"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "name": "assumption-radar-eval-runner",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Semantic-conflict evaluation suite v0.1 runner — deterministic analysis + Claude Opus 4.8 judging. Place at the eval-suite root; run all scripts from here.",
+  "scripts": {
+    "test1:analyze": "node work/analyze-pairs.mjs",
+    "test1:judge": "node work/run-pair-judge.mjs",
+    "test1:sanitize": "node work/sanitize-evidence.mjs",
+    "test1:assemble": "node work/assemble-pair.mjs",
+    "test1:validate": "node semantic-conflict-pair-judgment-v0.1/validate-submission.mjs semantic-conflict-pair-judgment-v0.1/inputs.jsonl submission/pair-qualification-predictions.jsonl submission/pair-qualification-run.json",
+    "test2:analyze": "node work/analyze-episodes.mjs",
+    "test2:rank": "node work/run-e2e-rank.mjs",
+    "test2:assemble": "node work/assemble-e2e.mjs",
+    "test2:validate": "node semantic-conflict-end-to-end-v0.1/validate-submission.mjs semantic-conflict-end-to-end-v0.1/episodes submission/radar-arena-predictions.jsonl submission/radar-arena-run.json",
+    "score": "node work/score.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://assumption-radar.local/schemas/radar-arena-run-v0.1.json",
+  "title": "Radar arena run metadata",
+  "type": "object",
+  "required": ["schemaVersion", "systemName", "version", "model", "taskPromptSha256", "startedAt", "finishedAt", "totalLatencyMs", "failedEpisodes"],
+  "properties": {
+    "schemaVersion": { "const": "radar-arena-run-v0.1" },
+    "systemName": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "minLength": 1 },
+    "model": { "type": "string", "minLength": 1 },
+    "taskPromptSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "startedAt": { "type": "string", "minLength": 1 },
+    "finishedAt": { "type": "string", "minLength": 1 },
+    "totalLatencyMs": { "type": "number", "minimum": 0 },
+    "totalTokens": { "type": ["number", "null"], "minimum": 0 },
+    "totalCostUsd": { "type": ["number", "null"], "minimum": 0 },
+    "failedEpisodes": { "type": "integer", "minimum": 0 },
+    "episodeRuns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["episodeId", "prCount", "pairCount", "latencyMs"],
+        "properties": {
+          "episodeId": { "type": "string" },
+          "prCount": { "type": "integer", "minimum": 0 },
+          "pairCount": { "type": "integer", "minimum": 0 },
+          "latencyMs": { "type": "number", "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "notes": { "type": "string" }
+  },
+  "additionalProperties": false
+}

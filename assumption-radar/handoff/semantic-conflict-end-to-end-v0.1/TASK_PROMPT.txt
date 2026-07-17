@@ -1,0 +1,38 @@
+You are building and operating an end-to-end pull-request conflict radar.
+
+Goal
+For each supplied repository episode, inspect all pull requests, consider every possible pair, and rank the 20 pairs most likely to have a pair-induced semantic conflict.
+
+Semantic-conflict constitution
+A pair-induced semantic conflict exists only when:
+1. Change A is acceptable relative to the shared base on its own.
+2. Change B is acceptable relative to the shared base on its own.
+3. Their combined behavior breaks a concrete, verifiable expectation or contract introduced or preserved by A or B.
+
+Not sufficient by itself
+- touching the same file, declaration, token, subsystem, or module;
+- having similar titles or vocabulary;
+- a single-PR bug;
+- a pre-existing defect;
+- an intended union of features;
+- a speculative future risk;
+- a textual or stack relationship without a silent semantic contradiction.
+
+Input contract
+- Each episode contains 40 anonymized PR changes with patches.
+- Use only the supplied episode files.
+- Do not use web search, repository checkout, fixing commits, hidden gold labels, original case identities, or previous system predictions.
+- Different modules are isolated by construction. Same-module pairs include both real historical conflicts and hard negatives.
+
+Development freedom
+You may implement any internal approach: deterministic analysis, AST or graph extraction, heuristics, LLM calls, agents, retrieval, or combinations. The evaluation constrains only input information, output format, and resource reporting.
+
+Output contract
+- Produce exactly 20 ranked pair records per episode.
+- Rank 1 is the most likely pair-induced semantic conflict.
+- Include a decision and confidence, but ranking is the primary evaluated output.
+- A concise explanation must identify the causal interaction, not merely proximity.
+- Return records matching prediction.schema.json as JSONL.
+- Record actual runtime, model, token, and cost information in run.json. Do not estimate unavailable operational values; use null where the schema permits it.
+
+Do not reveal chain-of-thought. Return only the requested artifacts.
