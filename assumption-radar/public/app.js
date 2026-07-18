@@ -52,7 +52,7 @@ function metric(label, value, className = "") {
 
 function renderMetrics(summary) {
   const verification = summary.verifiedPairCount
-    ? `${summary.confirmedConflictCount} CONFIRMED / ${summary.verifiedCompatibleCount} CLEAN`
+    ? `${summary.confirmedConflictCount} CONFIRMED / ${summary.verifiedCompatibleCount} NOT REPRODUCED`
     : "NOT RUN";
   $("#metrics").innerHTML = [
     metric("OPEN PULL REQUESTS", summary.prCount),

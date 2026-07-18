@@ -51,7 +51,7 @@ function printReport(result, repository) {
   console.log(`${"─".repeat(68)}`);
   console.log(`${result.summary.prCount} open PR · ${result.summary.pairCount} pairs · ${result.summary.conflictCount} conflicts · ${result.summary.reviewCount} reviews`);
   if (result.summary.verifiedPairCount) {
-    console.log(`${result.summary.verifiedPairCount} verified · ${result.summary.confirmedConflictCount} confirmed pair regressions · ${result.summary.verifiedCompatibleCount} compatible`);
+    console.log(`${result.summary.verifiedPairCount} verified · ${result.summary.confirmedConflictCount} confirmed pair regressions · ${result.summary.verifiedCompatibleCount} no observed regression`);
   }
   console.log(`Verdict: ${result.summary.verdict}\n`);
   for (const conflict of result.findings) {
