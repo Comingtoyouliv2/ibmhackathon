@@ -18,6 +18,19 @@ function qualifiedTypeReferences(lines) {
   return new Set(lines.flatMap((line) => [...line.matchAll(/\b(?:[a-z_$][\w$]*\.){2,}([A-Z_$][\w$]*)\b/g)].map((match) => match[1])));
 }
 
+function unqualifiedTypeReferences(lines) {
+  const references = new Set();
+  for (const line of lines) {
+    if (/^\s*(?:import|package)\b/.test(line)) continue;
+    for (const match of line.matchAll(/\b([A-Z_$][\w$]*)\b/g)) {
+      const prefix = line.slice(0, match.index).trimEnd();
+      if (prefix.endsWith(".")) continue;
+      references.add(match[1]);
+    }
+  }
+  return references;
+}
+
 function javaPackageForPath(filename) {
   const marker = filename.lastIndexOf("/java/");
   if (marker < 0) return null;
@@ -38,6 +51,8 @@ export const javaAdapter = Object.freeze({
     const addedImports = javaImports(fileModel.addedLines || []);
     const removedImports = javaImports(fileModel.removedLines || []);
     const qualifiedReferences = qualifiedTypeReferences(fileModel.addedLines || []);
+    const addedUnqualifiedTypes = unqualifiedTypeReferences(fileModel.addedLines || []);
+    const removedUnqualifiedTypes = unqualifiedTypeReferences(fileModel.removedLines || []);
     const evidenceFor = (summary, excerpt) => {
       const item = createEvidence({ changeSetId, adapterId: this.id, path: file.filename, summary, excerpt });
       evidence.push(item);
@@ -67,6 +82,17 @@ export const javaAdapter = Object.freeze({
         evidenceIds: [evidenceId], metadata: {
           binding: true, file: file.filename, qualifiedReference: qualifiedReferences.has(name),
           localType: fileModel.addedDeclarations?.some((item) => item.kind === "type" && item.name === name) || false,
+        },
+      }));
+    }
+    for (const name of [...addedUnqualifiedTypes].filter((item) => !removedUnqualifiedTypes.has(item))) {
+      if (fileModel.addedDeclarations?.some((item) => item.name === name)) continue;
+      const evidenceId = evidenceFor(`${name} type is newly referenced without qualification`, name);
+      dependencies.push(createDependency({
+        adapterId: this.id, relation: "references", target: { kind: "type", name, scope: file.filename }, status: "added",
+        evidenceIds: [evidenceId], metadata: {
+          file: file.filename, javaType: true, unqualified: true,
+          qualifiedReference: qualifiedReferences.has(name),
         },
       }));
     }

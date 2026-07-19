@@ -21,6 +21,7 @@ const CAUSAL_ROLE_BY_TYPE = Object.freeze({
   "shared-contract": "composition-risk",
   "schema-vs-access": "dependency",
   "event-producer-consumer": "dependency",
+  "constructor-behavior-composition": "dependency",
   "same-declaration": "relevance",
   "overlapping-base-region": "relevance",
   "same-file-only": "proximity",
@@ -48,7 +49,7 @@ function identifiers(text) {
 
 function declaration(line) {
   const text = line.trim();
-  const typeDeclaration = text.match(/^(?:(?:export|public|private|protected|internal|abstract|final)\s+)*(?:class|interface|enum|struct|record|trait)\s+([A-Za-z_$][\w$]*)(?=\s*(?:[({:]|extends\b|implements\b|$))/);
+  const typeDeclaration = text.match(/^(?:(?:export|public|private|protected|internal|abstract|final|static)\s+)*(?:class|interface|enum|struct|record|trait)\s+([A-Za-z_$][\w$]*)(?=\s*(?:[({:]|extends\b|implements\b|$))/);
   if (typeDeclaration) return { name: typeDeclaration[1], signature: normalizeLine(text), kind: "type", arity: null, identity: `type:${typeDeclaration[1]}` };
   const typeAlias = text.match(/^(?:export\s+)?type\s+([A-Za-z_$][\w$]*)(?=\s*(?:<|=|$))/);
   if (typeAlias) return { name: typeAlias[1], signature: normalizeLine(text), kind: "type", arity: null, identity: `type:${typeAlias[1]}` };
@@ -207,7 +208,7 @@ function projectedHunkText(hunk, side) {
 function mayStartDeclaration(line) {
   const text = line.trim();
   if (!text) return false;
-  if (/^(?:(?:export|public|private|protected|internal|abstract|final)\s+)*(?:class|interface|enum|struct|record|trait)\b/.test(text)) return true;
+  if (/^(?:(?:export|public|private|protected|internal|abstract|final|static)\s+)*(?:class|interface|enum|struct|record|trait)\b/.test(text)) return true;
   if (/^(?:export\s+)?type\s+[A-Za-z_$][\w$]*/.test(text)) return true;
   if (/^(?:(?:export|public|private|protected|internal|static|final|async)\s+)*(?:def|func|function)\b/.test(text)) return true;
   if (/^(?:(?:public|private|protected|internal|static|final|volatile|transient|readonly|const)\s+)+[\w$<>,.?\[\]:]+\s+[A-Za-z_$][\w$]*\s*(?:=|;)/.test(text)) return true;
@@ -432,7 +433,11 @@ function compareFiles(a, b, options = {}) {
       continue;
     }
     if (left.status === "added" && right.status === "added") {
-      witnesses.push(createWitness("add-vs-add", "semantic", "code", `${label}을 양쪽이 추가함`, "두 PR이 같은 경로의 새 파일을 정의합니다. 이는 우선 Git의 기계적 mergeability로 확인할 대상입니다.", [label]));
+      const leftContent = left.addedLines.map(normalizeLine).filter(Boolean);
+      const rightContent = right.addedLines.map(normalizeLine).filter(Boolean);
+      if (leftContent.length !== rightContent.length || leftContent.some((line, index) => line !== rightContent[index])) {
+        witnesses.push(createWitness("add-vs-add", "semantic", "code", `${label}을 양쪽이 다르게 추가함`, "두 PR이 같은 새 경로에 서로 다른 내용을 정의합니다. 병합 결과가 어느 정의를 보존해야 하는지 확인해야 합니다.", [label]));
+      }
     }
     const sharedRemoved = intersect(left.removedLines.map(normalizeLine).filter((line) => line.length > 8), right.removedLines.map(normalizeLine).filter((line) => line.length > 8));
     const addedA = left.addedLines.map(normalizeLine).filter(Boolean);
@@ -466,6 +471,25 @@ function compareFiles(a, b, options = {}) {
       } else {
         witnesses.push(createWitness("same-declaration", "semantic", "code", `${name}의 의미를 양쪽이 변경함`, "같은 선언을 수정하지만 텍스트만으로 두 변경의 합성 가능성을 확정할 수 없습니다.", [label, name]));
       }
+    }
+    const className = label.split("/").at(-1)?.replace(/\.java$/, "");
+    const assignedState = (lines) => new Set(lines.flatMap((line) => [...line.matchAll(/\bthis\.([A-Za-z_$][\w$]*)\s*=/g)].map((match) => match[1])));
+    const changesInitialization = (file) => intersect([...assignedState(file.addedLines)], [...assignedState(file.removedLines)]).length > 0;
+    const leftChangesConstructor = Boolean(className && left.changedDeclarations.includes(className)
+      && changesInitialization(left));
+    const rightChangesConstructor = Boolean(className && right.changedDeclarations.includes(className)
+      && changesInitialization(right));
+    const leftChangesOtherBehavior = left.addedLines.some((line) => /\b(?:return|throw|new)\b|[.][A-Za-z_$][\w$]*\s*\(/.test(line));
+    const rightChangesOtherBehavior = right.addedLines.some((line) => /\b(?:return|throw|new)\b|[.][A-Za-z_$][\w$]*\s*\(/.test(line));
+    const sharedMemberDeclarations = sharedDeclarations.filter((name) => name !== className);
+    if (!sharedMemberDeclarations.length && ((leftChangesConstructor && rightChangesOtherBehavior) || (rightChangesConstructor && leftChangesOtherBehavior))) {
+      witnesses.push(createWitness(
+        "constructor-behavior-composition", "semantic", "behavior",
+        `${className} 초기화 변경과 메서드 동작 변경이 합성됨`,
+        "한 PR은 객체의 초기 상태를 바꾸고 다른 PR은 같은 클래스의 런타임 동작을 바꿉니다. 새 상태가 새 동작의 전제조건을 만족하는지 방향성 통합 검증이 필요합니다.",
+        [label, ...(leftChangesConstructor ? left.addedLines : right.addedLines).slice(0, 2), ...(leftChangesConstructor ? right.addedLines : left.addedLines).slice(0, 2)],
+        "dependency",
+      ));
     }
     if (options.comparableBase && !sharedDeclarations.length && left.hunks.some((one) => right.hunks.some((two) => rangesOverlap(one, two)))) {
       witnesses.push(createWitness("overlapping-base-region", "semantic", "behavior", `${label}의 같은 base 영역을 수정함`, "두 PR의 hunk가 같은 원본 라인 범위에 닿습니다. 실제 의도 결합을 확인해야 합니다.", [label]));
@@ -590,13 +614,20 @@ function compareContracts(a, b) {
   compareSignatureCalls(a.signatureChanges, b.addedInvocations);
   compareSignatureCalls(b.signatureChanges, a.addedInvocations);
 
-  const compareRemovedSymbols = (removed, references) => {
-    for (const declaration of removed) {
-      if (declaration.kind !== "type" || !/^[A-Z]/.test(declaration.name)) continue;
-      const matching = references.filter((reference) => reference.name === declaration.name);
-      if (!matching.length) continue;
-      if (UNRESOLVED_CROSS_FILE_SYMBOLS.has(declaration.name.toLowerCase())
-        && matching.every((reference) => reference.file !== declaration.file)) continue;
+  const compareRemovedSymbols = (removingModel, referenceModel) => {
+    const scirReferences = referenceModel.scir.dependencies.filter((dependency) => dependency.relation === "references" && dependency.status === "added");
+    const replacementDeclarations = new Set(referenceModel.scir.operations.filter((operation) => operation.kind === "add")
+      .map((operation) => `${operation.metadata.file}:${referenceModel.scir.entities.find((entity) => entity.id === operation.entityId)?.name}`));
+    for (const declaration of removingModel.removedDeclarations) {
+      const scopedReference = scirReferences.find((dependency) => dependency.target.name === declaration.name
+        && dependency.target.scope === declaration.file);
+      const identifierReferences = referenceModel.netAddedIdentifierReferences.filter((reference) => reference.name === declaration.name);
+      const crossFileTypeReference = declaration.kind === "type" && /^[A-Z]/.test(declaration.name)
+        && identifierReferences.length > 0
+        && !(UNRESOLVED_CROSS_FILE_SYMBOLS.has(declaration.name.toLowerCase())
+          && identifierReferences.every((reference) => reference.file !== declaration.file));
+      if ((!scopedReference && !crossFileTypeReference)
+        || replacementDeclarations.has(`${declaration.file}:${declaration.name}`)) continue;
       witnesses.push(createWitness(
         "removed-symbol-vs-new-reference", "direct", "api",
         `${declaration.name} 제거 뒤 다른 PR이 새 참조를 추가함`,
@@ -605,8 +636,8 @@ function compareContracts(a, b) {
       ));
     }
   };
-  compareRemovedSymbols(a.removedDeclarations, b.netAddedIdentifierReferences);
-  compareRemovedSymbols(b.removedDeclarations, a.netAddedIdentifierReferences);
+  compareRemovedSymbols(a, b);
+  compareRemovedSymbols(b, a);
   return witnesses;
 }
 
