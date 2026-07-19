@@ -14,6 +14,7 @@ const INTENT_STOP = new Set([
   "support", "use", "using", "with", "from", "into", "when", "where", "this", "that", "test", "tests",
   "feat", "feature", "refactor", "the", "and", "for", "codex", "historical", "parent", "change", "set",
 ]);
+const HTTP_METHOD = /^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/;
 
 const uniq = (values) => [...new Set(values.filter(Boolean))];
 const intersection = (left, right) => [...left].filter((value) => right.has(value));
@@ -164,6 +165,81 @@ function intentTokens(text = "") {
     .filter((token) => !INTENT_STOP.has(token)));
 }
 
+function patchSideLines(patch = "", side) {
+  return patch.split("\n").flatMap((line) => {
+    if (/^(?:diff --git|index |--- |\+\+\+|@@)/.test(line)) return [];
+    if (line.startsWith(" ")) return [line.slice(1)];
+    if (side === "after" && line.startsWith("+") && !line.startsWith("+++")) return [line.slice(1)];
+    if (side === "before" && line.startsWith("-") && !line.startsWith("---")) return [line.slice(1)];
+    return [];
+  });
+}
+
+function httpMethodOnLine(line = "") {
+  const upperAnnotation = line.match(/@\s*(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/i)?.[1];
+  if (upperAnnotation) return upperAnnotation.toUpperCase();
+  const mapping = line.match(/@\s*(Get|Post|Put|Patch|Delete)Mapping\b/i)?.[1];
+  if (mapping) return mapping.toUpperCase();
+  const requestMethod = line.match(/RequestMethod\.(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/i)?.[1];
+  if (requestMethod) return requestMethod.toUpperCase();
+  const firstArgument = line.match(/(?:_request|request)\s*\(\s*[furb]*["'`](GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)["'`]/i)?.[1];
+  if (firstArgument) return firstArgument.toUpperCase();
+  const methodCall = line.match(/\b(?:app|router|route|client|session|requests?|axios)\s*\.\s*(get|post|put|patch|delete|head|options)\s*\(/i)?.[1];
+  return methodCall ? methodCall.toUpperCase() : null;
+}
+
+function routeStrings(line = "") {
+  return [...line.matchAll(/[furb]*(["'`])((?:\\.|(?!\1).)*)\1/g)]
+    .map((match) => match[2])
+    .filter((value) => value.includes("/") && !/^(?:application|text|image|audio|video)\//i.test(value));
+}
+
+function normalizeHttpPath(raw = "") {
+  let value = raw.trim()
+    .replace(/^https?:\/\/[^/]+/i, "")
+    .replace(/\$\{[^}]+\}|\{[^}]+\}|<[^>]+>|:[A-Za-z_$][\w$]*/g, "{param}")
+    .split(/[?#]/, 1)[0]
+    .replace(/\\\//g, "/")
+    .replace(/\/{2,}/g, "/");
+  if (!value.startsWith("/")) value = `/${value}`;
+  value = value.replace(/\/$/, "");
+  const segments = value.split("/").filter(Boolean);
+  if (segments.length < 2 || segments.some((segment) => /\s/.test(segment))) return null;
+  return `/${segments.join("/")}`;
+}
+
+function routeResourceKeys(method, path) {
+  if (!HTTP_METHOD.test(method || "") || !path) return [];
+  const segments = path.split("/").filter(Boolean);
+  const paths = [path];
+  // Server annotations often omit a class-level prefix that clients include.
+  // A three-segment suffix is specific enough to join those representations
+  // without collapsing every `/resource/{id}` route together.
+  if (segments.length > 3) paths.push(`/${segments.slice(-3).join("/")}`);
+  return uniq(paths.map((item) => `api:http:${method}:${item}`));
+}
+
+function httpContractResources(pr) {
+  const resources = [];
+  for (const file of pr.files || []) {
+    for (const side of ["before", "after"]) {
+      const lines = patchSideLines(file.patch || "", side);
+      for (let index = 0; index < lines.length; index += 1) {
+        const paths = routeStrings(lines[index]).map(normalizeHttpPath).filter(Boolean);
+        if (!paths.length) continue;
+        let method = httpMethodOnLine(lines[index]);
+        if (!method) {
+          for (let distance = 1; distance <= 4 && !method; distance += 1) {
+            method = httpMethodOnLine(lines[index - distance]) || httpMethodOnLine(lines[index + distance]);
+          }
+        }
+        for (const path of paths) resources.push(...routeResourceKeys(method, path));
+      }
+    }
+  }
+  return uniq(resources);
+}
+
 export function buildContractCard(pr) {
   const model = pr.changeModel;
   const resources = new Set();
@@ -178,6 +254,7 @@ export function buildContractCard(pr) {
   for (const entity of model.scir.entities) {
     if (entity.name?.length >= 4 && !GENERIC_IDENTIFIERS.has(entity.name.toLowerCase())) resources.add(`symbol:${entity.name}`);
   }
+  for (const resource of httpContractResources(pr)) resources.add(resource);
   return {
     prId: pr.id,
     summary: pr.title,

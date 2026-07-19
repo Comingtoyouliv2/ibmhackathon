@@ -50,6 +50,9 @@ function printReport(result, repository) {
   console.log(`\nASSUMPTION RADAR · ${repository}`);
   console.log(`${"─".repeat(68)}`);
   console.log(`${result.summary.prCount} open PR · ${result.summary.pairCount} pairs · ${result.summary.conflictCount} conflicts · ${result.summary.reviewCount} reviews`);
+  if (result.summary.aiReviewedPairCount !== undefined) {
+    console.log(`${result.summary.aiReviewedPairCount} AI-reviewed · ${result.summary.noAlertUnreviewedCount} no-alert/unreviewed · ${result.summary.staticCandidateUnreviewedCount} static candidates awaiting review · ${result.summary.insufficientEvidenceCount} insufficient`);
+  }
   if (result.summary.verifiedPairCount) {
     console.log(`${result.summary.verifiedPairCount} verified · ${result.summary.confirmedConflictCount} confirmed pair regressions · ${result.summary.verifiedCompatibleCount} no observed regression`);
   }

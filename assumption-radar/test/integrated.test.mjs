@@ -52,6 +52,44 @@ test("semantic judge adds a bounded second look for related independent pairs", 
   assert.deepEqual(cases[0].prs.map((item) => item.files.length), [1, 1]);
 });
 
+test("cross-language HTTP contracts retrieve a Python client against a Java server route", () => {
+  const prepared = prepareIntegratedAnalysis([
+    pr("5277", "zeppelin-mcp-server/zeppelin_mcp/client.py", [
+      "@@ -0,0 +1,2 @@",
+      "+payload = {\"noteId\": note_id} if note_id else None",
+      "+self._request(\"PUT\", f\"/interpreter/setting/restart/{setting_id}\", json=payload)",
+    ].join("\n"), "Add MCP Python client"),
+    pr("5151", "zeppelin-server/src/main/java/org/apache/zeppelin/rest/InterpreterRestApi.java", [
+      "@@ -10,3 +10,7 @@",
+      " @PUT",
+      " @Path(\"setting/restart/{settingId}\")",
+      "+if (noteId == null) throw new BadRequestException(\"noteId is required\");",
+      "+@PUT",
+      "+@Path(\"setting/restart-all/{settingId}\")",
+      "+public void restartAll(String settingId) {}",
+    ].join("\n"), "Move global restart to a dedicated endpoint"),
+  ]);
+  const comparison = prepared.comparisons[0];
+  assert.equal(comparison.retrievalFeatures.priority, 0);
+  assert.ok(comparison.retrievalFeatures.sharedContracts.includes("api:http:PUT:/setting/restart/{param}"));
+  const fileDecoys = Array.from({ length: 8 }, (_, index) => ({
+    ...comparison,
+    key: `decoy-${index}`,
+    prIds: [`decoy-a-${index}`, `decoy-b-${index}`],
+    retrievalScore: 1_000 - index,
+    retrievalFeatures: {
+      ...comparison.retrievalFeatures,
+      sharedFiles: [`file:src/Decoy${index}.java`],
+      sharedModules: [],
+      sharedContracts: [],
+      strongContracts: [],
+    },
+  }));
+  prepared.comparisons = [...fileDecoys, comparison];
+  const selected = selectSemanticJudgeCandidates(prepared, { primaryLimit: 0, secondLookLimit: 2 });
+  assert.ok(selected.some((item) => item.key === comparison.key));
+});
+
 test("AI blockers require verbatim evidence from both PRs", () => {
   const prepared = prepareIntegratedAnalysis([
     pr("1", "src/Service.java", "@@ -1 +1 @@\n-old\n+newCall(oldArg);"),

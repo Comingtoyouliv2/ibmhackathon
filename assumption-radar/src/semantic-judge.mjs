@@ -19,16 +19,33 @@ function isAdjudicable(comparison) {
 export function selectSemanticJudgeCandidates(prepared, options = {}) {
   const primaryLimit = Math.max(0, Number(options.primaryLimit ?? 20));
   const secondLookLimit = Math.max(0, Number(options.secondLookLimit ?? 8));
+  const contractDiscoveryLimit = Math.min(secondLookLimit, Math.max(0, Number(options.contractDiscoveryLimit ?? 2)));
   const primary = prepared.comparisons
     .filter((comparison) => comparison.verdict === "review" && isAdjudicable(comparison))
     .slice(0, primaryLimit);
   const selected = new Set(primary.map((comparison) => comparison.key));
-  const secondLook = prepared.comparisons
+  const eligibleSecondLook = prepared.comparisons
     .filter((comparison) => comparison.verdict === "independent" && isAdjudicable(comparison))
     .filter((comparison) => (comparison.retrievalScore || 0) > 0)
     .filter((comparison) => (comparison.retrievalFeatures?.priority ?? 3) <= 2)
-    .filter((comparison) => !selected.has(comparison.key))
-    .slice(0, secondLookLimit);
+    .filter((comparison) => !selected.has(comparison.key));
+  // Exact-file proximity otherwise consumes the entire second-look budget.
+  // Reserve a small lane for strong contracts that cross module boundaries,
+  // such as a Python client and Java server sharing a normalized HTTP route.
+  const contractDiscovery = eligibleSecondLook
+    .filter((comparison) => comparison.retrievalFeatures?.strongContracts?.length
+      && !comparison.retrievalFeatures?.sharedFiles?.length
+      && !comparison.retrievalFeatures?.sharedModules?.length)
+    .sort((left, right) => right.retrievalFeatures.strongContracts.length - left.retrievalFeatures.strongContracts.length
+      || right.retrievalScore - left.retrievalScore
+      || left.key.localeCompare(right.key))
+    .slice(0, contractDiscoveryLimit);
+  const contractKeys = new Set(contractDiscovery.map((comparison) => comparison.key));
+  const secondLook = [
+    ...contractDiscovery,
+    ...eligibleSecondLook.filter((comparison) => !contractKeys.has(comparison.key))
+      .slice(0, Math.max(0, secondLookLimit - contractDiscovery.length)),
+  ];
   return [...primary, ...secondLook];
 }
 

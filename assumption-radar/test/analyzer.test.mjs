@@ -18,6 +18,8 @@ test("same file in separate declarations is proximity, not a finding", () => {
   ]);
   assert.equal(result.findings.length, 0);
   assert.equal(result.summary.independentCount, 1);
+  assert.equal(result.summary.noAlertUnreviewedCount, 1);
+  assert.equal(result.summary.aiReviewedPairCount, 0);
 });
 
 test("prose in a hunk section is not parsed as a code declaration", () => {
@@ -87,6 +89,22 @@ test("a multiline signature change conflicts with a newly added old-arity call",
   ]);
   assert.equal(result.findings[0].verdict, "conflict");
   assert.ok(result.findings[0].witnesses.some((item) => item.type === "signature-change-vs-old-call"));
+});
+
+test("unqualified Builder names in different files do not create a direct signature conflict", () => {
+  const result = analyzeHeuristically([
+    pr("1", [file("ShardProfile.java", "@@ -10,1 +10,1 @@\n-public Builder(String shard) {\n+public Builder() {")]),
+    pr("2", [file("GrpcTlsConfig.java", "@@ -20,0 +21,1 @@\n+return new Builder(\"tls\");")]),
+  ]);
+  assert.ok(!result.findings[0]?.witnesses.some((item) => item.type === "signature-change-vs-old-call"));
+});
+
+test("unqualified Kind names in different files do not create a removed-symbol conflict", () => {
+  const result = analyzeHeuristically([
+    pr("1", [file("SearchModel.java", "@@ -10,1 +10,0 @@\n-public enum Kind { QUERY }")]),
+    pr("2", [file("GrpcModel.java", "@@ -20,0 +21,1 @@\n+private Kind kind;")]),
+  ]);
+  assert.ok(!result.findings[0]?.witnesses.some((item) => item.type === "removed-symbol-vs-new-reference"));
 });
 
 test("a moved old-arity call is not treated as a newly added call", () => {

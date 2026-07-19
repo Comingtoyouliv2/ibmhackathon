@@ -27,6 +27,10 @@ const CAUSAL_ROLE_BY_TYPE = Object.freeze({
 });
 
 const PROOF_ROLES = new Set(["contradiction", "dependency", "composition-risk"]);
+// These names are commonly nested in unrelated generated/domain types. Without
+// a resolved owner, matching them across files turns proximity into a false
+// direct conflict (for example ShardProfile.Builder vs GrpcTlsConfig.Builder).
+const UNRESOLVED_CROSS_FILE_SYMBOLS = new Set(["builder", "kind"]);
 
 const uniq = (values) => [...new Set(values.filter(Boolean))];
 const intersect = (a, b) => { const set = new Set(b); return uniq(a.filter((value) => set.has(value))); };
@@ -362,6 +366,9 @@ function buildChangeModel(pr, adapters = undefined) {
     .filter((item) => !addedDeclarationNames.has(item.name))
     .map((item) => ({ ...item, file: file.filename })));
   const removedIdentifiers = new Set(files.flatMap((file) => file.codeRemovedIdentifiers));
+  const netAddedIdentifierReferences = files.flatMap((file) => file.codeAddedIdentifiers
+    .filter((item) => !removedIdentifiers.has(item))
+    .map((name) => ({ name, file: file.filename })));
   return {
     scir,
     files,
@@ -376,6 +383,7 @@ function buildChangeModel(pr, adapters = undefined) {
     addedInvocations: files.flatMap((file) => file.addedInvocations.map((item) => ({ ...item, file: file.filename }))),
     removedDeclarations,
     netAddedIdentifiers: uniq(files.flatMap((file) => file.codeAddedIdentifiers).filter((item) => !removedIdentifiers.has(item))),
+    netAddedIdentifierReferences,
   };
 }
 
@@ -566,6 +574,7 @@ function compareContracts(a, b) {
     for (const change of changes) {
       if (change.kind !== "callable" || change.before.arity === null || change.after.arity === null || change.before.arity === change.after.arity) continue;
       for (const call of calls.filter((item) => item.name === change.name && item.arity === change.before.arity)) {
+        if (change.file !== call.file && UNRESOLVED_CROSS_FILE_SYMBOLS.has(change.name.toLowerCase())) continue;
         const key = `${change.file}:${change.name}:${change.before.arity}:${call.file}`;
         if (emitted.has(key)) continue;
         emitted.add(key);
@@ -584,7 +593,10 @@ function compareContracts(a, b) {
   const compareRemovedSymbols = (removed, references) => {
     for (const declaration of removed) {
       if (declaration.kind !== "type" || !/^[A-Z]/.test(declaration.name)) continue;
-      if (!references.includes(declaration.name)) continue;
+      const matching = references.filter((reference) => reference.name === declaration.name);
+      if (!matching.length) continue;
+      if (UNRESOLVED_CROSS_FILE_SYMBOLS.has(declaration.name.toLowerCase())
+        && matching.every((reference) => reference.file !== declaration.file)) continue;
       witnesses.push(createWitness(
         "removed-symbol-vs-new-reference", "direct", "api",
         `${declaration.name} 제거 뒤 다른 PR이 새 참조를 추가함`,
@@ -593,8 +605,8 @@ function compareContracts(a, b) {
       ));
     }
   };
-  compareRemovedSymbols(a.removedDeclarations, b.netAddedIdentifiers);
-  compareRemovedSymbols(b.removedDeclarations, a.netAddedIdentifiers);
+  compareRemovedSymbols(a.removedDeclarations, b.netAddedIdentifierReferences);
+  compareRemovedSymbols(b.removedDeclarations, a.netAddedIdentifierReferences);
   return witnesses;
 }
 
@@ -627,7 +639,7 @@ function comparePair(a, b, detectors) {
     summary: relevanceOnly ? "같은 선언을 수정했다는 사실은 관련성 신호일 뿐입니다. 한 변경이 다른 변경의 실패 조건에 도달한다는 dependency·composition·contract 증거가 없어 review 경고로 승격하지 않습니다." : primary?.explanation || "공유 계약이나 동일 선언을 변경한다는 증거를 찾지 못했습니다.",
     assumptionA: `${a.title} 변경이 자신의 diff 밖 계약을 깨지 않는다고 전제합니다.`,
     assumptionB: `${b.title} 변경이 자신의 diff 밖 계약을 깨지 않는다고 전제합니다.`,
-    consequence: verdict === "conflict" ? "두 변경을 그대로 합치면 한쪽이 요구하는 계약이나 구현이 사라질 수 있습니다." : verdict === "review" ? "구성 위험이나 방향성 의존성은 확인됐지만 최종 호환 여부는 통합 검증이 필요합니다." : verdict === "insufficient" ? "patch가 없거나 생략되어 두 변경의 상호작용을 판단할 수 없습니다." : relevanceOnly ? "관련성만으로 리뷰 예산을 소모하지 않지만, 아직 호환성을 실행 증명한 것은 아닙니다." : "현재 증거로는 두 변경을 독립적으로 취급할 수 있습니다.",
+    consequence: verdict === "conflict" ? "두 변경을 그대로 합치면 한쪽이 요구하는 계약이나 구현이 사라질 수 있습니다." : verdict === "review" ? "구성 위험이나 방향성 의존성은 확인됐지만 최종 호환 여부는 통합 검증이 필요합니다." : verdict === "insufficient" ? "patch가 없거나 생략되어 두 변경의 상호작용을 판단할 수 없습니다." : relevanceOnly ? "관련성만으로 리뷰 예산을 소모하지 않지만, 아직 호환성을 실행 증명한 것은 아닙니다." : "현재 탐지 신호가 없지만 호환성을 실행 검증한 것은 아닙니다.",
     recommendation: verdict === "conflict" ? "두 PR을 같은 integration branch에 합쳐 witness가 가리키는 계약을 먼저 통일하세요." : verdict === "review" ? "causal witness가 가리키는 경로를 대상으로 교차 테스트를 추가하고 담당자 확인을 받으세요." : verdict === "insufficient" ? "전체 diff 또는 checkout 기반 분석을 다시 실행하세요." : relevanceOnly ? "낮은 우선순위 근거로만 보존하고, dependency 또는 contract contradiction이 추가로 발견될 때 다시 승격하세요." : "별도의 merge 차단 없이 기존 테스트를 유지하세요.",
     evidence: uniq(witnesses.flatMap((item) => item.evidence)).slice(0, 8),
     basis: direct.length ? "deterministic-witness" : supportedSemantic.length ? "causal-witness" : relevanceOnly ? "relevance-only" : "proximity-only",
@@ -677,8 +689,17 @@ export function prepareAnalysis(prs, options = {}) {
 export function finishAnalysis(prepared, aiFindings = []) {
   const aiByPair = new Map(aiFindings.map((item) => [pairKey(item.prIds), item]));
   const resolved = prepared.comparisons.map((comparison) => {
-    if (comparison.verdict === "conflict" && comparison.basis === "deterministic-witness") return comparison;
-    return aiByPair.get(comparison.key) || comparison;
+    if (comparison.verdict === "conflict" && comparison.basis === "deterministic-witness") {
+      return { ...comparison, screeningStatus: aiByPair.has(comparison.key) ? "ai-reviewed" : "static-candidate-unreviewed" };
+    }
+    const aiFinding = aiByPair.get(comparison.key);
+    if (aiFinding) return { ...aiFinding, screeningStatus: "ai-reviewed" };
+    return {
+      ...comparison,
+      screeningStatus: comparison.verdict === "independent" ? "no-alert-unreviewed"
+        : comparison.verdict === "insufficient" ? "insufficient-evidence"
+          : "static-candidate-unreviewed",
+    };
   });
   const findings = resolved.filter((item) => item.verdict === "conflict" || item.verdict === "coordination" || item.verdict === "review");
   const conflictCount = resolved.filter((item) => item.verdict === "conflict").length;
@@ -686,11 +707,16 @@ export function finishAnalysis(prepared, aiFindings = []) {
   const reviewCount = resolved.filter((item) => item.verdict === "review").length;
   const independentCount = resolved.filter((item) => item.verdict === "independent").length;
   const insufficientCount = resolved.filter((item) => item.verdict === "insufficient").length;
+  const aiReviewedPairCount = resolved.filter((item) => item.screeningStatus === "ai-reviewed").length;
+  const noAlertUnreviewedCount = resolved.filter((item) => item.screeningStatus === "no-alert-unreviewed").length;
+  const staticCandidateUnreviewedCount = resolved.filter((item) => item.screeningStatus === "static-candidate-unreviewed").length;
+  const insufficientEvidenceCount = resolved.filter((item) => item.screeningStatus === "insufficient-evidence").length;
   return {
     generatedAt: new Date().toISOString(),
     summary: {
       prCount: prepared.prs.length, pairCount: prepared.comparisons.length,
       candidateCount: prepared.candidates.length, conflictCount, coordinationCount, reviewCount, independentCount, insufficientCount,
+      aiReviewedPairCount, noAlertUnreviewedCount, staticCandidateUnreviewedCount, insufficientEvidenceCount,
       verdict: conflictCount ? "충돌 witness 확인" : coordinationCount ? "Git merge 조율 필요" : reviewCount ? "의미 검토 필요" : "직접 충돌 근거 없음",
     },
     prs: prepared.prs, findings, conflicts: findings, categories: CATEGORY_LABELS,

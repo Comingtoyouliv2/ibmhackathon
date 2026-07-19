@@ -104,6 +104,7 @@ Radar UI / CLI gate + append-only JSONL
 `src/analyzer.mjs`는 diff를 추가·삭제 방향이 보존된 change model로 바꾸고 다음 신호를 구조화합니다.
 
 - endpoint와 HTTP method
+- 언어 간 HTTP client/server 경로 정규화 (`{setting_id}`, `{settingId}`, `{id}`를 같은 parameter로 처리)
 - 테이블·컬럼·migration
 - event/topic/queue 이름
 - 환경변수와 feature flag
@@ -117,7 +118,7 @@ Radar UI / CLI gate + append-only JSONL
 - `coordination`: `git merge-tree`가 기계적 충돌을 확인한 쌍. 조율 대상으로 표시하지만 silent semantic-conflict benchmark에서는 제외
 - `conflict`: 파일 삭제와 수정의 경쟁, 같은 base 라인의 상이한 교체, signature 분기, 계약 제거와 새 사용, rename 후 구이름 참조
 - `review`: dependency 또는 composition-risk witness가 있으나 최종 호환 여부는 통합 검증이 필요
-- `independent`: causal proof가 없거나 동일 declaration 같은 relevance 신호만 존재. relevance는 비교 결과에 보존하지만 경고 예산을 쓰지 않음
+- `independent`: causal proof가 없거나 동일 declaration 같은 relevance 신호만 존재. 이는 호환성 검증 완료가 아니라 기본 분류이며, AI가 보지 않은 쌍은 `screeningStatus: no-alert-unreviewed`로 별도 표시
 - `insufficient`: patch가 없거나 분석할 근거가 부족함. 현재 API 응답에서는 independent 집계에 포함됩니다.
 
 ### 3. AI 전제 대조
@@ -126,7 +127,9 @@ Radar UI / CLI gate + append-only JSONL
 
 개별 PR이 현재 base와 이미 충돌하면 그 PR이 포함된 모든 pair를 반복 경고하지 않고 `insufficient / base-conflict`로 보류합니다. 두 PR의 base-normalized 결과 사이에서만 발생한 Git conflict는 `coordination`으로 보내며 AI와 silent semantic-conflict benchmark에서는 제외합니다.
 
-`OPENAI_API_KEY`가 있고 AI 분석이 켜져 있으면 clean merge인 `review` 쌍만 OpenAI Responses API에 보냅니다. deterministic conflict를 모델이 지울 수 없고, 동일 파일뿐인 independent pair는 모델 비용을 쓰지 않습니다. AI는 점수 대신 `conflict`, `compatible`, `uncertain` 중 하나를 반환합니다. 결과는 strict JSON Schema로 제한됩니다. 기본 모델은 `gpt-5.6-terra`이며 `OPENAI_MODEL`로 바꿀 수 있습니다.
+AI 분석이 켜져 있으면 clean merge인 `review` 후보와 Contract Card 검색 점수가 높은 `independent` 후보를 bounded second-look으로 보냅니다. 기본 한도는 저장소당 8쌍입니다. 따라서 나머지는 AI가 호환 판정을 내린 것이 아니라 `no-alert-unreviewed`입니다. deterministic conflict를 모델이 지울 수 없으며, AI 결과는 양쪽 diff의 실제 인용을 포함해야 합니다.
+
+Contract Card는 Python/TypeScript 등의 HTTP client 호출과 Java 등의 server route를 HTTP method와 정규화된 path로 연결합니다. class-level prefix가 diff에 없을 수 있어 세 segment 이상의 suffix도 보수적으로 연결합니다. 반대로 `Builder`, `Kind`처럼 서로 다른 타입에 반복되는 이름은 owner type이 확인되지 않는 한 교차 파일 direct conflict로 승격하지 않습니다.
 
 AI가 실패하거나 키가 없어도 witness framework가 결과를 반환합니다. AI 결과는 semantic review만 대체합니다. API 요청에는 `store: false`를 지정합니다.
 
