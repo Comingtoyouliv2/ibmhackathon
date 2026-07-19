@@ -143,7 +143,7 @@ AI가 실패하거나 키가 없어도 witness framework가 결과를 반환합�
 
 ### 5. 결합 실행 검증
 
-`--verify`는 상위 후보만 Docker에서 실행합니다. Base, A, B가 통과하고 A+B가 실패한 뒤 같은 failure signature가 한 번 더 재현될 때만 `confirmed-conflict`로 승격합니다. Base나 단독 PR 실패, 설치 오류, timeout은 `inconclusive`이며 blocker가 아닙니다. 테스트 컨테이너에는 네트워크를 제공하지 않고 host credential이나 Docker socket을 전달하지 않습니다.
+`--verify`는 상위 후보만 Docker에서 실행합니다. Base, A, B가 통과하고 A+B가 실패한 뒤 같은 failure signature가 한 번 더 재현될 때만 `confirmed-conflict`로 승격합니다. A+B가 통과해도 이는 선택한 테스트 범위에서 회귀가 재현되지 않았다는 뜻일 뿐이므로 기존 정적·AI `conflict` 또는 `review` 판정을 낮추지 않습니다. Base나 단독 PR 실패, 설치 오류, timeout도 `inconclusive` 실행 증거로만 기록하며 기존 판정을 바꾸지 않습니다. 테스트 컨테이너에는 네트워크를 제공하지 않고 host credential이나 Docker socket을 전달하지 않습니다.
 
 `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, Python 프로젝트는 자동 인식합니다. 저장소 고유 명령은 [`config/verification-profiles.example.json`](config/verification-profiles.example.json)을 복사해 지정합니다. 결과는 기본적으로 `.cache/verification-runs/*.jsonl`에 commit SHA, 도구 버전, 실행 명령, 전제, 영향, evidence ID와 함께 append-only로 기록됩니다.
 

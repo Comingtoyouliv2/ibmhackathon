@@ -36,39 +36,23 @@ function executionFinding(verification, existing) {
       ...base,
       verdict: "conflict",
       relationship: "confirmed-conflict",
-      title: "A와 B 단독 통과 후 A+B에서 반복 실패",
-      summary: verification.classification.rationale,
-      consequence: verification.impact?.summary || existing.consequence,
-      recommendation: "재현된 failure signature와 양쪽 변경 근거를 함께 검토한 뒤 merge 순서 또는 구현 계약을 조정하세요.",
-      basis: "base-a-b-ab-execution",
-      source: "combined-verifier",
+      executionStatus: "confirmed-conflict",
+      executionSummary: verification.classification.rationale,
       goldEvidence: "executable",
     };
   }
   if (verification.classification.verdict === "compatible") {
     return {
       ...base,
-      verdict: "independent",
-      relationship: "compatible",
-      title: "A/B/A+B 실행 통과",
-      summary: verification.classification.rationale,
-      consequence: "선택한 테스트 범위에서는 pair-induced regression이 재현되지 않았습니다.",
-      recommendation: "기존 CI를 유지하고 새로운 관련 변경이 생기면 재검증하세요.",
-      basis: "base-a-b-ab-execution",
-      source: "combined-verifier",
+      executionStatus: "no-observed-regression",
+      executionSummary: "선택한 테스트 범위에서는 pair-induced regression이 재현되지 않았습니다.",
       goldEvidence: "executable",
     };
   }
   return {
     ...base,
-    verdict: "review",
-    relationship: "inconclusive",
-    title: "결합 실행으로 판정하지 못함",
-    summary: verification.classification.rationale,
-    consequence: "환경 실패나 단독 PR 실패를 두 PR의 상호작용으로 오인하면 안 됩니다.",
-    recommendation: "실행 환경 또는 단독 PR 실패를 해결한 뒤 같은 commit SHA로 다시 검증하세요.",
-    basis: "base-a-b-ab-inconclusive",
-    source: "combined-verifier",
+    executionStatus: "inconclusive",
+    executionSummary: verification.classification.rationale,
   };
 }
 
@@ -81,7 +65,7 @@ export function applyVerificationResults(analysis, verifications = []) {
     return verification ? executionFinding(verification, finding) : finding;
   });
   const findings = resolved.filter((item) => ["conflict", "coordination", "review"].includes(item.verdict));
-  const compatibleVerifications = resolved.filter((item) => item.verdict === "independent" && item.verification);
+  const compatibleVerifications = resolved.filter((item) => item.verification?.classification.verdict === "compatible");
   const conflictCount = findings.filter((item) => item.verdict === "conflict").length;
   const coordinationCount = findings.filter((item) => item.verdict === "coordination").length;
   const reviewCount = findings.filter((item) => item.verdict === "review").length;

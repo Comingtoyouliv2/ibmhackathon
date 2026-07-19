@@ -30,7 +30,7 @@ test("verification candidates are bounded findings with a clean semantic lane", 
   assert.deepEqual(selectVerificationCandidates(prepared, analysis, { limit: 1 }).map((item) => item.key), ["1:2"]);
 });
 
-test("executable compatibility removes a speculative warning but preserves its audit result", () => {
+test("executable compatibility annotates a review without removing it", () => {
   const finding = { id: "f1", key: "1:2", prIds: ["1", "2"], verdict: "review", consequence: "possible failure" };
   const verification = {
     key: "1:2", prIds: ["1", "2"], verifiedAt: "2026-07-17T00:00:00Z",
@@ -41,9 +41,50 @@ test("executable compatibility removes a speculative warning but preserves its a
     findings: [finding],
     summary: { conflictCount: 0, coordinationCount: 0, reviewCount: 1 },
   }, [verification]);
-  assert.equal(result.findings.length, 0);
+  assert.equal(result.findings.length, 1);
+  assert.equal(result.findings[0].verdict, "review");
+  assert.equal(result.findings[0].executionStatus, "no-observed-regression");
   assert.equal(result.compatibleVerifications.length, 1);
   assert.equal(result.summary.verifiedCompatibleCount, 1);
+});
+
+test("executable compatibility never downgrades an existing conflict", () => {
+  const finding = {
+    id: "f1", key: "1:2", prIds: ["1", "2"], verdict: "conflict",
+    basis: "deterministic-witness", source: "framework", title: "signature conflict",
+  };
+  const verification = {
+    key: "1:2", prIds: ["1", "2"], verifiedAt: "2026-07-17T00:00:00Z",
+    classification: { verdict: "compatible", rationale: "all pass", evidence: ["A+B: passed"] },
+    runs: [],
+  };
+  const result = applyVerificationResults({
+    findings: [finding],
+    summary: { conflictCount: 1, coordinationCount: 0, reviewCount: 0 },
+  }, [verification]);
+  assert.equal(result.findings[0].verdict, "conflict");
+  assert.equal(result.findings[0].basis, "deterministic-witness");
+  assert.equal(result.findings[0].source, "framework");
+  assert.equal(result.findings[0].title, "signature conflict");
+  assert.equal(result.findings[0].executionStatus, "no-observed-regression");
+  assert.equal(result.summary.conflictCount, 1);
+});
+
+test("a repeated combined-only failure promotes review to conflict", () => {
+  const finding = { id: "f1", key: "1:2", prIds: ["1", "2"], verdict: "review" };
+  const verification = {
+    key: "1:2", prIds: ["1", "2"], verifiedAt: "2026-07-17T00:00:00Z",
+    classification: { verdict: "conflict", rationale: "A+B repeatedly fails", evidence: ["error x"] },
+    runs: [],
+  };
+  const result = applyVerificationResults({
+    findings: [finding],
+    summary: { conflictCount: 0, coordinationCount: 0, reviewCount: 1 },
+  }, [verification]);
+  assert.equal(result.findings[0].verdict, "conflict");
+  assert.equal(result.findings[0].relationship, "confirmed-conflict");
+  assert.equal(result.findings[0].executionStatus, "confirmed-conflict");
+  assert.equal(result.summary.confirmedConflictCount, 1);
 });
 
 test("auto profile resolves Node and repository configuration wins", async () => {
