@@ -250,10 +250,11 @@ export class DockerCombinedVerifier {
       if (volume.code !== 0) throw new Error(`Docker cache volume 생성 실패: ${tail(volume.stderr || volume.stdout, 500)}`);
       const pairId = `${left.number}-${right.number}`;
       const base = await this.executeState("base", pairId, profile, paths.base, cacheVolume);
-      const a = await this.executeState("a", pairId, profile, paths.a, cacheVolume);
-      const b = await this.executeState("b", pairId, profile, paths.b, cacheVolume);
-      const combinedRun = await this.executeState("combined", pairId, profile, paths.combined, cacheVolume);
-      const confirmation = base.status === "passed" && a.status === "passed" && b.status === "passed" && combinedRun.status === "failed"
+      const a = base.status === "passed" ? await this.executeState("a", pairId, profile, paths.a, cacheVolume) : null;
+      const b = base.status === "passed" ? await this.executeState("b", pairId, profile, paths.b, cacheVolume) : null;
+      const combinedRun = base.status === "passed" && a.status === "passed" && b.status === "passed"
+        ? await this.executeState("combined", pairId, profile, paths.combined, cacheVolume) : null;
+      const confirmation = combinedRun?.status === "failed"
         ? await this.confirmCombined(pairId, profile, paths.combined, cacheVolume) : null;
       const classification = classifyCombinedRuns({ base, a, b, combined: combinedRun, confirmation });
       return {
@@ -267,7 +268,7 @@ export class DockerCombinedVerifier {
         profile: profile.profile,
         profileSource: profile.source,
         classification,
-        runs: [base, a, b, combinedRun, ...(confirmation ? [confirmation] : [])],
+        runs: [base, a, b, combinedRun, confirmation].filter(Boolean),
         impact: { summary: classification.rationale },
         verifiedAt: new Date().toISOString(),
       };
