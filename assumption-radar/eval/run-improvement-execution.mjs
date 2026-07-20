@@ -5,7 +5,7 @@ import { cp, copyFile, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rm, s
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createHash } from "node:crypto";
+import { readPathState, unauthorizedCandidateChanges, workspaceChanges } from "./candidate-scope.mjs";
 import { evaluateCandidateGate } from "./improvement-lifecycle.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -13,7 +13,6 @@ const args = process.argv.slice(2);
 const value = (flag, fallback = null) => { const index = args.indexOf(flag); return index >= 0 ? args[index + 1] : fallback; };
 const has = (flag) => args.includes(flag);
 const readJsonl = async (path) => (await readFile(path, "utf8")).split("\n").map((line) => line.trim()).filter(Boolean).map(JSON.parse);
-const sha = (value) => createHash("sha256").update(value).digest("hex");
 
 async function latest(root) {
   const names = (await readdir(root, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse();
@@ -53,34 +52,6 @@ async function copyWorkspace(destination) {
     const stat = await lstat(modules);
     await symlink(stat.isSymbolicLink() ? await readlink(modules) : modules, join(destination, "node_modules"));
   } catch { /* The current test suite does not require installed dependencies. */ }
-}
-
-async function filesUnder(root, prefixes = ["src", "test", "eval"]) {
-  const result = [];
-  async function walk(path) {
-    for (const entry of await readdir(path, { withFileTypes: true })) {
-      const child = join(path, entry.name);
-      if (entry.isDirectory()) await walk(child);
-      else if (entry.isFile()) result.push(relative(root, child));
-    }
-  }
-  for (const prefix of prefixes) {
-    try { await walk(join(root, prefix)); } catch { /* optional */ }
-  }
-  return result.sort();
-}
-
-async function changedFiles(original, candidate) {
-  const paths = new Set([...(await filesUnder(original)), ...(await filesUnder(candidate))]);
-  const changed = [];
-  for (const path of paths) {
-    let before = null; let after = null;
-    try { before = await readFile(join(original, path)); } catch { /* new file */ }
-    try { after = await readFile(join(candidate, path)); } catch { /* deleted file */ }
-    if ((before && after && Buffer.compare(before, after) === 0) || (!before && !after)) continue;
-    changed.push({ path, beforeSha256: before ? sha(before) : null, afterSha256: after ? sha(after) : null, deleted: !after });
-  }
-  return changed;
 }
 
 function improvementPrompt(actions, cases) {
@@ -148,9 +119,9 @@ async function main() {
       await writeFile(join(output, "agent.log"), `${proposal.stdout}\n${proposal.stderr}`);
       if (proposal.code !== 0) throw new Error(`improvement agent failed (${proposal.code}); see ${join(output, "agent.log")}`);
     }
-    const changed = await changedFiles(ROOT, candidate);
+    const changed = await workspaceChanges(ROOT, candidate);
     const allowedTargets = new Set(actions.flatMap((action) => action.targetFiles || []));
-    const unauthorized = changed.filter((item) => !allowedTargets.has(item.path) && !/^test\/.*\.test\.mjs$/.test(item.path));
+    const unauthorized = unauthorizedCandidateChanges(changed, allowedTargets);
     if (!changed.length) throw new Error("improvement agent produced no changes");
     if (unauthorized.length) throw new Error(`agent changed unauthorized files: ${unauthorized.map((item) => item.path).join(", ")}`);
 
@@ -192,9 +163,10 @@ async function main() {
     const result = { schemaVersion: "improvement-execution-v0.1", runId, harness, model: value("--model", process.env.CODEX_MODEL || "gpt-5.6-sol"), actions: actions.map((action) => action.id), changed, gate, applied: false, publishedRuns: [] };
     if (has("--apply") && gate.passed) {
       for (const change of changed) {
-        let current = null;
-        try { current = await readFile(join(ROOT, change.path)); } catch { /* new */ }
-        if ((current ? sha(current) : null) !== change.beforeSha256) throw new Error(`source changed during validation: ${change.path}`);
+        const current = await readPathState(ROOT, change.path);
+        if ((current?.sha256 || null) !== change.beforeSha256 || (current?.type || null) !== change.beforeType || (current?.mode ?? null) !== change.beforeMode) {
+          throw new Error(`source changed during validation: ${change.path}`);
+        }
         if (change.deleted) await rm(join(ROOT, change.path));
         else { await mkdir(dirname(join(ROOT, change.path)), { recursive: true }); await copyFile(join(candidate, change.path), join(ROOT, change.path)); }
       }

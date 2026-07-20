@@ -75,7 +75,7 @@ npm run improve:answer -- --interactive
 npm run improve:answer -- --answers /path/to/answers.jsonl
 ```
 
-코드·프롬프트 작업은 현재 작업공간에서 바로 수정하지 않는다. 별도 임시 복사본에서 `gpt-5.6-sol` 개선 agent가 일반화된 수정과 counterexample test를 만들고, 전체 테스트와 frozen deterministic/AI benchmark를 통과시킨다. 회귀가 하나라도 생기거나 AI 불안정 case가 늘면 후보를 거절한다. 통과한 후보를 실제 source에 반영하려면 `--apply`를 명시한다.
+코드·프롬프트 작업은 현재 작업공간에서 바로 수정하지 않는다. 별도 임시 복사본에서 `gpt-5.6-sol` 개선 agent가 일반화된 수정과 counterexample test를 만들고, 전체 테스트와 frozen deterministic/AI benchmark를 통과시킨다. 후보 작업공간 전체를 비교해 허용된 source와 focused test 이외의 `package.json`, benchmark, 설정 변경이나 symlink 우회가 하나라도 있으면 gate 전에 거절한다. 회귀가 하나라도 생기거나 AI 불안정 case가 늘어도 후보를 거절한다. 통과한 후보를 실제 source에 반영하려면 `--apply`를 명시한다.
 
 ```bash
 CODEX_MODEL=gpt-5.6-sol CODEX_BIN=/path/to/codex npm run improve:execute
