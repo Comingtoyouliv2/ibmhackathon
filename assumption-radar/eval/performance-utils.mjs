@@ -57,6 +57,30 @@ function byLogicalKey(snapshot) {
   return new Map((snapshot?.findings || []).map((finding) => [finding.logicalKey, finding]));
 }
 
+function explorationByLogicalKey(snapshot) {
+  return new Map((snapshot?.explorationControls || []).map((item) => [item.logicalKey, item]));
+}
+
+function compareExplorationControls(previous, current) {
+  const before = explorationByLogicalKey(previous);
+  const after = explorationByLogicalKey(current);
+  const result = { new: [], changed: [], outOfScope: [], unchanged: 0 };
+  for (const [key, item] of after) {
+    const prior = before.get(key);
+    if (!prior) result.new.push(item);
+    else if (prior.inputFingerprint !== item.inputFingerprint) result.changed.push({ logicalKey: key, previous: prior, current: item, inputChanged: true });
+    else result.unchanged += 1;
+  }
+  for (const [key, item] of before) if (!after.has(key)) result.outOfScope.push(item);
+  result.counts = {
+    new: result.new.length,
+    changed: result.changed.length,
+    outOfScope: result.outOfScope.length,
+    unchanged: result.unchanged,
+  };
+  return result;
+}
+
 export function compareLiveSnapshots(previous, current) {
   if (!previous) {
     return {
@@ -66,6 +90,7 @@ export function compareLiveSnapshots(previous, current) {
       changed: [],
       cleared: [],
       outOfScope: [],
+      exploration: compareExplorationControls(null, current),
     };
   }
   const previousByKey = byLogicalKey(previous);
@@ -107,5 +132,6 @@ export function compareLiveSnapshots(previous, current) {
     outOfScope: diff.outOfScope.length,
     unchanged,
   };
+  diff.exploration = compareExplorationControls(previous, current);
   return diff;
 }

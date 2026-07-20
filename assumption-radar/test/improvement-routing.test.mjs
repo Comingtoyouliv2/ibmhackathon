@@ -47,3 +47,21 @@ test("live warnings route to verification and coordination is grouped for humans
   assert.equal(result.humanQuestions.length, 1);
   assert.equal(result.humanQuestions[0].kind, "coordination-policy");
 });
+
+test("new no-alert controls route to executable exploration", () => {
+  const result = routeLiveDiff({
+    repository: "acme/repo",
+    snapshot: {},
+    diff: {
+      new: [], changed: [], cleared: [],
+      exploration: {
+        new: [{ logicalKey: "acme/repo#10:20", prNumbers: [10, 20], basis: "relevance-only", source: "framework", inputFingerprint: "sha", samplingStratum: "same-module" }],
+        changed: [],
+      },
+    },
+  });
+  assert.equal(result.verificationActions.length, 1);
+  assert.equal(result.verificationActions[0].kind, "verify-no-alert-control");
+  assert.equal(result.verificationActions[0].predictedVerdict, "independent");
+  assert.equal(result.verificationActions[0].exploration, true);
+});

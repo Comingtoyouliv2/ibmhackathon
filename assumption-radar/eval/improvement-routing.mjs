@@ -108,6 +108,27 @@ export function routeLiveDiff({ repository, snapshot, diff }) {
     });
   }
 
+  const explorationControls = [
+    ...(diff.exploration?.new || []),
+    ...(diff.exploration?.changed || []).map((change) => change.current),
+  ];
+  for (const control of explorationControls) {
+    result.verificationActions.push({
+      id: taskId("verify", control.logicalKey), kind: "verify-no-alert-control", status: "proposed",
+      repository, logicalKey: control.logicalKey, prNumbers: control.prNumbers,
+      verdict: "independent", predictedVerdict: "independent", basis: control.basis, source: control.source,
+      inputFingerprint: control.inputFingerprint,
+      exploration: true,
+      samplingStratum: control.samplingStratum,
+      acceptance: [
+        "Record immutable base and both PR head SHAs",
+        "Run Base, A, B, and A+B in the same pinned environment",
+        "Exclude Base or independent PR failures from semantic metrics",
+        "Treat a repeated combined-only failure as a live retrieval false negative",
+      ],
+    });
+  }
+
   if (coordination.length) {
     result.humanQuestions.push({
       id: taskId("human", `${repository}:coordination`), kind: "coordination-policy", repository,

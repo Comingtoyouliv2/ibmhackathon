@@ -87,6 +87,8 @@ CODEX_MODEL=gpt-5.6-sol CODEX_BIN=/path/to/codex npm run improve:execute -- --ap
 
 live verification action은 저장된 immutable PR input을 사용하여 Docker에서 Base/A/B/A+B를 실행한다. Base가 실패하면 `baseline-failure`, A 또는 B가 단독 실패하면 `single-pr-regression`으로 semantic conflict 평가에서 제외하고 A+B를 실행하지 않는다. Base/A/B가 모두 통과한 뒤 A+B에서만 같은 failure signature가 반복 재현되어야 conflict로 확정된다.
 
+live snapshot은 경고 pair뿐 아니라 `independent`로 판정된 pair에서 기본 4개의 no-alert control을 거리별(same-file/contract, same-module, weak relation, random no-overlap)로 고른다. 새 control 또는 SHA가 바뀐 control은 동일한 실행 검증을 거치며, A+B에서만 반복 실패하면 `false-negative`로 `error-ledger.jsonl`에 기록된다. `--exploration-controls 0..50`으로 저장소별 탐색 예산을 조정할 수 있다. Base와 단독 PR 결과는 repository·commit SHA·실행 profile 기준으로 캐시해 여러 pair에서 재사용한다.
+
 ```bash
 npm run improve:verify-live
 ```

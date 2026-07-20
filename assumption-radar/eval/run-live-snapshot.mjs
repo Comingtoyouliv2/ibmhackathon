@@ -9,6 +9,7 @@ import { finishAnalysis } from "../src/analyzer.mjs";
 import { analyzeWithAI, semanticJudgeProvider } from "../src/ai.mjs";
 import { prepareAnalysisPipeline } from "../src/pipeline.mjs";
 import { compareLiveSnapshots, stableHash } from "./performance-utils.mjs";
+import { selectExplorationControls } from "./live-exploration.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -19,6 +20,7 @@ const value = (flag, fallback) => {
   return index >= 0 ? args[index + 1] : fallback;
 };
 const limit = Math.max(2, Math.min(100, Number(value("--limit", 20))));
+const explorationLimit = Math.max(0, Math.min(50, Number(value("--exploration-controls", 4))));
 const outputRoot = resolve(value("--output-root", join(ROOT, ".cache", "live-snapshots")));
 
 function modelName(aiProvider) {
@@ -80,6 +82,7 @@ function report(snapshot, diff) {
     `- PRs: ${snapshot.summary.prCount}`,
     `- Pairs: ${snapshot.summary.pairCount}`,
     `- Findings: ${snapshot.findings.length}`,
+    `- No-alert exploration controls: ${snapshot.explorationControls.length}`,
     `- Model: ${snapshot.run.model || "deterministic only"}`,
     "",
     "## Diff",
@@ -89,6 +92,7 @@ function report(snapshot, diff) {
     `- Cleared warnings: ${diff.counts.cleared}`,
     `- Out of scope/closed: ${diff.counts.outOfScope}`,
     `- Unchanged warnings: ${diff.counts.unchanged}`,
+    `- New/changed exploration controls: ${(diff.exploration?.counts.new || 0) + (diff.exploration?.counts.changed || 0)}`,
     "",
     "### New",
     "",
@@ -114,6 +118,14 @@ async function main() {
   const aiFindings = has("--ai") ? await analyzeWithAI(pipeline.prepared, aiOptions) : [];
   const analysis = finishAnalysis(pipeline.prepared, aiFindings);
   const prsById = new Map(analysis.prs.map((pr) => [String(pr.id), pr]));
+  const explorationControls = selectExplorationControls({
+    repository,
+    comparisons: pipeline.prepared.comparisons,
+    prs: analysis.prs,
+    findingKeys: analysis.findings.map((finding) => finding.key),
+    stacks: pipeline.preflight.stacks,
+    limit: explorationLimit,
+  });
   const generatedAt = new Date().toISOString();
   const snapshot = {
     schemaVersion: "live-warning-snapshot-v0.1",
@@ -131,8 +143,9 @@ async function main() {
     preflight: pipeline.preflight,
     prs: analysis.prs.map((pr) => ({ number: pr.number, title: pr.title, url: pr.url, headSha: pr.headSha, base: pr.base, baseSha: pr.baseSha, updatedAt: pr.updatedAt })),
     findings: analysis.findings.map((finding) => normalizeFinding(finding, prsById)),
+    explorationControls,
   };
-  snapshot.snapshotFingerprint = createHash("sha256").update(JSON.stringify(snapshot.findings)).digest("hex");
+  snapshot.snapshotFingerprint = createHash("sha256").update(JSON.stringify({ findings: snapshot.findings, explorationControls })).digest("hex");
   const repoRoot = join(outputRoot, repository.replace("/", "__"));
   const previous = await latestSnapshot(repoRoot);
   const diff = compareLiveSnapshots(previous, snapshot);

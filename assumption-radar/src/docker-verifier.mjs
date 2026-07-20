@@ -103,6 +103,7 @@ export class DockerCombinedVerifier {
     this.engine = options.preflightEngine || new GitMergeTreePreflight(repository, { cacheDir: options.cacheDir });
     this.run = options.runner || execute;
     this.profiles = options.profiles || { version: 1, repositories: {} };
+    this.executionCache = new Map();
   }
 
   async git(args, options = {}) {
@@ -185,6 +186,14 @@ export class DockerCombinedVerifier {
     };
   }
 
+  async executeStateCached(label, commitOid, pairId, profile, workspace, cacheVolume) {
+    const key = JSON.stringify({ repository: this.repository, commitOid, image: profile.image, installCommand: profile.installCommand, testCommand: profile.testCommand });
+    const cached = this.executionCache.has(key);
+    if (!cached) this.executionCache.set(key, this.executeState(label, pairId, profile, workspace, cacheVolume));
+    const result = await this.executionCache.get(key);
+    return { ...result, label, cached };
+  }
+
   async confirmCombined(pairId, profile, workspace, cacheVolume) {
     const name = safeName(`assumption-radar-${pairId}-combined-confirmation`);
     const tested = await this.container(name, profile, workspace, cacheVolume, profile.testCommand, false);
@@ -249,9 +258,10 @@ export class DockerCombinedVerifier {
       const volume = await this.docker(["volume", "create", cacheVolume]);
       if (volume.code !== 0) throw new Error(`Docker cache volume 생성 실패: ${tail(volume.stderr || volume.stdout, 500)}`);
       const pairId = `${left.number}-${right.number}`;
-      const base = await this.executeState("base", pairId, profile, paths.base, cacheVolume);
-      const a = base.status === "passed" ? await this.executeState("a", pairId, profile, paths.a, cacheVolume) : null;
-      const b = base.status === "passed" ? await this.executeState("b", pairId, profile, paths.b, cacheVolume) : null;
+      const baseSha = (await this.git(["-C", this.engine.repoDir, "rev-parse", baseRef])).stdout.trim();
+      const base = await this.executeStateCached("base", baseSha, pairId, profile, paths.base, cacheVolume);
+      const a = base.status === "passed" ? await this.executeStateCached("a", leftHead, pairId, profile, paths.a, cacheVolume) : null;
+      const b = base.status === "passed" ? await this.executeStateCached("b", rightHead, pairId, profile, paths.b, cacheVolume) : null;
       const combinedRun = base.status === "passed" && a.status === "passed" && b.status === "passed"
         ? await this.executeState("combined", pairId, profile, paths.combined, cacheVolume) : null;
       const confirmation = combinedRun?.status === "failed"
@@ -261,7 +271,7 @@ export class DockerCombinedVerifier {
         key: comparison.key,
         prIds: comparison.prIds,
         prNumbers: [left.number, right.number],
-        baseSha: (await this.git(["-C", this.engine.repoDir, "rev-parse", baseRef])).stdout.trim(),
+        baseSha,
         headShaA: left.headSha || (await this.git(["-C", this.engine.repoDir, "rev-parse", this.engine.ref(left.number)])).stdout.trim(),
         headShaB: right.headSha || (await this.git(["-C", this.engine.repoDir, "rev-parse", this.engine.ref(right.number)])).stdout.trim(),
         combinedTreeSha: inspection.treeOid,

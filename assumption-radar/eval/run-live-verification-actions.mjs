@@ -6,12 +6,71 @@ import { fileURLToPath } from "node:url";
 import { prepareIntegratedAnalysis } from "../src/integrated.mjs";
 import { DockerCombinedVerifier, loadVerificationProfiles } from "../src/docker-verifier.mjs";
 import { GitMergeTreePreflight } from "../src/preflight.mjs";
+import { buildLiveErrorLedger } from "./live-exploration.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
 const value = (flag, fallback = null) => { const index = args.indexOf(flag); return index >= 0 ? args[index + 1] : fallback; };
 const readJsonl = async (path) => (await readFile(path, "utf8")).split("\n").map((line) => line.trim()).filter(Boolean).map(JSON.parse);
 const jsonl = (rows) => rows.length ? `${rows.map((row) => JSON.stringify(row)).join("\n")}\n` : "";
+const pairKey = (numbers) => [...numbers].map(Number).sort((a, b) => a - b).join(":");
+
+function snapshotFinding(snapshot, action) {
+  return snapshot.findings.find((item) => item.logicalKey === action.logicalKey)
+    || snapshot.explorationControls?.find((item) => item.logicalKey === action.logicalKey)
+    || { logicalKey: action.logicalKey, prNumbers: action.prNumbers, verdict: action.predictedVerdict || action.verdict, basis: action.basis, source: action.source };
+}
+
+function stackExclusion(comparison, pairPrs, stack) {
+  const ordered = [...pairPrs].sort((left, right) => Number(left.number) - Number(right.number));
+  const verifiedAt = new Date().toISOString();
+  return {
+    key: comparison.key,
+    prIds: ordered.map((pr) => String(pr.id)),
+    prNumbers: ordered.map((pr) => Number(pr.number)),
+    baseSha: ordered[0]?.baseSha || ordered[1]?.baseSha || null,
+    headShaA: ordered[0]?.headSha || null,
+    headShaB: ordered[1]?.headSha || null,
+    combinedTreeSha: null,
+    profile: null,
+    profileSource: null,
+    classification: {
+      verdict: "excluded",
+      reasonCode: "stacked-prs",
+      semanticBenchmarkEligibility: "excluded",
+      rationale: "두 PR은 독립 변경이 아니라 ancestor/descendant 스택이므로 pair-induced regression 표본에서 제외합니다.",
+      evidence: [`PR #${stack.ancestorNumber} is an ancestor of PR #${stack.descendantNumber}`],
+    },
+    runs: [],
+    impact: { summary: "독립 PR 쌍이 아니므로 실행 검증과 오류 장부 집계에서 제외했습니다." },
+    verifiedAt,
+  };
+}
+
+function learningReport(results, ledger, errors) {
+  const falseNegatives = ledger.filter((item) => item.errorType === "false-negative");
+  const falsePositiveCandidates = ledger.filter((item) => item.errorType === "false-positive-candidate");
+  const excluded = results.filter((item) => item.verification?.classification?.verdict === "excluded");
+  const rows = ledger.length
+    ? ledger.map((item) => `| ${item.id} | ${item.errorType} | ${item.pipelineStage} | ${item.rootCause} |`).join("\n")
+    : "| - | - | - | - |";
+  return [
+    "# Live verification learning report",
+    "",
+    `- Executed or classified pairs: ${results.length}`,
+    `- Retrieval false negatives: ${falseNegatives.length}`,
+    `- False-positive candidates: ${falsePositiveCandidates.length}`,
+    `- Excluded controls: ${excluded.length}`,
+    `- Runner errors: ${errors.length}`,
+    "",
+    "| Pair | Error | Pipeline stage | Root cause |",
+    "|---|---|---|---|",
+    rows,
+    "",
+    "> A false-positive candidate is not a confirmed false positive until a human checks that the selected tests cover the claimed contract.",
+    "",
+  ].join("\n");
+}
 
 async function latest(root) {
   const names = (await readdir(root, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse();
@@ -50,40 +109,67 @@ async function main() {
     const preflightEngine = new GitMergeTreePreflight(snapshot.repository);
     const verifier = new DockerCombinedVerifier(snapshot.repository, { preflightEngine, profiles });
     try {
-      await verifier.assertDocker();
       await preflightEngine.initialize(prepared.prs);
-      await preflightEngine.prepareBaseMerges(prepared.prs);
+      const stacks = await preflightEngine.findStacks(prepared.prs);
+      const stacksByNumbers = new Map(stacks.map((stack) => [pairKey([stack.ancestorNumber, stack.descendantNumber]), stack]));
+      const runnableActionCount = repositoryActions.filter((action) => !stacksByNumbers.has(pairKey(action.prNumbers))).length;
+      if (runnableActionCount) {
+        await verifier.assertDocker();
+        await preflightEngine.prepareBaseMerges(prepared.prs);
+      }
       const prsById = new Map(prepared.prs.map((pr) => [String(pr.id), pr]));
       for (const action of repositoryActions) {
-        const key = [...action.prNumbers].map(Number).sort((a, b) => a - b).join(":");
+        const key = pairKey(action.prNumbers);
         const comparison = comparisonByNumbers.get(key);
         if (!comparison || action.prNumbers.some((number) => !byNumber.has(Number(number)))) {
           errors.push({ actionId: action.id, repository: snapshot.repository, error: "pair not present in immutable snapshot input" });
           continue;
         }
-        try {
-          const verification = await verifier.verifyPair(comparison, prsById);
-          const pairIds = new Set(action.prNumbers.map(Number));
+        const pairIds = new Set(action.prNumbers.map(Number));
+        const finding = snapshotFinding(snapshot, action);
+        const stack = stacksByNumbers.get(key);
+        if (stack) {
+          const pairPrs = prepared.prs.filter((pr) => pairIds.has(Number(pr.number)));
           results.push({
             schemaVersion: "live-verification-result-v0.1",
             actionId: action.id,
             repository: snapshot.repository,
+            action,
             liveRun,
             input: { schemaVersion: "semantic-clean-input-v0.1", prs: liveInput.prs.filter((pr) => pairIds.has(Number(pr.number))) },
-            finding: snapshot.findings.find((finding) => finding.logicalKey === action.logicalKey) || null,
+            finding,
+            verification: stackExclusion(comparison, pairPrs, stack),
+          });
+          continue;
+        }
+        try {
+          const verification = await verifier.verifyPair(comparison, prsById);
+          results.push({
+            schemaVersion: "live-verification-result-v0.1",
+            actionId: action.id,
+            repository: snapshot.repository,
+            action,
+            liveRun,
+            input: { schemaVersion: "semantic-clean-input-v0.1", prs: liveInput.prs.filter((pr) => pairIds.has(Number(pr.number))) },
+            finding,
             verification,
           });
         } catch (error) { errors.push({ actionId: action.id, repository: snapshot.repository, error: error.message }); }
       }
     } finally { await preflightEngine.cleanup?.().catch(() => {}); }
   }
+  const errorLedger = buildLiveErrorLedger(results);
+  const report = learningReport(results, errorLedger, errors);
   await Promise.all([
     writeFile(join(output, "results.jsonl"), jsonl(results)),
     writeFile(join(output, "errors.jsonl"), jsonl(errors)),
-    writeFile(join(output, "run.json"), `${JSON.stringify({ schemaVersion: "live-verification-run-v0.1", harness, generatedAt: new Date().toISOString(), resultCount: results.length, errorCount: errors.length }, null, 2)}\n`),
+    writeFile(join(output, "error-ledger.jsonl"), jsonl(errorLedger)),
+    writeFile(join(output, "learning-report.md"), report),
+    writeFile(join(output, "run.json"), `${JSON.stringify({ schemaVersion: "live-verification-run-v0.1", harness, generatedAt: new Date().toISOString(), resultCount: results.length, errorCount: errors.length, learningErrorCount: errorLedger.length, falseNegativeCount: errorLedger.filter((item) => item.errorType === "false-negative").length, falsePositiveCandidateCount: errorLedger.filter((item) => item.errorType === "false-positive-candidate").length }, null, 2)}\n`),
   ]);
   console.log(`Verified: ${results.length}`);
   console.log(`Errors: ${errors.length}`);
+  console.log(`Learning errors: ${errorLedger.length}`);
   console.log(`Saved: ${output}`);
   if (errors.length) process.exitCode = 2;
 }

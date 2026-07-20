@@ -47,3 +47,12 @@ test("live snapshot diff distinguishes cleared warnings from closed PRs", () => 
   const result = compareLiveSnapshots(previous, current);
   assert.deepEqual(result.counts, { new: 1, changed: 1, cleared: 0, outOfScope: 1, unchanged: 1 });
 });
+
+test("live snapshot diff only re-runs new or SHA-changed exploration controls", () => {
+  const control = (key, input) => ({ logicalKey: key, prNumbers: [1, 2], inputFingerprint: input });
+  const result = compareLiveSnapshots(
+    { generatedAt: "before", prs: [], findings: [], explorationControls: [control("r#1:2", "same"), control("r#2:3", "old")] },
+    { generatedAt: "after", prs: [], findings: [], explorationControls: [control("r#1:2", "same"), control("r#2:3", "new"), control("r#3:4", "new")] },
+  );
+  assert.deepEqual(result.exploration.counts, { new: 1, changed: 1, outOfScope: 0, unchanged: 1 });
+});

@@ -207,6 +207,44 @@ test("Docker verifier skips A+B when an independent PR fails", async () => {
   assert.equal(containers.some((name) => name.includes("-combined-")), false);
 });
 
+test("Docker verifier reuses Base and single-PR runs across pairs by commit SHA", async () => {
+  const engine = {
+    repoDir: "/fake/repo.git",
+    virtualHeads: new Map([[10, "virtual-a"], [20, "virtual-b"], [30, "virtual-c"]]),
+    ref: (number) => `refs/pr-${number}`,
+    baseRef: () => "refs/base/main",
+    initialize: async () => ({}),
+    prepareBaseMerges: async () => [],
+    inspectPair: async (item) => ({ status: "clean", treeOid: `tree-${item.key}` }),
+  };
+  const containers = [];
+  const runner = async (program, args) => {
+    if (program === "git" && args.includes("commit-tree")) return { code: 0, stdout: "combined-commit\n", stderr: "", durationMs: 1 };
+    if (program === "git" && args.includes("rev-parse")) return { code: 0, stdout: "base-sha\n", stderr: "", durationMs: 1 };
+    if (program === "docker" && args[0] === "info") return { code: 0, stdout: "27.0\n", stderr: "", durationMs: 1 };
+    if (program === "docker" && args[0] === "run") containers.push(args[args.indexOf("--name") + 1]);
+    return { code: 0, stdout: "ok\n", stderr: "", durationMs: 1 };
+  };
+  const verifier = new DockerCombinedVerifier("acme/repo", {
+    preflightEngine: engine,
+    runner,
+    profiles: { repositories: { "acme/repo": {
+      profile: "fake", image: "fake:image", installCommand: "install", testCommand: "test", timeoutSeconds: 10,
+    } } },
+  });
+  const prs = [
+    { id: "1", number: 10, base: "main", headSha: "head-a" },
+    { id: "2", number: 20, base: "main", headSha: "head-b" },
+    { id: "3", number: 30, base: "main", headSha: "head-c" },
+  ];
+  const result = await verifier.verify({ prs }, [{ key: "1:2", prIds: ["1", "2"] }, { key: "1:3", prIds: ["1", "3"] }]);
+  assert.equal(result.verifications.length, 2);
+  assert.equal(containers.filter((name) => name.includes("-base-test")).length, 1);
+  assert.equal(containers.filter((name) => name.includes("-a-test")).length, 1);
+  assert.equal(result.verifications[1].runs.find((run) => run.label === "base").cached, true);
+  assert.equal(result.verifications[1].runs.find((run) => run.label === "a").cached, true);
+});
+
 test("JSONL case record keeps immutable SHAs, evidence IDs, and four-state outcomes", () => {
   const verification = {
     prIds: ["1", "2"], prNumbers: [10, 20], baseSha: "base", headShaA: "a", headShaB: "b",

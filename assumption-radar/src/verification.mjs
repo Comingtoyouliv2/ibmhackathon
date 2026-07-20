@@ -151,6 +151,7 @@ export function verificationCaseRecord({ repository, verification, finding, meta
     command: run.command,
     exitCode: run.exitCode,
     durationMs: run.durationMs,
+    cached: Boolean(run.cached),
     failureSignatures: run.failureSignatures,
   }]));
   return {
