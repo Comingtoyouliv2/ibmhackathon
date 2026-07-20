@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildPromotionCandidate, mergePromotions } from "./improvement-lifecycle.mjs";
+import { allowedHumanDecisions, buildPromotionCandidate, mergePromotions } from "./improvement-lifecycle.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -33,14 +33,32 @@ async function main() {
   const decisionsPath = value("--human-decisions");
   const decisions = decisionsPath ? await readJsonl(resolve(decisionsPath)) : [];
   const decisionByCase = new Map(decisions.filter((item) => item.caseId).map((item) => [item.caseId, item.decision]));
-  const compatibleQuestions = results.filter((result) => result.verification?.classification?.verdict === "compatible" && !decisionByCase.has(result.finding?.logicalKey)).map((result) => ({
-    id: `promote-${result.actionId}`,
-    kind: "compatible-promotion-adjudication",
-    caseId: result.finding?.logicalKey,
-    question: `${result.finding?.logicalKey}는 Base/A/B/A+B 테스트 범위에서 통과했습니다. diff와 테스트 범위도 확인해 frozen harmless gold로 승격할까요?`,
-    context: { repository: result.repository, classification: result.verification.classification },
-  }));
-  await writeFile(join(verificationRun, "promotion-questions.jsonl"), jsonl(compatibleQuestions));
+  const promotionQuestions = results.filter((result) => ["conflict", "compatible"].includes(result.verification?.classification?.verdict)).map((result) => {
+    const verdict = result.verification.classification.verdict;
+    return {
+      id: `promote-${result.actionId}`,
+      kind: verdict === "conflict" ? "conflict-promotion-adjudication" : "compatible-promotion-adjudication",
+      caseId: result.finding?.logicalKey,
+      question: verdict === "conflict"
+        ? `${result.finding?.logicalKey}의 A+B 반복 실패가 두 PR의 상호작용에서 발생한 것인지 확인해 frozen conflict gold로 승격할까요?`
+        : `${result.finding?.logicalKey}는 Base/A/B/A+B 테스트 범위에서 통과했습니다. diff와 테스트 범위도 확인해 frozen harmless gold로 승격할까요?`,
+      context: { repository: result.repository, classification: result.verification.classification },
+    };
+  });
+  for (const question of promotionQuestions) {
+    const decision = decisionByCase.get(question.caseId);
+    if (decision && !allowedHumanDecisions(question).includes(decision)) {
+      throw new Error(`${question.caseId}: unsupported promotion decision '${decision}' (allowed: ${allowedHumanDecisions(question).join(", ")})`);
+    }
+  }
+  const pendingQuestions = promotionQuestions.filter((question) => !decisionByCase.has(question.caseId));
+  await writeFile(join(verificationRun, "promotion-questions.jsonl"), jsonl(pendingQuestions));
+  if (pendingQuestions.length) {
+    console.log(`Human promotion questions: ${pendingQuestions.length}`);
+    console.log(`Questions: ${join(verificationRun, "promotion-questions.jsonl")}`);
+    process.exitCode = 2;
+    return;
+  }
   const sourceSuite = resolve(value("--source-suite", join(ROOT, "benchmarks", "semantic-clean-v0.1", "frozen-v0.1")));
   const [existingInputs, existingGold] = await Promise.all([readJsonl(join(sourceSuite, "inputs.jsonl")), readJsonl(join(sourceSuite, "gold.jsonl"))]);
   const candidates = results.map((result) => buildPromotionCandidate({
@@ -52,8 +70,7 @@ async function main() {
   })).filter(Boolean);
   const merged = mergePromotions(existingInputs, existingGold, candidates);
   if (!merged.added) {
-    console.log("No promotable cases. Conflict requires repeated executable failure; compatible additionally requires a human harmless decision.");
-    if (compatibleQuestions.length) console.log(`Human questions: ${join(verificationRun, "promotion-questions.jsonl")}`);
+    console.log("No promotable cases. Conflict requires human causal approval; compatible requires a human harmless decision.");
     return;
   }
   const version = value("--version", `promoted-${new Date().toISOString().replace(/[:.]/g, "-")}`);

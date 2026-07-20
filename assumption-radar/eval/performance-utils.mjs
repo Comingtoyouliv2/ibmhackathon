@@ -4,12 +4,15 @@ export const stableHash = (value) => createHash("sha256")
   .update(JSON.stringify(value))
   .digest("hex");
 
-export function aggregateRepeatedVerdicts(verdicts) {
+export function aggregateRepeatedVerdicts(verdicts, expectedCount = verdicts.length) {
   const valid = verdicts.filter(Boolean);
   const counts = Object.fromEntries([...new Set(valid)].map((verdict) => [verdict, valid.filter((item) => item === verdict).length]));
-  if (!valid.length) return { verdict: "insufficient", stable: false, counts };
-  if (Object.keys(counts).length === 1) return { verdict: valid[0], stable: true, counts };
-  return { verdict: "review", stable: false, counts };
+  const complete = valid.length === expectedCount;
+  if (!valid.length) return { verdict: "insufficient", stable: false, complete, completedCount: 0, expectedCount, counts };
+  if (complete && Object.keys(counts).length === 1) {
+    return { verdict: valid[0], stable: true, complete, completedCount: valid.length, expectedCount, counts };
+  }
+  return { verdict: "review", stable: false, complete, completedCount: valid.length, expectedCount, counts };
 }
 
 export function semanticOutcome(gold, prediction) {

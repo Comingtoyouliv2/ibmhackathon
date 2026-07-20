@@ -4,10 +4,13 @@ import { aggregateRepeatedVerdicts, compareFrozenPredictions, compareLiveSnapsho
 
 test("repeated AI verdicts require unanimity", () => {
   assert.deepEqual(aggregateRepeatedVerdicts(["conflict", "conflict", "conflict"]), {
-    verdict: "conflict", stable: true, counts: { conflict: 3 },
+    verdict: "conflict", stable: true, complete: true, completedCount: 3, expectedCount: 3, counts: { conflict: 3 },
   });
   assert.deepEqual(aggregateRepeatedVerdicts(["conflict", "independent", "conflict"]), {
-    verdict: "review", stable: false, counts: { conflict: 2, independent: 1 },
+    verdict: "review", stable: false, complete: true, completedCount: 3, expectedCount: 3, counts: { conflict: 2, independent: 1 },
+  });
+  assert.deepEqual(aggregateRepeatedVerdicts(["conflict"], 3), {
+    verdict: "review", stable: false, complete: false, completedCount: 1, expectedCount: 3, counts: { conflict: 1 },
   });
 });
 

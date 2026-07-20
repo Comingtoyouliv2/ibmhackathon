@@ -251,6 +251,22 @@ test("removing a nested Java type conflicts with a qualified-to-simple new refer
   assert.ok(result.findings[0].witnesses.some((item) => item.type === "removed-symbol-vs-new-reference"));
 });
 
+test("a removed Java type mentioned only in a new comment is not a reference", () => {
+  const result = analyzeHeuristically([
+    pr("1", [file("src/AbstractForm.java", "@@ -20,2 +20,0 @@\n-public static class SubmitEvent extends GwtEvent<SubmitHandler> {\n-}")]),
+    pr("2", [file("src/AbstractForm.java", "@@ -90,0 +91,1 @@\n+// SubmitEvent was removed intentionally")]),
+  ]);
+  assert.ok(!result.findings[0]?.witnesses.some((item) => item.type === "removed-symbol-vs-new-reference"));
+});
+
+test("a removed Java type mentioned only in a string or text block is not a reference", () => {
+  const result = analyzeHeuristically([
+    pr("1", [file("src/AbstractForm.java", "@@ -20,2 +20,0 @@\n-public static class SubmitEvent extends GwtEvent<SubmitHandler> {\n-}")]),
+    pr("2", [file("src/AbstractForm.java", "@@ -90,0 +91,4 @@\n+logger.info(\"SubmitEvent was removed\");\n+String note = \"\"\"\n+SubmitEvent migration note\n+\"\"\";")]),
+  ]);
+  assert.ok(!result.findings[0]?.witnesses.some((item) => item.type === "removed-symbol-vs-new-reference"));
+});
+
 test("constructor state and a separate method behavior form a directional review dependency", () => {
   const result = analyzeHeuristically([
     pr("1", [file("src/DefaultEnvironment.java", "@@ -40,1 +40,1 @@ public DefaultEnvironment(EnvironmentType type)\n-this.type = firstNonNull(type, DEVELOPMENT);\n+this.type = firstNonNull(type, EnvironmentType.DEVELOPMENT);")]),

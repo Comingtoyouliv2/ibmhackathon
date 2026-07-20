@@ -93,13 +93,13 @@ npm run improve:verify-live
 
 ## 4단계: 재검증과 문제집 승격
 
-실행으로 확정한 live conflict는 새 immutable benchmark version으로 승격한다. compatible은 제한된 테스트 범위의 통과만으로 harmless gold를 단정하지 않고 사람의 `harmless` adjudication도 요구한다. 기존 `frozen-v0.1`은 절대 수정하지 않는다. 새 문제집 생성 직후 deterministic과 full AI baseline을 모두 실행한다.
+실행으로 확인한 live conflict와 compatible은 사람의 판정을 거친 뒤에만 새 immutable benchmark version으로 승격한다. conflict는 A+B 실패가 두 PR의 상호작용에서 발생했다는 인과 확인이 필요하고, compatible은 제한된 테스트 범위의 통과만으로 harmless gold를 단정하지 않도록 사람의 `harmless` 판정을 요구한다. 기존 `frozen-v0.1`은 절대 수정하지 않는다. 새 문제집 생성 직후 deterministic과 full AI baseline을 모두 실행한다.
 
 ```bash
 CODEX_MODEL=gpt-5.6-sol CODEX_BIN=/path/to/codex npm run improve:promote
 ```
 
-compatible 승격 질문이 생기면 verification run의 `promotion-questions.jsonl`을 직접 묻고 답변을 저장한 뒤 승격을 재실행한다.
+conflict 또는 compatible 승격 질문이 생기면 cycle은 `awaiting-human`으로 멈춘다. verification run의 `promotion-questions.jsonl`을 직접 묻고 답변을 저장한 뒤 승격을 재실행한다.
 
 ```bash
 npm run improve:answer -- --questions .cache/live-verification-runs/<run>/promotion-questions.jsonl --interactive --output /tmp/promotion-decisions.jsonl

@@ -79,7 +79,7 @@ async function runCase(record) {
     }
   }
   const repeatVerdicts = resolvedRuns.map((item) => item.verdict);
-  const aggregation = aggregateRepeatedVerdicts(repeatVerdicts);
+  const aggregation = aggregateRepeatedVerdicts(repeatVerdicts, repeats);
   const resolved = chooseResolved(deterministic, resolvedRuns, aggregation);
   return {
     prediction: {
@@ -93,6 +93,9 @@ async function runCase(record) {
       repeatVerdicts,
       repeatStable: aggregation.stable,
       repeatCounts: aggregation.counts,
+      repeatComplete: aggregation.complete,
+      completedRepeats: aggregation.completedCount,
+      expectedRepeats: aggregation.expectedCount,
       modelCalls,
       errors,
       latencyMs: performance.now() - started,

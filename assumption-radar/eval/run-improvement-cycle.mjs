@@ -72,7 +72,7 @@ async function main() {
     if (value("--answers")) promoteArgs.push("--human-decisions", resolve(value("--answers")));
     if (has("--skip-ai")) promoteArgs.push("--skip-ai");
     const promotion = await run("eval/run-benchmark-promotion.mjs", promoteArgs);
-    stages.push({ stage: "benchmark-promotion", status: promotion.code === 0 ? "passed" : "failed", exitCode: promotion.code });
+    stages.push({ stage: "benchmark-promotion", status: promotion.code === 0 ? "passed" : promotion.code === 2 ? "awaiting-human" : "failed", exitCode: promotion.code });
   } else stages.push({ stage: "benchmark-promotion", status: "not-needed" });
 
   const status = stages.some((stage) => stage.status === "failed") ? "failed"

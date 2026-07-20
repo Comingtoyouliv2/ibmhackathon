@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { buildScirChangeSet } from "./adapters/registry.mjs";
+import { javaCodeOnly } from "./adapters/java.mjs";
 
 const CATEGORY_LABELS = {
   api: "API 계약", data: "데이터 모델", config: "설정·플래그", auth: "인증·권한",
@@ -293,7 +294,12 @@ function modelFile(file) {
   const oldSignatureDeclarations = declarationsFromHunks(hunks, "old", false);
   const sections = hunks.map((hunk) => sectionDeclaration(hunk.section)).filter(Boolean);
   const codeFile = /\.(?:c|cc|cpp|cs|go|h|hpp|java|js|jsx|kt|kts|mjs|php|py|rb|rs|scala|swift|ts|tsx)$/i.test(file.filename);
-  const codeLines = (changes) => codeFile ? changes.map((change) => change.text).filter((line) => !/^\s*(?:\/\/|#|\*|\/\*)/.test(line)) : [];
+  const codeLines = (changes) => {
+    if (!codeFile) return [];
+    const lines = changes.map((change) => change.text);
+    if (file.filename.endsWith(".java")) return javaCodeOnly(lines);
+    return lines.filter((line) => !/^\s*(?:\/\/|#|\*|\/\*)/.test(line));
+  };
   const addedCodeLines = codeLines(added);
   const removedCodeLines = codeLines(removed);
   const referenceLines = (lines) => lines.filter((line) => !/^\s*(?:import|package)\b/.test(line));

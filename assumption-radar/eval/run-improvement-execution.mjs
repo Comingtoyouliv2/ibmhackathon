@@ -161,7 +161,7 @@ async function main() {
     await writeFile(join(output, "deterministic.log"), `${deterministic.stdout}\n${deterministic.stderr}`);
     if (deterministic.code !== 0) throw new Error(`deterministic validation failed; see ${join(output, "deterministic.log")}`);
     const deterministicRun = await latest(deterministicRoot);
-    const requireAi = promptActions.length > 0 && !has("--skip-ai");
+    const requireAi = actions.length > 0 && !has("--skip-ai");
     let aiCandidate = [];
     let aiRun = null;
     if (requireAi) {

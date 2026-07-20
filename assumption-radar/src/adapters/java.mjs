@@ -14,13 +14,68 @@ function javaImports(lines) {
   return imports;
 }
 
+export function javaCodeOnly(lines) {
+  let inBlockComment = false;
+  let inTextBlock = false;
+  return lines.map((line) => {
+    let code = "";
+    let quote = null;
+    let escaped = false;
+    for (let index = 0; index < line.length; index += 1) {
+      const character = line[index];
+      const next = line[index + 1];
+      const triple = line.slice(index, index + 3);
+      if (inBlockComment) {
+        if (character === "*" && next === "/") {
+          inBlockComment = false;
+          index += 1;
+        }
+        continue;
+      }
+      if (inTextBlock) {
+        if (triple === "\"\"\"") {
+          inTextBlock = false;
+          index += 2;
+        }
+        continue;
+      }
+      if (quote) {
+        if (escaped) escaped = false;
+        else if (character === "\\") escaped = true;
+        else if (character === quote) quote = null;
+        continue;
+      }
+      if (character === "/" && next === "/") break;
+      if (character === "/" && next === "*") {
+        inBlockComment = true;
+        code += " ";
+        index += 1;
+        continue;
+      }
+      if (triple === "\"\"\"") {
+        inTextBlock = true;
+        code += " ";
+        index += 2;
+        continue;
+      }
+      if (character === "\"" || character === "'") {
+        quote = character;
+        code += " ";
+        continue;
+      }
+      code += character;
+    }
+    return code;
+  });
+}
+
 function qualifiedTypeReferences(lines) {
-  return new Set(lines.flatMap((line) => [...line.matchAll(/\b(?:[a-z_$][\w$]*\.){2,}([A-Z_$][\w$]*)\b/g)].map((match) => match[1])));
+  return new Set(javaCodeOnly(lines).flatMap((line) => [...line.matchAll(/\b(?:[a-z_$][\w$]*\.){2,}([A-Z_$][\w$]*)\b/g)].map((match) => match[1])));
 }
 
 function unqualifiedTypeReferences(lines) {
   const references = new Set();
-  for (const line of lines) {
+  for (const line of javaCodeOnly(lines)) {
     if (/^\s*(?:import|package)\b/.test(line)) continue;
     for (const match of line.matchAll(/\b([A-Z_$][\w$]*)\b/g)) {
       const prefix = line.slice(0, match.index).trimEnd();
@@ -53,6 +108,7 @@ export const javaAdapter = Object.freeze({
     const qualifiedReferences = qualifiedTypeReferences(fileModel.addedLines || []);
     const addedUnqualifiedTypes = unqualifiedTypeReferences(fileModel.addedLines || []);
     const removedUnqualifiedTypes = unqualifiedTypeReferences(fileModel.removedLines || []);
+    const addedCodeTypes = new Set([...qualifiedReferences, ...addedUnqualifiedTypes]);
     const evidenceFor = (summary, excerpt) => {
       const item = createEvidence({ changeSetId, adapterId: this.id, path: file.filename, summary, excerpt });
       evidence.push(item);
@@ -76,6 +132,7 @@ export const javaAdapter = Object.freeze({
       }
     }
     for (const name of (fileModel.netAddedIdentifiers || []).filter((item) => /^[A-Z]/.test(item))) {
+      if (!addedCodeTypes.has(name)) continue;
       const evidenceId = evidenceFor(`${name} binding is newly required`, name);
       dependencies.push(createDependency({
         adapterId: this.id, relation: "requires-binding", target: { kind: "binding", name, scope: file.filename }, status: "added",

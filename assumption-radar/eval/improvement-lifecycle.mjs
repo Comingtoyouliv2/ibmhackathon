@@ -2,17 +2,23 @@ import { semanticOutcome, compareFrozenPredictions, stableHash } from "./perform
 
 const HUMAN_DECISIONS = new Set(["conflict", "harmless", "verify", "retry", "expected", "regression", "skip"]);
 
+export function allowedHumanDecisions(question) {
+  if (question.kind === "cleared-warning-review") return ["expected", "regression", "skip"];
+  if (question.kind === "compatible-promotion-adjudication") return ["harmless", "conflict", "retry", "skip"];
+  if (question.kind === "conflict-promotion-adjudication") return ["conflict", "retry", "skip"];
+  if (["missing-prediction", "unstable-ai-verdict", "unstable-or-unrepeated-ai-error", "ai-verdict-flip", "coordination-policy"].includes(question.kind)) {
+    return ["verify", "retry", "skip"];
+  }
+  return question.caseId ? ["conflict", "harmless", "retry", "skip"] : ["verify", "retry", "skip"];
+}
+
 export function buildHumanAnswerTemplate(questions) {
   return questions.map((question) => ({
     questionId: question.id,
     decision: null,
     note: "",
     question: question.question,
-    allowedDecisions: question.caseId
-      ? ["conflict", "harmless", "retry", "skip"]
-      : question.kind === "cleared-warning-review"
-        ? ["expected", "regression", "skip"]
-        : ["verify", "retry", "skip"],
+    allowedDecisions: allowedHumanDecisions(question),
   }));
 }
 
@@ -27,8 +33,9 @@ export function resolveHumanAnswers(questions, answers) {
       pending.push(question);
       continue;
     }
-    if (!HUMAN_DECISIONS.has(answer.decision)) {
-      errors.push(`${question.id}: unsupported decision '${answer.decision}'`);
+    const allowed = allowedHumanDecisions(question);
+    if (!HUMAN_DECISIONS.has(answer.decision) || !allowed.includes(answer.decision)) {
+      errors.push(`${question.id}: unsupported decision '${answer.decision}' (allowed: ${allowed.join(", ")})`);
       continue;
     }
     resolved.push({ ...question, status: "resolved", decision: answer.decision, note: answer.note || "", resolvedAt: answer.resolvedAt || new Date().toISOString() });
@@ -57,6 +64,12 @@ export function evaluateCandidateGate({
   const reasons = [];
   if (!testsPassed) reasons.push("test-suite-failed");
   if (deterministicComparison.counts.regressed) reasons.push(`deterministic-regressions:${deterministicComparison.counts.regressed}`);
+  if (deterministicComparison.counts.missing) reasons.push(`deterministic-missing:${deterministicComparison.counts.missing}`);
+  const blockerRegressions = goldRecords.filter((gold) => gold.gold === "conflict")
+    .filter((gold) => baselinePredictions.find((item) => item.id === gold.id)?.prediction === "conflict")
+    .filter((gold) => currentById.get(gold.id)?.prediction !== "conflict")
+    .map((gold) => gold.id);
+  if (blockerRegressions.length) reasons.push(`blocker-regressions:${blockerRegressions.join(",")}`);
   if (unresolvedTargets.length) reasons.push(`targets-not-corrected:${unresolvedTargets.join(",")}`);
 
   let aiComparison = null;
@@ -65,6 +78,13 @@ export function evaluateCandidateGate({
     else {
       aiComparison = compareFrozenPredictions(goldRecords, aiBaselinePredictions, aiCandidatePredictions);
       if (aiComparison.counts.regressed) reasons.push(`ai-regressions:${aiComparison.counts.regressed}`);
+      if (aiComparison.counts.missing) reasons.push(`ai-missing:${aiComparison.counts.missing}`);
+      const aiCandidateById = new Map(aiCandidatePredictions.map((record) => [record.id, record]));
+      const aiBlockerRegressions = goldRecords.filter((gold) => gold.gold === "conflict")
+        .filter((gold) => aiBaselinePredictions.find((item) => item.id === gold.id)?.prediction === "conflict")
+        .filter((gold) => aiCandidateById.get(gold.id)?.prediction !== "conflict")
+        .map((gold) => gold.id);
+      if (aiBlockerRegressions.length) reasons.push(`ai-blocker-regressions:${aiBlockerRegressions.join(",")}`);
       const unstableBefore = aiBaselinePredictions.filter((item) => item.repeatStable === false).length;
       const unstableAfter = aiCandidatePredictions.filter((item) => item.repeatStable === false).length;
       if (unstableAfter > unstableBefore) reasons.push(`ai-instability-increased:${unstableBefore}->${unstableAfter}`);
@@ -76,6 +96,7 @@ export function evaluateCandidateGate({
     reasons,
     targetCaseIds,
     unresolvedTargets,
+    blockerRegressions,
     deterministicComparison,
     aiComparison,
   };
@@ -84,10 +105,9 @@ export function evaluateCandidateGate({
 export function buildPromotionCandidate({ repository, input, verification, finding, humanDecision = null }) {
   const verdict = verification?.classification?.verdict;
   if (!input?.prs?.length || !["conflict", "compatible"].includes(verdict)) return null;
-  if (humanDecision && !["conflict", "harmless"].includes(humanDecision)) return null;
   if (verdict === "compatible" && humanDecision !== "harmless") return null;
-  if (verdict === "conflict" && humanDecision === "harmless") return null;
-  const gold = humanDecision || (verdict === "conflict" ? "conflict" : "harmless");
+  if (verdict === "conflict" && humanDecision !== "conflict") return null;
+  const gold = humanDecision;
   const id = `${repository}@live-${stableHash({ repository, baseSha: verification.baseSha, heads: [verification.headShaA, verification.headShaB] }).slice(0, 20)}`;
   return {
     input: { schemaVersion: "semantic-clean-input-v0.1", id, prs: input.prs },
