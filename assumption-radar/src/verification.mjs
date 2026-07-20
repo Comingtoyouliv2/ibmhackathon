@@ -49,6 +49,17 @@ function executionFinding(verification, existing) {
       goldEvidence: "executable",
     };
   }
+  if (verification.classification.verdict === "excluded") {
+    return {
+      ...base,
+      verdict: "excluded",
+      relationship: "excluded",
+      semanticBenchmarkEligibility: "excluded",
+      executionStatus: verification.classification.reasonCode || "excluded-independent-failure",
+      executionSummary: verification.classification.rationale,
+      goldEvidence: "executable",
+    };
+  }
   return {
     ...base,
     executionStatus: "inconclusive",
@@ -71,7 +82,10 @@ export function applyVerificationResults(analysis, verifications = []) {
   const reviewCount = findings.filter((item) => item.verdict === "review").length;
   const confirmedConflictCount = verifications.filter((item) => item.classification.verdict === "conflict").length;
   const verifiedCompatibleCount = verifications.filter((item) => item.classification.verdict === "compatible").length;
-  const inconclusiveVerificationCount = verifications.length - confirmedConflictCount - verifiedCompatibleCount;
+  const excludedVerificationCount = verifications.filter((item) => item.classification.verdict === "excluded").length;
+  const baselineFailureCount = verifications.filter((item) => item.classification.reasonCode?.startsWith("baseline-")).length;
+  const singlePrRegressionCount = verifications.filter((item) => item.classification.reasonCode?.startsWith("single-pr-regression-")).length;
+  const inconclusiveVerificationCount = verifications.length - confirmedConflictCount - verifiedCompatibleCount - excludedVerificationCount;
   return {
     ...analysis,
     findings,
@@ -86,6 +100,9 @@ export function applyVerificationResults(analysis, verifications = []) {
       verifiedPairCount: verifications.length,
       confirmedConflictCount,
       verifiedCompatibleCount,
+      excludedVerificationCount,
+      baselineFailureCount,
+      singlePrRegressionCount,
       inconclusiveVerificationCount,
       verdict: confirmedConflictCount ? "실행으로 pair-induced regression 확인"
         : conflictCount ? "정적·AI 충돌 witness 확인"
@@ -117,7 +134,8 @@ function impactFromVerification(verification) {
   const signatures = [...new Set(failed.flatMap((run) => run.failureSignatures || []))];
   return {
     type: verification.classification.verdict === "conflict" ? "pair-induced-regression"
-      : verification.classification.verdict === "compatible" ? "no-observed-regression" : "inconclusive",
+      : verification.classification.verdict === "compatible" ? "no-observed-regression"
+        : verification.classification.verdict === "excluded" ? verification.classification.reasonCode : "inconclusive",
     severity: verification.classification.verdict === "conflict" ? "unassessed" : "none",
     failedRuns: failed.map((run) => run.label),
     failureSignatures: signatures.slice(0, 20),
@@ -133,6 +151,7 @@ export function verificationCaseRecord({ repository, verification, finding, meta
     command: run.command,
     exitCode: run.exitCode,
     durationMs: run.durationMs,
+    cached: Boolean(run.cached),
     failureSignatures: run.failureSignatures,
   }]));
   return {
@@ -145,7 +164,10 @@ export function verificationCaseRecord({ repository, verification, finding, meta
     prA: { number: verification.prNumbers[0], headSha: verification.headShaA },
     prB: { number: verification.prNumbers[1], headSha: verification.headShaB },
     relationship: verification.classification.verdict === "conflict" ? "confirmed-conflict"
-      : verification.classification.verdict === "compatible" ? "compatible" : "inconclusive",
+      : verification.classification.verdict === "compatible" ? "compatible"
+        : verification.classification.verdict === "excluded" ? "excluded" : "inconclusive",
+    semanticBenchmarkEligibility: verification.classification.verdict === "excluded" ? "excluded" : "included",
+    exclusionReason: verification.classification.verdict === "excluded" ? verification.classification.reasonCode : null,
     mechanism: finding?.category || "unclassified",
     brokenContract: {
       assumptionA: finding?.assumptionA || "",

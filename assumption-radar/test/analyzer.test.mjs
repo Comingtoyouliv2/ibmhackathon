@@ -225,6 +225,65 @@ test("a fully qualified new use does not depend on the removed import", () => {
   assert.ok(!result.findings[0]?.witnesses.some((item) => item.type === "import-removal-vs-new-use"));
 });
 
+test("a removed Java field conflicts with a new same-file reference", () => {
+  const result = analyzeHeuristically([
+    pr("1", [file("src/Index.java", "@@ -4,1 +4,0 @@\n-private static final Log logger = LogFactory.getLog(Index.class);")]),
+    pr("2", [file("src/Index.java", "@@ -80,0 +81,3 @@\n+public void delete(int id) {\n+  logger.error(\"delete failed\");\n+}")]),
+  ]);
+  assert.equal(result.findings[0].verdict, "conflict");
+  assert.ok(result.findings[0].witnesses.some((item) => item.type === "removed-symbol-vs-new-reference"));
+});
+
+test("moving an existing Java field reference is not a removal conflict", () => {
+  const result = analyzeHeuristically([
+    pr("1", [file("src/Index.java", "@@ -4,1 +4,0 @@\n-private static final Log logger = LogFactory.getLog(Index.class);")]),
+    pr("2", [file("src/Index.java", "@@ -80,2 +80,2 @@\n-logger.error(\"delete failed\");\n cleanup();\n+logger.error(\"delete failed\");")]),
+  ]);
+  assert.ok(!result.findings[0]?.witnesses.some((item) => item.type === "removed-symbol-vs-new-reference"));
+});
+
+test("removing a nested Java type conflicts with a qualified-to-simple new reference", () => {
+  const result = analyzeHeuristically([
+    pr("1", [file("src/AbstractForm.java", "@@ -20,2 +20,0 @@\n-public static class SubmitEvent extends GwtEvent<SubmitHandler> {\n-}")]),
+    pr("2", [file("src/AbstractForm.java", "@@ -90,1 +90,1 @@\n-FormPanel.SubmitEvent event = new FormPanel.SubmitEvent();\n+SubmitEvent event = new SubmitEvent();")]),
+  ]);
+  assert.equal(result.findings[0].verdict, "conflict");
+  assert.ok(result.findings[0].witnesses.some((item) => item.type === "removed-symbol-vs-new-reference"));
+});
+
+test("a removed Java type mentioned only in a new comment is not a reference", () => {
+  const result = analyzeHeuristically([
+    pr("1", [file("src/AbstractForm.java", "@@ -20,2 +20,0 @@\n-public static class SubmitEvent extends GwtEvent<SubmitHandler> {\n-}")]),
+    pr("2", [file("src/AbstractForm.java", "@@ -90,0 +91,1 @@\n+// SubmitEvent was removed intentionally")]),
+  ]);
+  assert.ok(!result.findings[0]?.witnesses.some((item) => item.type === "removed-symbol-vs-new-reference"));
+});
+
+test("a removed Java type mentioned only in a string or text block is not a reference", () => {
+  const result = analyzeHeuristically([
+    pr("1", [file("src/AbstractForm.java", "@@ -20,2 +20,0 @@\n-public static class SubmitEvent extends GwtEvent<SubmitHandler> {\n-}")]),
+    pr("2", [file("src/AbstractForm.java", "@@ -90,0 +91,4 @@\n+logger.info(\"SubmitEvent was removed\");\n+String note = \"\"\"\n+SubmitEvent migration note\n+\"\"\";")]),
+  ]);
+  assert.ok(!result.findings[0]?.witnesses.some((item) => item.type === "removed-symbol-vs-new-reference"));
+});
+
+test("constructor state and a separate method behavior form a directional review dependency", () => {
+  const result = analyzeHeuristically([
+    pr("1", [file("src/DefaultEnvironment.java", "@@ -40,1 +40,1 @@ public DefaultEnvironment(EnvironmentType type)\n-this.type = firstNonNull(type, DEVELOPMENT);\n+this.type = firstNonNull(type, EnvironmentType.DEVELOPMENT);")]),
+    pr("2", [file("src/DefaultEnvironment.java", "@@ -62,1 +62,1 @@ public boolean supports(String feature)\n-return Boolean.parseBoolean(get(feature));\n+return Boolean.parseBoolean(get(feature).trim());")]),
+  ]);
+  assert.equal(result.findings[0].verdict, "review");
+  assert.ok(result.findings[0].witnesses.some((item) => item.type === "constructor-behavior-composition"));
+});
+
+test("separate ordinary Java methods remain a hard negative", () => {
+  const result = analyzeHeuristically([
+    pr("1", [file("src/DefaultEnvironment.java", "@@ -40,1 +40,1 @@ public void load()\n-oldLoad();\n+newLoad();")]),
+    pr("2", [file("src/DefaultEnvironment.java", "@@ -62,1 +62,1 @@ public boolean supports(String feature)\n-return oldValue();\n+return newValue();")]),
+  ]);
+  assert.equal(result.findings.length, 0);
+});
+
 test("Python binding removal conflicts with a new unqualified use", () => {
   const result = analyzeHeuristically([
     pr("1", [file("service.py", "@@ -1,1 +1,0 @@\n-from legacy.cookies import Cookie")]),

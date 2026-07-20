@@ -13,7 +13,7 @@ import {
 
 const run = (status, output = "") => ({ status, output, command: "test", exitCode: status === "passed" ? 0 : 1, durationMs: 1, failureSignatures: [] });
 
-test("combined classification never calls a failing base compatible", () => {
+test("Base and independent PR failures are excluded from semantic conflict classification", () => {
   const result = classifyCombinedRuns({
     base: run("failed"),
     a: run("passed"),
@@ -21,6 +21,19 @@ test("combined classification never calls a failing base compatible", () => {
     combined: run("passed"),
   });
   assert.equal(result.verdict, "excluded");
+  assert.equal(result.reasonCode, "baseline-failure");
+
+  const aFailure = classifyCombinedRuns({ base: run("passed"), a: run("failed"), b: run("passed"), combined: run("failed") });
+  assert.equal(aFailure.verdict, "excluded");
+  assert.equal(aFailure.reasonCode, "single-pr-regression-a");
+
+  const bFailure = classifyCombinedRuns({ base: run("passed"), a: run("passed"), b: run("failed"), combined: run("failed") });
+  assert.equal(bFailure.verdict, "excluded");
+  assert.equal(bFailure.reasonCode, "single-pr-regression-b");
+
+  const bothFail = classifyCombinedRuns({ base: run("passed"), a: run("failed"), b: run("failed"), combined: run("failed") });
+  assert.equal(bothFail.verdict, "excluded");
+  assert.equal(bothFail.reasonCode, "independent-pr-regressions");
 });
 
 test("verification candidates are bounded findings with a clean semantic lane", () => {
@@ -87,6 +100,20 @@ test("a repeated combined-only failure promotes review to conflict", () => {
   assert.equal(result.summary.confirmedConflictCount, 1);
 });
 
+test("an independent PR failure removes the pair from semantic findings", () => {
+  const finding = { id: "f1", key: "1:2", prIds: ["1", "2"], verdict: "conflict" };
+  const verification = {
+    key: "1:2", prIds: ["1", "2"], verifiedAt: "2026-07-17T00:00:00Z",
+    classification: { verdict: "excluded", reasonCode: "single-pr-regression-a", rationale: "A fails alone", evidence: ["A: failed"] },
+    runs: [],
+  };
+  const result = applyVerificationResults({ findings: [finding], summary: { conflictCount: 1, coordinationCount: 0, reviewCount: 0 } }, [verification]);
+  assert.equal(result.findings.length, 0);
+  assert.equal(result.summary.conflictCount, 0);
+  assert.equal(result.summary.excludedVerificationCount, 1);
+  assert.equal(result.summary.singlePrRegressionCount, 1);
+});
+
 test("auto profile resolves Node and repository configuration wins", async () => {
   const workspace = await mkdtemp(join(tmpdir(), "radar-profile-"));
   try {
@@ -141,6 +168,83 @@ test("Docker verifier orchestrates Base/A/B/A+B and confirms a repeated combined
   assert.deepEqual(result.verifications[0].runs.map((item) => item.label), ["base", "a", "b", "combined", "combined_confirmation"]);
 });
 
+test("Docker verifier skips A+B when an independent PR fails", async () => {
+  const engine = {
+    repoDir: "/fake/repo.git",
+    virtualHeads: new Map([[10, "virtual-a"], [20, "virtual-b"]]),
+    ref: (number) => `refs/pr-${number}`,
+    baseRef: () => "refs/base/main",
+    initialize: async () => ({}),
+    prepareBaseMerges: async () => [],
+    inspectPair: async () => ({ status: "clean", treeOid: "tree" }),
+  };
+  const containers = [];
+  const runner = async (program, args) => {
+    if (program === "git" && args.includes("commit-tree")) return { code: 0, stdout: "combined-commit\n", stderr: "", durationMs: 1 };
+    if (program === "git" && args.includes("rev-parse")) return { code: 0, stdout: "base-sha\n", stderr: "", durationMs: 1 };
+    if (program === "docker" && args[0] === "info") return { code: 0, stdout: "27.0\n", stderr: "", durationMs: 1 };
+    if (program === "docker" && args[0] === "run") {
+      const name = args[args.indexOf("--name") + 1];
+      containers.push(name);
+      const aFailed = name.includes("-a-test");
+      return { code: aFailed ? 1 : 0, stdout: aFailed ? "Error: A fails alone" : "ok", stderr: "", durationMs: 1 };
+    }
+    return { code: 0, stdout: "ok\n", stderr: "", durationMs: 1 };
+  };
+  const verifier = new DockerCombinedVerifier("acme/repo", {
+    preflightEngine: engine,
+    runner,
+    profiles: { repositories: { "acme/repo": {
+      profile: "fake", image: "fake:image", installCommand: "install", testCommand: "test", timeoutSeconds: 10,
+    } } },
+  });
+  const result = await verifier.verify({ prs: [
+    { id: "1", number: 10, base: "main", headSha: "head-a" },
+    { id: "2", number: 20, base: "main", headSha: "head-b" },
+  ] }, [{ key: "1:2", prIds: ["1", "2"] }]);
+  assert.equal(result.verifications[0].classification.reasonCode, "single-pr-regression-a");
+  assert.deepEqual(result.verifications[0].runs.map((item) => item.label), ["base", "a", "b"]);
+  assert.equal(containers.some((name) => name.includes("-combined-")), false);
+});
+
+test("Docker verifier reuses Base and single-PR runs across pairs by commit SHA", async () => {
+  const engine = {
+    repoDir: "/fake/repo.git",
+    virtualHeads: new Map([[10, "virtual-a"], [20, "virtual-b"], [30, "virtual-c"]]),
+    ref: (number) => `refs/pr-${number}`,
+    baseRef: () => "refs/base/main",
+    initialize: async () => ({}),
+    prepareBaseMerges: async () => [],
+    inspectPair: async (item) => ({ status: "clean", treeOid: `tree-${item.key}` }),
+  };
+  const containers = [];
+  const runner = async (program, args) => {
+    if (program === "git" && args.includes("commit-tree")) return { code: 0, stdout: "combined-commit\n", stderr: "", durationMs: 1 };
+    if (program === "git" && args.includes("rev-parse")) return { code: 0, stdout: "base-sha\n", stderr: "", durationMs: 1 };
+    if (program === "docker" && args[0] === "info") return { code: 0, stdout: "27.0\n", stderr: "", durationMs: 1 };
+    if (program === "docker" && args[0] === "run") containers.push(args[args.indexOf("--name") + 1]);
+    return { code: 0, stdout: "ok\n", stderr: "", durationMs: 1 };
+  };
+  const verifier = new DockerCombinedVerifier("acme/repo", {
+    preflightEngine: engine,
+    runner,
+    profiles: { repositories: { "acme/repo": {
+      profile: "fake", image: "fake:image", installCommand: "install", testCommand: "test", timeoutSeconds: 10,
+    } } },
+  });
+  const prs = [
+    { id: "1", number: 10, base: "main", headSha: "head-a" },
+    { id: "2", number: 20, base: "main", headSha: "head-b" },
+    { id: "3", number: 30, base: "main", headSha: "head-c" },
+  ];
+  const result = await verifier.verify({ prs }, [{ key: "1:2", prIds: ["1", "2"] }, { key: "1:3", prIds: ["1", "3"] }]);
+  assert.equal(result.verifications.length, 2);
+  assert.equal(containers.filter((name) => name.includes("-base-test")).length, 1);
+  assert.equal(containers.filter((name) => name.includes("-a-test")).length, 1);
+  assert.equal(result.verifications[1].runs.find((run) => run.label === "base").cached, true);
+  assert.equal(result.verifications[1].runs.find((run) => run.label === "a").cached, true);
+});
+
 test("JSONL case record keeps immutable SHAs, evidence IDs, and four-state outcomes", () => {
   const verification = {
     prIds: ["1", "2"], prNumbers: [10, 20], baseSha: "base", headShaA: "a", headShaB: "b",
@@ -165,4 +269,18 @@ test("JSONL case record keeps immutable SHAs, evidence IDs, and four-state outco
   assert.deepEqual(record.evidence.map((item) => item.id), ["A1", "B1"]);
   assert.equal(record.verification.runs.combined.status, "failed");
   assert.deepEqual([record.baseSha, record.prA.headSha, record.prB.headSha], ["base", "a", "b"]);
+});
+
+test("JSONL records independent failures as excluded rather than semantic conflict", () => {
+  const verification = {
+    prIds: ["1", "2"], prNumbers: [10, 20], baseSha: "base", headShaA: "a", headShaB: "b",
+    verifiedAt: "2026-07-17T00:00:00Z", profile: "node-npm",
+    classification: { verdict: "excluded", reasonCode: "single-pr-regression-b", rationale: "B fails alone", evidence: ["B: failed"] },
+    runs: [{ label: "base", ...run("passed") }, { label: "a", ...run("passed") }, { label: "b", ...run("failed") }],
+  };
+  const record = verificationCaseRecord({ repository: "acme/repo", verification, finding: {} });
+  assert.equal(record.relationship, "excluded");
+  assert.equal(record.semanticBenchmarkEligibility, "excluded");
+  assert.equal(record.exclusionReason, "single-pr-regression-b");
+  assert.equal(record.impact.type, "single-pr-regression-b");
 });

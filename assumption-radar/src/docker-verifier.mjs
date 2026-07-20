@@ -103,6 +103,7 @@ export class DockerCombinedVerifier {
     this.engine = options.preflightEngine || new GitMergeTreePreflight(repository, { cacheDir: options.cacheDir });
     this.run = options.runner || execute;
     this.profiles = options.profiles || { version: 1, repositories: {} };
+    this.executionCache = new Map();
   }
 
   async git(args, options = {}) {
@@ -185,6 +186,14 @@ export class DockerCombinedVerifier {
     };
   }
 
+  async executeStateCached(label, commitOid, pairId, profile, workspace, cacheVolume) {
+    const key = JSON.stringify({ repository: this.repository, commitOid, image: profile.image, installCommand: profile.installCommand, testCommand: profile.testCommand });
+    const cached = this.executionCache.has(key);
+    if (!cached) this.executionCache.set(key, this.executeState(label, pairId, profile, workspace, cacheVolume));
+    const result = await this.executionCache.get(key);
+    return { ...result, label, cached };
+  }
+
   async confirmCombined(pairId, profile, workspace, cacheVolume) {
     const name = safeName(`assumption-radar-${pairId}-combined-confirmation`);
     const tested = await this.container(name, profile, workspace, cacheVolume, profile.testCommand, false);
@@ -209,10 +218,10 @@ export class DockerCombinedVerifier {
     await this.git(["-C", this.engine.repoDir, "worktree", "remove", "--force", path], { allowed: [0, 128] });
   }
 
-  async verifyPair(comparison, prsById) {
+  async verifyPair(comparison, prsById, inspectionOverride = null) {
     const left = prsById.get(comparison.prIds[0]);
     const right = prsById.get(comparison.prIds[1]);
-    const inspection = await this.engine.inspectPair(comparison, prsById);
+    const inspection = inspectionOverride || await this.engine.inspectPair(comparison, prsById);
     if (inspection.status !== "clean" || !inspection.treeOid) {
       throw new Error(`실행 검증에는 clean merge tree가 필요합니다: ${inspection.status}`);
     }
@@ -249,25 +258,27 @@ export class DockerCombinedVerifier {
       const volume = await this.docker(["volume", "create", cacheVolume]);
       if (volume.code !== 0) throw new Error(`Docker cache volume 생성 실패: ${tail(volume.stderr || volume.stdout, 500)}`);
       const pairId = `${left.number}-${right.number}`;
-      const base = await this.executeState("base", pairId, profile, paths.base, cacheVolume);
-      const a = await this.executeState("a", pairId, profile, paths.a, cacheVolume);
-      const b = await this.executeState("b", pairId, profile, paths.b, cacheVolume);
-      const combinedRun = await this.executeState("combined", pairId, profile, paths.combined, cacheVolume);
-      const confirmation = base.status === "passed" && a.status === "passed" && b.status === "passed" && combinedRun.status === "failed"
+      const baseSha = (await this.git(["-C", this.engine.repoDir, "rev-parse", baseRef])).stdout.trim();
+      const base = await this.executeStateCached("base", baseSha, pairId, profile, paths.base, cacheVolume);
+      const a = base.status === "passed" ? await this.executeStateCached("a", leftHead, pairId, profile, paths.a, cacheVolume) : null;
+      const b = base.status === "passed" ? await this.executeStateCached("b", rightHead, pairId, profile, paths.b, cacheVolume) : null;
+      const combinedRun = base.status === "passed" && a.status === "passed" && b.status === "passed"
+        ? await this.executeState("combined", pairId, profile, paths.combined, cacheVolume) : null;
+      const confirmation = combinedRun?.status === "failed"
         ? await this.confirmCombined(pairId, profile, paths.combined, cacheVolume) : null;
       const classification = classifyCombinedRuns({ base, a, b, combined: combinedRun, confirmation });
       return {
         key: comparison.key,
         prIds: comparison.prIds,
         prNumbers: [left.number, right.number],
-        baseSha: (await this.git(["-C", this.engine.repoDir, "rev-parse", baseRef])).stdout.trim(),
+        baseSha,
         headShaA: left.headSha || (await this.git(["-C", this.engine.repoDir, "rev-parse", this.engine.ref(left.number)])).stdout.trim(),
         headShaB: right.headSha || (await this.git(["-C", this.engine.repoDir, "rev-parse", this.engine.ref(right.number)])).stdout.trim(),
         combinedTreeSha: inspection.treeOid,
         profile: profile.profile,
         profileSource: profile.source,
         classification,
-        runs: [base, a, b, combinedRun, ...(confirmation ? [confirmation] : [])],
+        runs: [base, a, b, combinedRun, confirmation].filter(Boolean),
         impact: { summary: classification.rationale },
         verifiedAt: new Date().toISOString(),
       };

@@ -29,6 +29,27 @@ test("patch write-read interaction improves retrieval without inventing a semant
   assert.ok(prepared.comparisons[0].retrievalScore > 0);
 });
 
+test("identical add-vs-add helpers are an additive union, not composition risk", () => {
+  const patch = "@@ -0,0 +1,3 @@\n+public final class SSLHelper {\n+  public static void configure() {}\n+}";
+  const left = pr("1", "src/SSLHelper.java", patch);
+  const right = pr("2", "src/SSLHelper.java", patch);
+  left.files[0].status = "added";
+  right.files[0].status = "added";
+  const prepared = prepareIntegratedAnalysis([left, right]);
+  assert.equal(prepared.comparisons[0].verdict, "independent");
+  assert.ok(!prepared.comparisons[0].witnesses.some((witness) => witness.type === "add-vs-add"));
+});
+
+test("different add-vs-add definitions still require review", () => {
+  const left = pr("1", "src/SSLHelper.java", "@@ -0,0 +1,1 @@\n+public final class SSLHelper { public static int mode() { return 1; } }");
+  const right = pr("2", "src/SSLHelper.java", "@@ -0,0 +1,1 @@\n+public final class SSLHelper { public static int mode() { return 2; } }");
+  left.files[0].status = "added";
+  right.files[0].status = "added";
+  const prepared = prepareIntegratedAnalysis([left, right]);
+  assert.equal(prepared.comparisons[0].verdict, "review");
+  assert.ok(prepared.comparisons[0].witnesses.some((witness) => witness.type === "add-vs-add"));
+});
+
 test("combined verifier requires independent passes and a repeated failure signature", () => {
   const result = classifyCombinedRuns({
     base: { status: "passed" }, a: { status: "passed" }, b: { status: "passed" },
@@ -148,4 +169,27 @@ test("Codex adapter uses the same second-look and bilateral evidence contract", 
   const judgments = await analyzeWithCodex(prepared, { runner, concurrency: 1 });
   assert.equal(judgments[0].verdict, "conflict");
   assert.equal(judgments[0].source, "codex");
+});
+
+test("Codex receives a stable CASE_JSON and returns a stable compatible verdict across three runs", async () => {
+  const prepared = prepareIntegratedAnalysis([
+    pr("1", "src/SSLHelper.java", "@@ -0,0 +1,1 @@\n+public final class SSLHelper {}"),
+    pr("2", "src/SSLHelper.java", "@@ -0,0 +1,1 @@\n+public final class SSLHelper {}"),
+  ]);
+  const seen = [];
+  const runner = async (caseInput) => {
+    seen.push(JSON.stringify(caseInput));
+    return {
+      prIds: caseInput.prIds, verdict: "compatible", category: "code", title: "identical helper",
+      summary: "Both parents add the same helper.", assumptionA: "", assumptionB: "", failureMechanism: "",
+      recommendation: "merge", confidence: 1, evidence: [],
+    };
+  };
+  const verdicts = [];
+  for (let run = 0; run < 3; run += 1) {
+    const [judgment] = await analyzeWithCodex(prepared, { runner, concurrency: 1 });
+    verdicts.push(judgment.verdict);
+  }
+  assert.deepEqual(new Set(seen).size, 1);
+  assert.deepEqual(verdicts, ["independent", "independent", "independent"]);
 });
