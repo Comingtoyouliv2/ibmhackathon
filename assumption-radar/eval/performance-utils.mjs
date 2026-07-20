@@ -57,13 +57,13 @@ function byLogicalKey(snapshot) {
   return new Map((snapshot?.findings || []).map((finding) => [finding.logicalKey, finding]));
 }
 
-function explorationByLogicalKey(snapshot) {
-  return new Map((snapshot?.explorationControls || []).map((item) => [item.logicalKey, item]));
+function itemsByLogicalKey(snapshot, field) {
+  return new Map((snapshot?.[field] || []).map((item) => [item.logicalKey, item]));
 }
 
-function compareExplorationControls(previous, current) {
-  const before = explorationByLogicalKey(previous);
-  const after = explorationByLogicalKey(current);
+function compareSelectedItems(previous, current, field) {
+  const before = itemsByLogicalKey(previous, field);
+  const after = itemsByLogicalKey(current, field);
   const result = { new: [], changed: [], outOfScope: [], unchanged: 0 };
   for (const [key, item] of after) {
     const prior = before.get(key);
@@ -90,7 +90,8 @@ export function compareLiveSnapshots(previous, current) {
       changed: [],
       cleared: [],
       outOfScope: [],
-      exploration: compareExplorationControls(null, current),
+      exploration: compareSelectedItems(null, current, "explorationControls"),
+      selectedAlerts: compareSelectedItems(null, current, "selectedAlerts"),
     };
   }
   const previousByKey = byLogicalKey(previous);
@@ -132,6 +133,7 @@ export function compareLiveSnapshots(previous, current) {
     outOfScope: diff.outOfScope.length,
     unchanged,
   };
-  diff.exploration = compareExplorationControls(previous, current);
+  diff.exploration = compareSelectedItems(previous, current, "explorationControls");
+  diff.selectedAlerts = compareSelectedItems(previous, current, "selectedAlerts");
   return diff;
 }

@@ -9,7 +9,7 @@ import { finishAnalysis } from "../src/analyzer.mjs";
 import { analyzeWithAI, semanticJudgeProvider } from "../src/ai.mjs";
 import { prepareAnalysisPipeline } from "../src/pipeline.mjs";
 import { compareLiveSnapshots, stableHash } from "./performance-utils.mjs";
-import { selectExplorationControls } from "./live-exploration.mjs";
+import { planLiveVerification } from "./live-exploration.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -20,8 +20,13 @@ const value = (flag, fallback) => {
   return index >= 0 ? args[index + 1] : fallback;
 };
 const limit = Math.max(2, Math.min(100, Number(value("--limit", 20))));
-const explorationLimit = Math.max(0, Math.min(50, Number(value("--exploration-controls", 4))));
 const outputRoot = resolve(value("--output-root", join(ROOT, ".cache", "live-snapshots")));
+const executionProfileRoot = resolve(value("--execution-profile-root", join(ROOT, ".cache", "live-execution-profiles")));
+
+async function loadExecutionProfile(repo) {
+  try { return JSON.parse(await readFile(join(executionProfileRoot, `${repo.replace("/", "__")}.json`), "utf8")); }
+  catch { return null; }
+}
 
 function modelName(aiProvider) {
   if (!has("--ai")) return null;
@@ -82,7 +87,11 @@ function report(snapshot, diff) {
     `- PRs: ${snapshot.summary.prCount}`,
     `- Pairs: ${snapshot.summary.pairCount}`,
     `- Findings: ${snapshot.findings.length}`,
+    `- Verification mode: ${snapshot.verificationPolicy.mode} (${snapshot.verificationPolicy.reason})`,
+    `- Eligible clean pairs: ${snapshot.verificationPolicy.eligibleCleanPairCount}`,
+    `- Selected warning pairs: ${snapshot.selectedAlerts.length}`,
     `- No-alert exploration controls: ${snapshot.explorationControls.length}`,
+    `- Estimated exhaustive runtime: ${snapshot.verificationPolicy.estimatedTotalMs === null ? "측정 전" : `${(snapshot.verificationPolicy.estimatedTotalMs / 60_000).toFixed(1)}분`}`,
     `- Model: ${snapshot.run.model || "deterministic only"}`,
     "",
     "## Diff",
@@ -92,6 +101,7 @@ function report(snapshot, diff) {
     `- Cleared warnings: ${diff.counts.cleared}`,
     `- Out of scope/closed: ${diff.counts.outOfScope}`,
     `- Unchanged warnings: ${diff.counts.unchanged}`,
+    `- New/changed selected warnings: ${(diff.selectedAlerts?.counts.new || 0) + (diff.selectedAlerts?.counts.changed || 0)}`,
     `- New/changed exploration controls: ${(diff.exploration?.counts.new || 0) + (diff.exploration?.counts.changed || 0)}`,
     "",
     "### New",
@@ -118,14 +128,24 @@ async function main() {
   const aiFindings = has("--ai") ? await analyzeWithAI(pipeline.prepared, aiOptions) : [];
   const analysis = finishAnalysis(pipeline.prepared, aiFindings);
   const prsById = new Map(analysis.prs.map((pr) => [String(pr.id), pr]));
-  const explorationControls = selectExplorationControls({
+  const planned = planLiveVerification({
     repository,
     comparisons: pipeline.prepared.comparisons,
     prs: analysis.prs,
     findingKeys: analysis.findings.map((finding) => finding.key),
     stacks: pipeline.preflight.stacks,
-    limit: explorationLimit,
+    executionProfile: await loadExecutionProfile(repository),
+    mode: value("--verification-mode", "auto"),
+    pairLimit: Math.max(1, Number(value("--verification-pair-limit", 200))),
+    timeBudgetMs: Math.max(1, Number(value("--verification-budget-minutes", 120))) * 60_000,
+    pilotLimit: Math.max(0, Number(value("--pilot-controls", 4))),
+    budgetedLimit: Math.max(0, Number(value("--budgeted-controls", 20))),
+    controlLimitOverride: has("--exploration-controls") ? Math.max(0, Number(value("--exploration-controls", 0))) : null,
   });
+  const { controls: explorationControls, ...verificationPolicy } = planned;
+  const normalizedFindings = analysis.findings.map((finding) => normalizeFinding(finding, prsById));
+  const selectedAlertKeys = new Set(verificationPolicy.selectedAlertLogicalKeys);
+  const selectedAlerts = normalizedFindings.filter((finding) => selectedAlertKeys.has(finding.logicalKey));
   const generatedAt = new Date().toISOString();
   const snapshot = {
     schemaVersion: "live-warning-snapshot-v0.1",
@@ -141,11 +161,13 @@ async function main() {
     },
     summary: analysis.summary,
     preflight: pipeline.preflight,
+    verificationPolicy,
     prs: analysis.prs.map((pr) => ({ number: pr.number, title: pr.title, url: pr.url, headSha: pr.headSha, base: pr.base, baseSha: pr.baseSha, updatedAt: pr.updatedAt })),
-    findings: analysis.findings.map((finding) => normalizeFinding(finding, prsById)),
+    findings: normalizedFindings,
+    selectedAlerts,
     explorationControls,
   };
-  snapshot.snapshotFingerprint = createHash("sha256").update(JSON.stringify({ findings: snapshot.findings, explorationControls })).digest("hex");
+  snapshot.snapshotFingerprint = createHash("sha256").update(JSON.stringify({ findings: snapshot.findings, selectedAlerts, explorationControls })).digest("hex");
   const repoRoot = join(outputRoot, repository.replace("/", "__"));
   const previous = await latestSnapshot(repoRoot);
   const diff = compareLiveSnapshots(previous, snapshot);

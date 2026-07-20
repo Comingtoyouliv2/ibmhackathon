@@ -92,8 +92,14 @@ export function routeLiveDiff({ repository, snapshot, diff }) {
   for (const finding of diff.new || []) {
     if (finding.verdict === "coordination") {
       coordination.push(finding);
-      continue;
     }
+  }
+
+  const usesVerificationPolicy = Boolean(snapshot.verificationPolicy);
+  const selectedWarnings = usesVerificationPolicy
+    ? [...(diff.selectedAlerts.new || []), ...(diff.selectedAlerts.changed || []).map((change) => change.current)]
+    : (diff.new || []).filter((finding) => finding.verdict !== "coordination");
+  for (const finding of selectedWarnings) {
     result.verificationActions.push({
       id: taskId("verify", finding.logicalKey), kind: "verify-new-live-warning", status: "proposed",
       repository, logicalKey: finding.logicalKey, prNumbers: finding.prNumbers,
@@ -139,12 +145,14 @@ export function routeLiveDiff({ repository, snapshot, diff }) {
 
   for (const change of diff.changed || []) {
     if (change.inputChanged) {
-      result.verificationActions.push({
-        id: taskId("verify", `${change.logicalKey}:changed-input`), kind: "verify-updated-live-warning", status: "proposed",
-        repository, logicalKey: change.logicalKey, prNumbers: change.prNumbers,
-        previous: change.previous, current: change.current,
-        reason: "PR head/base input changed; treat this as a new case rather than a regression.",
-      });
+      if (!usesVerificationPolicy) {
+        result.verificationActions.push({
+          id: taskId("verify", `${change.logicalKey}:changed-input`), kind: "verify-updated-live-warning", status: "proposed",
+          repository, logicalKey: change.logicalKey, prNumbers: change.prNumbers,
+          previous: change.previous, current: change.current,
+          reason: "PR head/base input changed; treat this as a new case rather than a regression.",
+        });
+      }
     } else if (["codex", "openai", "anthropic"].includes(change.current.source)) {
       result.humanQuestions.push({
         id: taskId("human", `${change.logicalKey}:ai-flip`), kind: "ai-verdict-flip", repository,

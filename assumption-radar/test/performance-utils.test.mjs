@@ -56,3 +56,13 @@ test("live snapshot diff only re-runs new or SHA-changed exploration controls", 
   );
   assert.deepEqual(result.exploration.counts, { new: 1, changed: 1, outOfScope: 0, unchanged: 1 });
 });
+
+test("live snapshot diff notices warnings newly selected by an exhaustive policy", () => {
+  const warning = (key, input) => ({ logicalKey: key, prNumbers: [1, 2], inputFingerprint: input, findingFingerprint: key });
+  const result = compareLiveSnapshots(
+    { generatedAt: "before", prs: [], findings: [warning("r#1:2", "same"), warning("r#2:3", "same")], selectedAlerts: [warning("r#1:2", "same")] },
+    { generatedAt: "after", prs: [], findings: [warning("r#1:2", "same"), warning("r#2:3", "same")], selectedAlerts: [warning("r#1:2", "same"), warning("r#2:3", "same")] },
+  );
+  assert.deepEqual(result.selectedAlerts.counts, { new: 1, changed: 0, outOfScope: 0, unchanged: 1 });
+  assert.equal(result.counts.unchanged, 2);
+});

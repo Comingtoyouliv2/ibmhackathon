@@ -65,3 +65,18 @@ test("new no-alert controls route to executable exploration", () => {
   assert.equal(result.verificationActions[0].predictedVerdict, "independent");
   assert.equal(result.verificationActions[0].exploration, true);
 });
+
+test("budgeted live policy executes only warnings selected for its runtime budget", () => {
+  const selected = { logicalKey: "acme/repo#1:2", prNumbers: [1, 2], verdict: "conflict", basis: "witness", source: "framework", inputFingerprint: "a" };
+  const deferred = { logicalKey: "acme/repo#2:3", prNumbers: [2, 3], verdict: "review", basis: "witness", source: "framework", inputFingerprint: "b" };
+  const result = routeLiveDiff({
+    repository: "acme/repo",
+    snapshot: { verificationPolicy: { mode: "budgeted" } },
+    diff: {
+      new: [selected, deferred], changed: [], cleared: [],
+      selectedAlerts: { new: [selected], changed: [] },
+      exploration: { new: [], changed: [] },
+    },
+  });
+  assert.deepEqual(result.verificationActions.map((action) => action.logicalKey), ["acme/repo#1:2"]);
+});

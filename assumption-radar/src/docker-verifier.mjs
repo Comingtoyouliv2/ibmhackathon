@@ -218,10 +218,10 @@ export class DockerCombinedVerifier {
     await this.git(["-C", this.engine.repoDir, "worktree", "remove", "--force", path], { allowed: [0, 128] });
   }
 
-  async verifyPair(comparison, prsById) {
+  async verifyPair(comparison, prsById, inspectionOverride = null) {
     const left = prsById.get(comparison.prIds[0]);
     const right = prsById.get(comparison.prIds[1]);
-    const inspection = await this.engine.inspectPair(comparison, prsById);
+    const inspection = inspectionOverride || await this.engine.inspectPair(comparison, prsById);
     if (inspection.status !== "clean" || !inspection.treeOid) {
       throw new Error(`실행 검증에는 clean merge tree가 필요합니다: ${inspection.status}`);
     }

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { prepareIntegratedAnalysis } from "../src/integrated.mjs";
 import { DockerCombinedVerifier, loadVerificationProfiles } from "../src/docker-verifier.mjs";
 import { GitMergeTreePreflight } from "../src/preflight.mjs";
-import { buildLiveErrorLedger } from "./live-exploration.mjs";
+import { buildExecutionProfiles, buildLiveErrorLedger } from "./live-exploration.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -44,6 +44,36 @@ function stackExclusion(comparison, pairPrs, stack) {
     runs: [],
     impact: { summary: "독립 PR 쌍이 아니므로 실행 검증과 오류 장부 집계에서 제외했습니다." },
     verifiedAt,
+  };
+}
+
+function preflightDisposition(comparison, pairPrs, inspection) {
+  const ordered = [...pairPrs].sort((left, right) => Number(left.number) - Number(right.number));
+  const excluded = ["textual-conflict", "base-conflict"].includes(inspection.status);
+  const reasonCode = inspection.status === "textual-conflict" ? "mechanical-textual-conflict"
+    : inspection.status === "base-conflict" ? "base-conflict" : "merge-preflight-unavailable";
+  return {
+    key: comparison.key,
+    prIds: ordered.map((pr) => String(pr.id)),
+    prNumbers: ordered.map((pr) => Number(pr.number)),
+    baseSha: ordered[0]?.baseSha || ordered[1]?.baseSha || null,
+    headShaA: ordered[0]?.headSha || null,
+    headShaB: ordered[1]?.headSha || null,
+    combinedTreeSha: inspection.treeOid || null,
+    profile: null,
+    profileSource: null,
+    classification: {
+      verdict: excluded ? "excluded" : "inconclusive",
+      reasonCode,
+      semanticBenchmarkEligibility: excluded ? "excluded" : "inconclusive",
+      rationale: excluded
+        ? "Git이 먼저 차단하는 기계적 충돌이므로 silent pair-induced regression 표본에서 제외합니다."
+        : "merge-tree 결과를 만들지 못해 실행 검증을 보류합니다.",
+      evidence: [...(inspection.conflictPaths || []), ...(inspection.messages || []), inspection.error].filter(Boolean).slice(0, 20),
+    },
+    runs: [],
+    impact: { summary: excluded ? "기계적 Git 충돌로 제외했습니다." : "merge preflight가 불충분해 판정할 수 없습니다." },
+    verifiedAt: new Date().toISOString(),
   };
 }
 
@@ -85,6 +115,7 @@ async function main() {
   const profilePath = value("--verification-profile");
   const profiles = await loadVerificationProfiles(profilePath ? resolve(profilePath) : null);
   const outputRoot = resolve(value("--output-root", join(ROOT, ".cache", "live-verification-runs")));
+  const executionProfileRoot = resolve(value("--execution-profile-root", join(ROOT, ".cache", "live-execution-profiles")));
   const output = join(outputRoot, new Date().toISOString().replace(/[:.]/g, "-"));
   await mkdir(output, { recursive: true });
   const results = [];
@@ -113,11 +144,18 @@ async function main() {
       const stacks = await preflightEngine.findStacks(prepared.prs);
       const stacksByNumbers = new Map(stacks.map((stack) => [pairKey([stack.ancestorNumber, stack.descendantNumber]), stack]));
       const runnableActionCount = repositoryActions.filter((action) => !stacksByNumbers.has(pairKey(action.prNumbers))).length;
-      if (runnableActionCount) {
-        await verifier.assertDocker();
-        await preflightEngine.prepareBaseMerges(prepared.prs);
-      }
+      const inspectionsByNumbers = new Map();
       const prsById = new Map(prepared.prs.map((pr) => [String(pr.id), pr]));
+      if (runnableActionCount) {
+        await preflightEngine.prepareBaseMerges(prepared.prs);
+        for (const action of repositoryActions) {
+          const key = pairKey(action.prNumbers);
+          if (stacksByNumbers.has(key)) continue;
+          const comparison = comparisonByNumbers.get(key);
+          if (comparison) inspectionsByNumbers.set(key, await preflightEngine.inspectPair(comparison, prsById));
+        }
+        if ([...inspectionsByNumbers.values()].some((inspection) => inspection.status === "clean" && inspection.treeOid)) await verifier.assertDocker();
+      }
       for (const action of repositoryActions) {
         const key = pairKey(action.prNumbers);
         const comparison = comparisonByNumbers.get(key);
@@ -143,7 +181,10 @@ async function main() {
           continue;
         }
         try {
-          const verification = await verifier.verifyPair(comparison, prsById);
+          const inspection = inspectionsByNumbers.get(key);
+          const verification = inspection.status === "clean" && inspection.treeOid
+            ? await verifier.verifyPair(comparison, prsById, inspection)
+            : preflightDisposition(comparison, prepared.prs.filter((pr) => pairIds.has(Number(pr.number))), inspection);
           results.push({
             schemaVersion: "live-verification-result-v0.1",
             actionId: action.id,
@@ -159,13 +200,17 @@ async function main() {
     } finally { await preflightEngine.cleanup?.().catch(() => {}); }
   }
   const errorLedger = buildLiveErrorLedger(results);
+  const executionProfiles = buildExecutionProfiles(results);
   const report = learningReport(results, errorLedger, errors);
+  await mkdir(executionProfileRoot, { recursive: true });
   await Promise.all([
     writeFile(join(output, "results.jsonl"), jsonl(results)),
     writeFile(join(output, "errors.jsonl"), jsonl(errors)),
     writeFile(join(output, "error-ledger.jsonl"), jsonl(errorLedger)),
+    writeFile(join(output, "execution-profiles.jsonl"), jsonl(executionProfiles)),
     writeFile(join(output, "learning-report.md"), report),
-    writeFile(join(output, "run.json"), `${JSON.stringify({ schemaVersion: "live-verification-run-v0.1", harness, generatedAt: new Date().toISOString(), resultCount: results.length, errorCount: errors.length, learningErrorCount: errorLedger.length, falseNegativeCount: errorLedger.filter((item) => item.errorType === "false-negative").length, falsePositiveCandidateCount: errorLedger.filter((item) => item.errorType === "false-positive-candidate").length }, null, 2)}\n`),
+    ...executionProfiles.map((profile) => writeFile(join(executionProfileRoot, `${profile.repository.replace("/", "__")}.json`), `${JSON.stringify(profile, null, 2)}\n`)),
+    writeFile(join(output, "run.json"), `${JSON.stringify({ schemaVersion: "live-verification-run-v0.1", harness, generatedAt: new Date().toISOString(), resultCount: results.length, errorCount: errors.length, learningErrorCount: errorLedger.length, falseNegativeCount: errorLedger.filter((item) => item.errorType === "false-negative").length, falsePositiveCandidateCount: errorLedger.filter((item) => item.errorType === "false-positive-candidate").length, executionProfileCount: executionProfiles.length }, null, 2)}\n`),
   ]);
   console.log(`Verified: ${results.length}`);
   console.log(`Errors: ${errors.length}`);
