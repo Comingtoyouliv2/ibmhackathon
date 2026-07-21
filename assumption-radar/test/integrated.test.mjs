@@ -145,11 +145,15 @@ test("cross-language HTTP contracts retrieve a Python client against a Java serv
 });
 
 test("contract provenance keeps provider and consumer files beyond the fallback prefix", () => {
+  const filler = Array.from({ length: 220 }, (_, index) => `+def unrelated_${index}(): return ${index}`);
   const left = {
     id: "5277", number: 5277, title: "Add MCP client", baseSha: "base",
     files: [
       ...[1, 2, 3].map((index) => ({ filename: `docs/decoy-${index}.md`, status: "modified", patch: `@@ -1 +1 @@\n-old\n+decoy ${index}` })),
-      { filename: "zeppelin-mcp/src/zeppelin_mcp/client.py", status: "modified", patch: "@@ -1 +1 @@\n-old\n+self._request(\"PUT\", f\"/interpreter/setting/restart/{setting_id}\", json=None)" },
+      { filename: "zeppelin-mcp/src/zeppelin_mcp/client.py", status: "modified", patch: [
+        "@@ -0,0 +1,221 @@", ...filler,
+        "+self._request(\"PUT\", f\"/interpreter/setting/restart/{setting_id}\", json=None)",
+      ].join("\n") },
     ],
   };
   const right = pr("5151", "zeppelin-server/src/main/java/org/apache/zeppelin/rest/InterpreterRestApi.java", [
@@ -157,11 +161,26 @@ test("contract provenance keeps provider and consumer files beyond the fallback 
   ].join("\n"));
   const prepared = prepareIntegratedAnalysis([left, right]);
   const comparison = prepared.comparisons[0];
-  const [caseInput] = buildSemanticJudgeCases(prepared, [comparison]);
+  const [caseInput] = buildSemanticJudgeCases(prepared, [comparison], { maxPatchChars: 700 });
   assert.deepEqual(caseInput.prs.map((item) => item.files.map((file) => file.filename)), [
     ["zeppelin-mcp/src/zeppelin_mcp/client.py"],
     ["zeppelin-server/src/main/java/org/apache/zeppelin/rest/InterpreterRestApi.java"],
   ]);
+  assert.match(caseInput.prs[0].files[0].patch, /interpreter\/setting\/restart/);
+  assert.ok(caseInput.prs[0].files[0].patch.length <= 700);
+});
+
+test("evidence-aware compaction also preserves late event contracts", () => {
+  const filler = Array.from({ length: 180 }, (_, index) => `+const unrelated_${index} = ${index};`);
+  const prepared = prepareIntegratedAnalysis([
+    pr("1", "src/producer.js", ["@@ -0,0 +1,181 @@", ...filler, '+publish("payment.captured", payload);'].join("\n")),
+    pr("2", "src/consumer.js", ["@@ -0,0 +1,181 @@", ...filler, '+subscribe("payment.captured", handlePayment);'].join("\n")),
+  ]);
+  const comparison = prepared.comparisons[0];
+  assert.ok(comparison.retrievalFeatures.sharedContracts.includes("event:payment.captured"));
+  const [caseInput] = buildSemanticJudgeCases(prepared, [comparison], { maxPatchChars: 650 });
+  assert.match(caseInput.prs[0].files[0].patch, /publish\("payment\.captured"/);
+  assert.match(caseInput.prs[1].files[0].patch, /subscribe\("payment\.captured"/);
 });
 
 test("AI blockers require verbatim evidence from both PRs", () => {

@@ -88,7 +88,84 @@ function relevantPaths(comparison, left, right) {
   return paths;
 }
 
-function compactPr(pr, paths, maxPatchChars) {
+const FOCUS_TERM_STOP = new Set([
+  "api", "http", "https", "event", "config", "schema", "symbol", "file", "module",
+  "get", "post", "put", "patch", "delete", "head", "options", "param", "params",
+]);
+
+function evidenceTerms(resources = []) {
+  return uniq(resources.flatMap((resource) => String(resource).toLowerCase().match(/[a-z_$][a-z0-9_$-]{2,}/g) || [])
+    .filter((term) => !FOCUS_TERM_STOP.has(term)))
+    .sort((left, right) => right.length - left.length);
+}
+
+function contractResourcesForFile(comparison, side, filename) {
+  return Object.entries(comparison.retrievalFeatures?.contractFiles || {}).flatMap(([resource, files]) => (
+    (files[side] || []).includes(filename) ? [resource] : []
+  ));
+}
+
+function patchPreamble(lines) {
+  const hunkIndex = lines.findIndex((line) => line.startsWith("@@"));
+  return lines.slice(0, hunkIndex < 0 ? Math.min(lines.length, 8) : hunkIndex);
+}
+
+function enclosingHunkHeader(lines, index) {
+  for (let cursor = index; cursor >= 0; cursor -= 1) if (lines[cursor].startsWith("@@")) return lines[cursor];
+  return null;
+}
+
+/**
+ * Keeps evidence-bearing windows from anywhere in a long patch. The query is
+ * derived from shared contract identities, so this works for HTTP routes,
+ * events, config, schemas, and symbols without repository-specific names.
+ */
+function compactPatch(patch = "", resources = [], maxPatchChars = 9_000) {
+  if (patch.length <= maxPatchChars) return patch;
+  const terms = evidenceTerms(resources);
+  if (!terms.length) return patch.slice(0, maxPatchChars);
+  const lines = patch.split("\n");
+  const hits = lines.flatMap((line, index) => {
+    const lower = line.toLowerCase();
+    const matched = terms.filter((term) => lower.includes(term));
+    return matched.length ? [{ index, score: matched.length * 100 + matched.reduce((sum, term) => sum + term.length, 0) }] : [];
+  }).sort((left, right) => right.score - left.score || left.index - right.index);
+  if (!hits.length) return patch.slice(0, maxPatchChars);
+
+  const snippets = [];
+  const covered = [];
+  const preamble = patchPreamble(lines).join("\n");
+  let used = preamble.length;
+  for (const hit of hits) {
+    if (covered.some(([start, end]) => hit.index >= start && hit.index <= end)) continue;
+    const start = Math.max(0, hit.index - 12);
+    const end = Math.min(lines.length - 1, hit.index + 12);
+    let selectedStart = start;
+    let selectedEnd = end;
+    const header = enclosingHunkHeader(lines, hit.index);
+    const body = lines.slice(start, end + 1);
+    if (header && !body.includes(header)) body.unshift(header);
+    let snippet = body.join("\n");
+    const separator = snippets.length || preamble ? "\n... [unrelated patch content omitted] ...\n" : "";
+    if (used + separator.length + snippet.length > maxPatchChars) {
+      const compactStart = Math.max(0, hit.index - 4);
+      const compactEnd = Math.min(lines.length - 1, hit.index + 4);
+      selectedStart = compactStart;
+      selectedEnd = compactEnd;
+      const compactBody = lines.slice(compactStart, compactEnd + 1);
+      if (header && !compactBody.includes(header)) compactBody.unshift(header);
+      snippet = compactBody.join("\n");
+    }
+    if (used + separator.length + snippet.length > maxPatchChars) continue;
+    snippets.push(`${separator}${snippet}`);
+    covered.push([selectedStart, selectedEnd]);
+    used += separator.length + snippet.length;
+  }
+  if (!snippets.length) return patch.slice(0, maxPatchChars);
+  return `${preamble}${snippets.join("")}`.slice(0, maxPatchChars);
+}
+
+function compactPr(pr, paths, maxPatchChars, comparison, side) {
   const relevant = (pr.files || []).filter((file) => paths.has(file.filename));
   const files = (relevant.length ? relevant : (pr.files || []).slice(0, 3)).slice(0, 16);
   return {
@@ -100,7 +177,7 @@ function compactPr(pr, paths, maxPatchChars) {
     files: files.map((file) => ({
       filename: file.filename,
       status: file.status,
-      patch: (file.patch || "").slice(0, maxPatchChars),
+      patch: compactPatch(file.patch || "", contractResourcesForFile(comparison, side, file.filename), maxPatchChars),
     })),
   };
 }
@@ -125,7 +202,10 @@ export function buildSemanticJudgeCases(prepared, candidates, options = {}) {
       witnesses: (comparison.witnesses || []).map(({ type, strength, category, explanation, evidence, causalRole }) => ({
         type, strength, category, explanation, evidence, causalRole,
       })),
-      prs: [compactPr(left, paths, maxPatchChars), compactPr(right, paths, maxPatchChars)],
+      prs: [
+        compactPr(left, paths, maxPatchChars, comparison, "left"),
+        compactPr(right, paths, maxPatchChars, comparison, "right"),
+      ],
     };
   });
 }

@@ -248,7 +248,11 @@ function httpContractEntries(pr) {
 function matchingResourceFiles(model, value) {
   const needle = String(value || "").replace(/^.*?:/, "");
   if (!needle) return [];
-  return model.files.filter((file) => (file.patch || "").includes(needle)).map((file) => file.filename);
+  const normalizedNeedle = needle.toLowerCase();
+  return model.files.filter((file) => [
+    file.filename,
+    ...(file.hunks || []).flatMap((hunk) => [hunk.section, ...(hunk.changes || []).map((change) => change.text)]),
+  ].some((text) => String(text || "").toLowerCase().includes(normalizedNeedle))).map((file) => file.filename);
 }
 
 export function buildContractCard(pr) {
