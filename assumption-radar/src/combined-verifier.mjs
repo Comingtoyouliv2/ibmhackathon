@@ -1,4 +1,4 @@
-const NORMALIZED_FAILURE = /(?:error(?:\[[A-Z0-9]+\])?|failed|failure|exception|panic|assertion)[^\n]*/gi;
+const NORMALIZED_FAILURE = /(?:error(?:\[[A-Z0-9]+\])?|fail(?:ed|ure)?|exception|panic|assertion)[^\n]*/gi;
 
 export function failureSignatures(output = "") {
   return [...new Set((output.match(NORMALIZED_FAILURE) || [])
@@ -7,7 +7,9 @@ export function failureSignatures(output = "") {
       .replace(/\b\d+(?:\.\d+)?\b/g, "#")
       .replace(/\s+/g, " ")
       .trim())
-    .filter(Boolean))];
+    // Summaries such as "1 failed" carry no causal identity and can make
+    // unrelated failures look like the same reproducible regression.
+    .filter((line) => line && !/^(?:#\s+)?(?:failed|failures?)$/.test(line)))];
 }
 
 function excluded(reasonCode, rationale, runs) {

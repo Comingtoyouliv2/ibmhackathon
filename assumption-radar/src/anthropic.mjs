@@ -42,9 +42,10 @@ async function defaultClient(apiKey, options) {
 function judgmentPrompt(caseInput) {
   return [
     "아래에는 단 하나의 PR pair만 있다. 다른 pair를 추론하거나 일반적인 위험을 conflict로 판정하지 마라.",
-    "conflict는 A와 B 양쪽의 실제 quote를 하나 이상씩 제시하고 구체적인 pair-induced failure를 설명할 때만 선택한다.",
+    "양쪽 실제 코드가 provider 변경 → consumer 의존 → 합성 실패로 완결되면 contract-backed-conflict를 선택할 수 있다. 이는 실행 확정이 아니라 코드 계약 증거 등급이다.",
+    "contract-backed-conflict 또는 testable-hypothesis는 A와 B 양쪽의 실제 quote를 하나 이상씩 제시하고 트리거 순서와 oracle이 있을 때만 선택한다.",
     "다음 JSON object 하나만 반환하라:",
-    '{"prIds":["...","..."],"verdict":"conflict|compatible|uncertain|coordination","category":"api|data|config|auth|event|rollout|behavior|code","title":"...","summary":"...","assumptionA":"...","assumptionB":"...","failureMechanism":"...","recommendation":"...","confidence":0.0,"evidence":[{"side":"A|B","file":"...","symbol":"...","quote":"verbatim input quote"}]}',
+    '{"prIds":["...","..."],"assessment":"contract-backed-conflict|testable-hypothesis|no-plausible-interaction|insufficient-evidence|coordination-required","category":"api|data|config|auth|event|rollout|behavior|code","title":"...","summary":"...","assumptionOwner":"PR-A|PR-B|both|unknown","assumption":"...","violatingChange":"...","preconditions":["..."],"triggerSequence":["..."],"expectedBehavior":"...","possibleActualBehavior":"...","contract":{"identity":"...","kind":"...","providerSide":"PR-A|PR-B|unknown","consumerSide":"PR-A|PR-B|unknown","providerChange":"...","consumerDependency":"...","composedFailure":"..."},"testPlan":{"name":"...","strategy":"existing-test|targeted-test|property-test|fuzz|trace-differential","setup":["..."],"steps":["..."],"oracle":"...","targetTests":["..."]},"confidence":0.0,"evidence":[{"side":"A|B","file":"...","symbol":"...","quote":"verbatim input quote"}]}',
     "CASE_JSON:",
     JSON.stringify(caseInput),
   ].join("\n");
@@ -79,6 +80,6 @@ export async function analyzeWithAnthropic(prepared, options = {}) {
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, cases.length) }, () => worker()));
   return normalizeSemanticJudgments(prepared, candidates, rawJudgments, {
-    source: "anthropic", basis: "anthropic-semantic-judgment-v0.2",
+    source: "anthropic", basis: "anthropic-interaction-hypothesis-v0.3",
   });
 }

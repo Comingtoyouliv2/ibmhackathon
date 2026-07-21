@@ -38,7 +38,10 @@ function executionFinding(verification, existing) {
       relationship: "confirmed-conflict",
       executionStatus: "confirmed-conflict",
       executionSummary: verification.classification.rationale,
+      evidenceGrade: "executable",
       goldEvidence: "executable",
+      confirmationStatus: "executable-confirmed",
+      runtimeVerification: "repeated-failure",
     };
   }
   if (verification.classification.verdict === "compatible") {
@@ -46,7 +49,10 @@ function executionFinding(verification, existing) {
       ...base,
       executionStatus: "no-observed-regression",
       executionSummary: "선택한 테스트 범위에서는 pair-induced regression이 재현되지 않았습니다.",
+      evidenceGrade: "executable",
       goldEvidence: "executable",
+      confirmationStatus: "executable-compatible",
+      runtimeVerification: "passed",
     };
   }
   if (verification.classification.verdict === "excluded") {
@@ -64,6 +70,8 @@ function executionFinding(verification, existing) {
     ...base,
     executionStatus: "inconclusive",
     executionSummary: verification.classification.rationale,
+    confirmationStatus: "runtime-inconclusive",
+    runtimeVerification: "inconclusive",
   };
 }
 

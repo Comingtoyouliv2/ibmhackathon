@@ -57,6 +57,8 @@ test("executable compatibility annotates a review without removing it", () => {
   assert.equal(result.findings.length, 1);
   assert.equal(result.findings[0].verdict, "review");
   assert.equal(result.findings[0].executionStatus, "no-observed-regression");
+  assert.equal(result.findings[0].confirmationStatus, "executable-compatible");
+  assert.equal(result.findings[0].runtimeVerification, "passed");
   assert.equal(result.compatibleVerifications.length, 1);
   assert.equal(result.summary.verifiedCompatibleCount, 1);
 });
@@ -97,6 +99,8 @@ test("a repeated combined-only failure promotes review to conflict", () => {
   assert.equal(result.findings[0].verdict, "conflict");
   assert.equal(result.findings[0].relationship, "confirmed-conflict");
   assert.equal(result.findings[0].executionStatus, "confirmed-conflict");
+  assert.equal(result.findings[0].confirmationStatus, "executable-confirmed");
+  assert.equal(result.findings[0].runtimeVerification, "repeated-failure");
   assert.equal(result.summary.confirmedConflictCount, 1);
 });
 

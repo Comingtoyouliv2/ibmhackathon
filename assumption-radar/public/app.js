@@ -1,7 +1,22 @@
 const $ = (selector) => document.querySelector(selector);
 const state = { data: null, selected: null, filter: "all", loadingTimer: null };
 const verdictColor = { conflict: "#ff5c35", coordination: "#a98bff", review: "#ffbd2e" };
-const verdictLabel = { conflict: "conflict confirmed", coordination: "merge coordination", review: "semantic review" };
+
+function findingLabel(finding) {
+  if (finding.verdict === "conflict" && finding.confirmationStatus === "executable-confirmed") return "execution confirmed";
+  if (finding.verdict === "conflict" && finding.confirmationStatus === "contract-backed-static") return "contract-backed conflict";
+  if (finding.verdict === "conflict") return "static conflict candidate";
+  if (finding.verdict === "coordination") return "merge coordination";
+  if (finding.verdict === "review") return "semantic review";
+  return finding.verdict;
+}
+
+function findingBadge(finding) {
+  if (finding.verdict === "conflict" && finding.confirmationStatus === "executable-confirmed") return "PROVEN";
+  if (finding.verdict === "conflict" && finding.confirmationStatus === "contract-backed-static") return "CONTRACT";
+  if (finding.verdict === "conflict") return "CANDIDATE";
+  return finding.verdict === "coordination" ? "COORD" : "REVIEW";
+}
 
 function escapeHtml(value = "") {
   return String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
@@ -153,7 +168,7 @@ function renderDetail(conflict) {
   $("#detailCard").innerHTML = `
     <div class="detail-content">
       <div class="detail-top">
-        <span class="severity ${escapeHtml(conflict.verdict)}">${escapeHtml(verdictLabel[conflict.verdict] || conflict.verdict)}</span>
+        <span class="severity ${escapeHtml(conflict.verdict)}">${escapeHtml(findingLabel(conflict))}</span>
         <span class="confidence">${conflict.source === "ai" ? "AI JUDGMENT" : escapeHtml(conflict.basis.toUpperCase())}</span>
       </div>
       <h3>${escapeHtml(conflict.title)}</h3>
@@ -196,7 +211,7 @@ function renderConflictList() {
     const a = prById(conflict.prIds[0]);
     const b = prById(conflict.prIds[1]);
     return `<article class="conflict-row ${state.selected === conflict.id ? "active" : ""}" data-id="${escapeHtml(conflict.id)}">
-      <div class="risk-score"><span>${conflict.verdict === "conflict" ? "BLOCK" : conflict.verdict === "coordination" ? "COORD" : "REVIEW"}</span><small>VERDICT</small></div>
+      <div class="risk-score"><span>${escapeHtml(findingBadge(conflict))}</span><small>EVIDENCE</small></div>
       <div class="pair-label"><b>#${a.number}</b> × <b>#${b.number}</b></div>
       <div class="conflict-main"><h3>${escapeHtml(conflict.title)}</h3><p>${escapeHtml(conflict.summary)}</p></div>
       <div class="category-label">${escapeHtml(state.data.categories[conflict.category] || conflict.category)} · ${escapeHtml(conflict.basis.replaceAll("-", " ").toUpperCase())}</div>

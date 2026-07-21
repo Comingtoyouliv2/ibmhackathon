@@ -14,14 +14,39 @@ const judgmentSchema = {
   additionalProperties: false,
   properties: {
     prIds: { type: "array", minItems: 2, maxItems: 2, items: { type: "string" } },
-    verdict: { type: "string", enum: ["conflict", "compatible", "uncertain", "coordination"] },
+    assessment: { type: "string", enum: ["contract-backed-conflict", "testable-hypothesis", "no-plausible-interaction", "insufficient-evidence", "coordination-required"] },
     category: { type: "string", enum: ["api", "data", "config", "auth", "event", "rollout", "behavior", "code"] },
     title: { type: "string" },
     summary: { type: "string" },
-    assumptionA: { type: "string" },
-    assumptionB: { type: "string" },
-    failureMechanism: { type: "string" },
-    recommendation: { type: "string" },
+    assumptionOwner: { type: "string", enum: ["PR-A", "PR-B", "both", "unknown"] },
+    assumption: { type: "string" },
+    violatingChange: { type: "string" },
+    preconditions: { type: "array", items: { type: "string" } },
+    triggerSequence: { type: "array", items: { type: "string" } },
+    expectedBehavior: { type: "string" },
+    possibleActualBehavior: { type: "string" },
+    contract: {
+      type: "object", additionalProperties: false,
+      properties: {
+        identity: { type: "string" }, kind: { type: "string" },
+        providerSide: { type: "string", enum: ["PR-A", "PR-B", "unknown"] },
+        consumerSide: { type: "string", enum: ["PR-A", "PR-B", "unknown"] },
+        providerChange: { type: "string" }, consumerDependency: { type: "string" }, composedFailure: { type: "string" },
+      },
+      required: ["identity", "kind", "providerSide", "consumerSide", "providerChange", "consumerDependency", "composedFailure"],
+    },
+    testPlan: {
+      type: "object", additionalProperties: false,
+      properties: {
+        name: { type: "string" },
+        strategy: { type: "string", enum: ["existing-test", "targeted-test", "property-test", "fuzz", "trace-differential"] },
+        setup: { type: "array", items: { type: "string" } },
+        steps: { type: "array", items: { type: "string" } },
+        oracle: { type: "string" },
+        targetTests: { type: "array", items: { type: "string" } },
+      },
+      required: ["name", "strategy", "setup", "steps", "oracle", "targetTests"],
+    },
     confidence: { type: "number", minimum: 0, maximum: 1 },
     evidence: {
       type: "array",
@@ -35,7 +60,7 @@ const judgmentSchema = {
       },
     },
   },
-  required: ["prIds", "verdict", "category", "title", "summary", "assumptionA", "assumptionB", "failureMechanism", "recommendation", "confidence", "evidence"],
+  required: ["prIds", "assessment", "category", "title", "summary", "assumptionOwner", "assumption", "violatingChange", "preconditions", "triggerSequence", "expectedBehavior", "possibleActualBehavior", "contract", "testPlan", "confidence", "evidence"],
 };
 
 function promptFor(caseInput) {
@@ -43,9 +68,9 @@ function promptFor(caseInput) {
     SEMANTIC_JUDGE_SYSTEM_PROMPT,
     "",
     "아래에는 단 하나의 PR pair만 있다. CASE_JSON 외의 저장소·웹·gold 정보는 사용하지 마라.",
-    "conflict라면 A와 B 양쪽에서 CASE_JSON에 실제로 존재하는 quote를 최소 하나씩 반환하라.",
-    "proximity나 일반적 위험 가능성만 있으면 uncertain이 아니라, 두 diff의 합집합이 유효한 근거가 보이면 compatible로 판정하라.",
-    "특히 동일한 add-vs-add, 공통 helper 추출, 독립적인 기능 추가는 실제 cross-parent dependency가 없으면 compatible이다.",
+    "양쪽 실제 코드가 provider 변경 → consumer 의존 → 합성 실패로 완결되면 contract-backed-conflict를 선택할 수 있다. 이는 실행 확정이 아니라 코드 계약 증거 등급이다.",
+    "contract-backed-conflict 또는 testable-hypothesis라면 A와 B 양쪽에서 CASE_JSON에 실제로 존재하는 quote, 트리거 순서와 oracle을 반환하라.",
+    "proximity나 일반적 위험 가능성만 있으면 insufficient-evidence, 행동 경로가 없으면 no-plausible-interaction을 선택하라.",
     "출력은 지정된 JSON schema만 따른다.",
     "",
     `CASE_JSON=${JSON.stringify(caseInput)}`,
@@ -116,6 +141,6 @@ export async function analyzeWithCodex(prepared, options = {}) {
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, cases.length) }, () => worker()));
   return normalizeSemanticJudgments(prepared, candidates, rawJudgments, {
-    source: "codex", basis: "codex-semantic-judgment-v0.2",
+    source: "codex", basis: "codex-interaction-hypothesis-v0.3",
   });
 }
