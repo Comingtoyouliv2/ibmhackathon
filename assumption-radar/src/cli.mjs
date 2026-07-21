@@ -115,7 +115,7 @@ async function main() {
         finding: findings.get([...verification.prIds].sort().join(":")),
         metadata: {
           analyzerVersion: APP_VERSION,
-          promptVersion: has("--ai") ? "semantic-judge-v0.2" : null,
+          promptVersion: has("--ai") ? "semantic-judge-v0.4" : null,
           model: has("--ai") ? (() => {
             const provider = semanticJudgeProvider(aiOptions);
             if (provider === "anthropic") return process.env.ANTHROPIC_MODEL || "claude-opus-4-8";

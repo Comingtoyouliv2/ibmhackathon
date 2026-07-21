@@ -48,19 +48,9 @@ const judgmentSchema = {
       required: ["name", "strategy", "setup", "steps", "oracle", "targetTests"],
     },
     confidence: { type: "number", minimum: 0, maximum: 1 },
-    evidence: {
-      type: "array",
-      items: {
-        type: "object", additionalProperties: false,
-        properties: {
-          side: { type: "string", enum: ["A", "B"] },
-          file: { type: "string" }, symbol: { type: "string" }, quote: { type: "string" },
-        },
-        required: ["side", "file", "symbol", "quote"],
-      },
-    },
+    evidenceIds: { type: "array", items: { type: "string", pattern: "^(A|B)-F[1-9][0-9]*-L[1-9][0-9]*$" } },
   },
-  required: ["prIds", "assessment", "category", "title", "summary", "assumptionOwner", "assumption", "violatingChange", "preconditions", "triggerSequence", "expectedBehavior", "possibleActualBehavior", "contract", "testPlan", "confidence", "evidence"],
+  required: ["prIds", "assessment", "category", "title", "summary", "assumptionOwner", "assumption", "violatingChange", "preconditions", "triggerSequence", "expectedBehavior", "possibleActualBehavior", "contract", "testPlan", "confidence", "evidenceIds"],
 };
 
 function promptFor(caseInput) {
@@ -69,7 +59,7 @@ function promptFor(caseInput) {
     "",
     "아래에는 단 하나의 PR pair만 있다. CASE_JSON 외의 저장소·웹·gold 정보는 사용하지 마라.",
     "양쪽 실제 코드가 provider 변경 → consumer 의존 → 합성 실패로 완결되면 contract-backed-conflict를 선택할 수 있다. 이는 실행 확정이 아니라 코드 계약 증거 등급이다.",
-    "contract-backed-conflict 또는 testable-hypothesis라면 A와 B 양쪽에서 CASE_JSON에 실제로 존재하는 quote, 트리거 순서와 oracle을 반환하라.",
+    "contract-backed-conflict 또는 testable-hypothesis라면 A와 B 양쪽에서 CASE_JSON에 실제로 표시된 evidence ID, 트리거 순서와 oracle을 반환하라. 코드 quote를 복사하지 마라.",
     "proximity나 일반적 위험 가능성만 있으면 insufficient-evidence, 행동 경로가 없으면 no-plausible-interaction을 선택하라.",
     "출력은 지정된 JSON schema만 따른다.",
     "",
@@ -141,6 +131,6 @@ export async function analyzeWithCodex(prepared, options = {}) {
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, cases.length) }, () => worker()));
   return normalizeSemanticJudgments(prepared, candidates, rawJudgments, {
-    source: "codex", basis: "codex-interaction-hypothesis-v0.3",
+    source: "codex", basis: "codex-interaction-hypothesis-v0.4",
   });
 }

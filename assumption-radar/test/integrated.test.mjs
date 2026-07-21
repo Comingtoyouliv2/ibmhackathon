@@ -25,10 +25,7 @@ const contractBackedJudgment = (overrides = {}) => ({
     steps: ["merge A and B", "compile Service.java"], oracle: "compilation succeeds", targetTests: [],
   },
   confidence: 0.9,
-  evidence: [
-    { side: "A", file: "src/Service.java", symbol: "newCall", quote: "newCall(oldArg);" },
-    { side: "B", file: "src/Service.java", symbol: "newCall", quote: "void newCall(NewArg arg) {}" },
-  ],
+  evidenceIds: ["A-F1-L3", "B-F1-L3"],
   ...overrides,
 });
 
@@ -100,6 +97,8 @@ test("semantic judge adds a bounded second look for related independent pairs", 
   const cases = buildSemanticJudgeCases(prepared, selected);
   assert.equal(cases[0].reviewLane, "second-look");
   assert.deepEqual(cases[0].prs.map((item) => item.files.length), [1, 1]);
+  assert.match(cases[0].prs[0].files[0].patch, /\[A-F1-L3\] \+publishReady\(\);/);
+  assert.match(cases[0].prs[1].files[0].patch, /\[B-F1-L3\] \+consumeReady\(\);/);
 });
 
 test("cross-language HTTP contracts retrieve a Python client against a Java server route", () => {
@@ -167,6 +166,7 @@ test("contract provenance keeps provider and consumer files beyond the fallback 
     ["zeppelin-server/src/main/java/org/apache/zeppelin/rest/InterpreterRestApi.java"],
   ]);
   assert.match(caseInput.prs[0].files[0].patch, /interpreter\/setting\/restart/);
+  assert.match(caseInput.prs[0].files[0].patch, /\[A-F4-L222\]/);
   assert.ok(caseInput.prs[0].files[0].patch.length <= 700);
 });
 
@@ -183,7 +183,7 @@ test("evidence-aware compaction also preserves late event contracts", () => {
   assert.match(caseInput.prs[1].files[0].patch, /subscribe\("payment\.captured"/);
 });
 
-test("AI blockers require verbatim evidence from both PRs", () => {
+test("AI blockers resolve immutable evidence IDs from both PRs", () => {
   const prepared = prepareIntegratedAnalysis([
     pr("1", "src/Service.java", "@@ -1 +1 @@\n-old\n+newCall(oldArg);"),
     pr("2", "src/Service.java", "@@ -2 +2 @@\n-old\n+void newCall(NewArg arg) {}"),
@@ -192,11 +192,25 @@ test("AI blockers require verbatim evidence from both PRs", () => {
   const base = contractBackedJudgment();
   assert.equal(normalizeSemanticJudgments(prepared, candidates, [base])[0].verdict, "conflict");
   assert.equal(normalizeSemanticJudgments(prepared, candidates, [base])[0].confirmationStatus, "contract-backed-static");
-  assert.equal(normalizeSemanticJudgments(prepared, candidates, [{ ...base, evidence: base.evidence.slice(0, 1) }])[0].verdict, "review");
+  const accepted = normalizeSemanticJudgments(prepared, candidates, [base])[0];
+  assert.deepEqual(accepted.evidenceObjects.map((item) => item.quote), ["newCall(oldArg);", "void newCall(NewArg arg) {}"]);
+  assert.equal(normalizeSemanticJudgments(prepared, candidates, [{ ...base, evidenceIds: base.evidenceIds.slice(0, 1) }])[0].verdict, "review");
+  assert.equal(normalizeSemanticJudgments(prepared, candidates, [{ ...base, evidenceIds: ["A-F99-L99", "B-F1-L3"] }])[0].verdict, "review");
+  assert.equal(normalizeSemanticJudgments(prepared, candidates, [{
+    ...base,
+    evidenceIds: undefined,
+    evidence: [
+      { side: "A", file: "src/Service.java", symbol: "newCall", quote: "newCall(oldArg);" },
+      { side: "B", file: "src/Service.java", symbol: "newCall", quote: "void newCall(NewArg arg) {}" },
+    ],
+  }])[0].verdict, "review");
 });
 
 test("Anthropic adapter repairs control characters and uses the shared evidence gate", async () => {
   assert.deepEqual(extractJsonObject('prefix {"quote":"a\tb"} suffix'), { quote: "a\tb" });
+  assert.deepEqual(extractJsonObject('```json\n{"assessment":"independent","detail":"brace } in string"}\n```\nusage: {"tokens":42}'), {
+    assessment: "independent", detail: "brace } in string",
+  });
   const prepared = prepareIntegratedAnalysis([
     pr("1", "src/Service.java", "@@ -1 +1 @@\n-old\n+newCall(oldArg);"),
     pr("2", "src/Service.java", "@@ -2 +2 @@\n-old\n+void newCall(NewArg arg) {}"),

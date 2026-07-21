@@ -5,11 +5,14 @@ export const SEMANTIC_JUDGE_SYSTEM_PROMPT = `당신은 여러 pull request 사�
 같은 파일·모듈·심볼을 만진다는 사실은 관련성일 뿐 충돌의 증거가 아니다.
 같은 새 파일을 양쪽이 추가해도 내용이 동일하거나 합집합이 그대로 유효하면 compatible이다. add-vs-add 자체를 위험 근거로 쓰지 않는다.
 리팩터링과 기능 추가가 함께 보이더라도 한쪽이 제거·변경한 선언이나 상태를 다른 쪽이 실제로 참조·소비하는 방향성 연결이 없으면 compatible이다.
-contract-backed-conflict는 실행하지 않았더라도 (1) 한쪽의 실제 provider 계약 변경, (2) 다른 쪽의 실제 consumer 의존, (3) 둘을 합쳤을 때의 결정적인 실패 경로를 양쪽 코드 인용으로 증명할 수 있을 때만 선택한다.
+contract-backed-conflict는 실행하지 않았더라도 (1) 한쪽의 실제 provider 계약 변경, (2) 다른 쪽의 실제 consumer 의존, (3) 둘을 합쳤을 때의 결정적인 실패 경로를 양쪽 evidence ID로 증명할 수 있을 때만 선택한다.
 testable-hypothesis는 상호작용 가능성이 있고 구체적인 trigger와 oracle을 제시할 수 있지만 위 세 조건 중 하나라도 코드 증거로 닫히지 않을 때 선택한다.
 no-plausible-interaction은 두 변경이 함께 유효한 경우, insufficient-evidence는 저장소 문맥이나 diff가 부족한 경우다.
 coordination-required는 기계적 충돌·중복 구현처럼 조율이 필요하지만 silent semantic conflict로 확정할 수 없는 경우다.
-contract-backed-conflict는 executable-confirmed와 다르다. 최종 실행 재현 여부는 별도 runtimeVerification 필드로 관리한다.`;
+contract-backed-conflict는 executable-confirmed와 다르다. 최종 실행 재현 여부는 별도 runtimeVerification 필드로 관리한다.
+코드 근거를 다시 쓰거나 요약하지 말고 CASE_JSON diff에 표시된 evidence ID만 evidenceIds로 선택한다. 존재하지 않는 ID를 만들지 않는다.`;
+
+const EVIDENCE_ID_PATTERN = /^(A|B)-F([1-9]\d*)-L([1-9]\d*)$/;
 
 const pairKey = (ids) => [...ids].sort().join(":");
 const uniq = (values) => [...new Set(values.filter(Boolean))];
@@ -120,17 +123,43 @@ function enclosingHunkHeader(lines, index) {
  * derived from shared contract identities, so this works for HTTP routes,
  * events, config, schemas, and symbols without repository-specific names.
  */
-function compactPatch(patch = "", resources = [], maxPatchChars = 9_000) {
-  if (patch.length <= maxPatchChars) return patch;
+function isEvidenceLine(line = "") {
+  if (!line.trim()) return false;
+  if (line.startsWith("@@") || line.startsWith("diff --git ") || line.startsWith("index ")) return false;
+  if (line.startsWith("--- ") || line.startsWith("+++ ")) return false;
+  if (/^(new file mode|deleted file mode|old mode|new mode|similarity index|rename from|rename to|Binary files|\\ No newline)/.test(line)) return false;
+  return true;
+}
+
+function evidenceId(side, fileIndex, lineIndex) {
+  return `${side}-F${fileIndex + 1}-L${lineIndex + 1}`;
+}
+
+function annotateEvidenceLines(patch = "", side, fileIndex) {
+  return patch.split("\n").map((line, lineIndex) => (
+    isEvidenceLine(line) ? `[${evidenceId(side, fileIndex, lineIndex)}] ${line}` : line
+  )).join("\n");
+}
+
+function truncateAtLineBoundary(text, maxChars) {
+  if (text.length <= maxChars) return text;
+  const sliced = text.slice(0, maxChars);
+  const boundary = sliced.lastIndexOf("\n");
+  return boundary > 0 ? sliced.slice(0, boundary) : "";
+}
+
+function compactPatch(patch = "", resources = [], maxPatchChars = 9_000, side, fileIndex) {
+  const annotatedPatch = annotateEvidenceLines(patch, side, fileIndex);
+  if (annotatedPatch.length <= maxPatchChars) return annotatedPatch;
   const terms = evidenceTerms(resources);
-  if (!terms.length) return patch.slice(0, maxPatchChars);
-  const lines = patch.split("\n");
+  if (!terms.length) return truncateAtLineBoundary(annotatedPatch, maxPatchChars);
+  const lines = annotatedPatch.split("\n");
   const hits = lines.flatMap((line, index) => {
     const lower = line.toLowerCase();
     const matched = terms.filter((term) => lower.includes(term));
     return matched.length ? [{ index, score: matched.length * 100 + matched.reduce((sum, term) => sum + term.length, 0) }] : [];
   }).sort((left, right) => right.score - left.score || left.index - right.index);
-  if (!hits.length) return patch.slice(0, maxPatchChars);
+  if (!hits.length) return truncateAtLineBoundary(annotatedPatch, maxPatchChars);
 
   const snippets = [];
   const covered = [];
@@ -161,23 +190,24 @@ function compactPatch(patch = "", resources = [], maxPatchChars = 9_000) {
     covered.push([selectedStart, selectedEnd]);
     used += separator.length + snippet.length;
   }
-  if (!snippets.length) return patch.slice(0, maxPatchChars);
-  return `${preamble}${snippets.join("")}`.slice(0, maxPatchChars);
+  if (!snippets.length) return truncateAtLineBoundary(annotatedPatch, maxPatchChars);
+  return truncateAtLineBoundary(`${preamble}${snippets.join("")}`, maxPatchChars);
 }
 
-function compactPr(pr, paths, maxPatchChars, comparison, side) {
-  const relevant = (pr.files || []).filter((file) => paths.has(file.filename));
-  const files = (relevant.length ? relevant : (pr.files || []).slice(0, 3)).slice(0, 16);
+function compactPr(pr, paths, maxPatchChars, comparison, side, evidenceSide) {
+  const indexedFiles = (pr.files || []).map((file, fileIndex) => ({ file, fileIndex }));
+  const relevant = indexedFiles.filter(({ file }) => paths.has(file.filename));
+  const files = (relevant.length ? relevant : indexedFiles.slice(0, 3)).slice(0, 16);
   return {
     id: pr.id,
     number: pr.number,
     title: pr.title,
     body: (pr.body || "").slice(0, 1800),
     assumptions: pr.assumptions || [],
-    files: files.map((file) => ({
+    files: files.map(({ file, fileIndex }) => ({
       filename: file.filename,
       status: file.status,
-      patch: compactPatch(file.patch || "", contractResourcesForFile(comparison, side, file.filename), maxPatchChars),
+      patch: compactPatch(file.patch || "", contractResourcesForFile(comparison, side, file.filename), maxPatchChars, evidenceSide, fileIndex),
     })),
   };
 }
@@ -203,28 +233,34 @@ export function buildSemanticJudgeCases(prepared, candidates, options = {}) {
         type, strength, category, explanation, evidence, causalRole,
       })),
       prs: [
-        compactPr(left, paths, maxPatchChars, comparison, "left"),
-        compactPr(right, paths, maxPatchChars, comparison, "right"),
+        compactPr(left, paths, maxPatchChars, comparison, "left", "A"),
+        compactPr(right, paths, maxPatchChars, comparison, "right", "B"),
       ],
     };
   });
 }
 
-function containsDeep(value, quote) {
-  if (typeof value === "string") return value.includes(quote);
-  if (Array.isArray(value)) return value.some((item) => containsDeep(item, quote));
-  if (value && typeof value === "object") return Object.values(value).some((item) => containsDeep(item, quote));
-  return false;
+function swapEvidenceSide(id) {
+  if (typeof id !== "string") return id;
+  if (id.startsWith("A-")) return `B-${id.slice(2)}`;
+  if (id.startsWith("B-")) return `A-${id.slice(2)}`;
+  return id;
 }
 
-function validatedEvidence(rawEvidence, pairIds, prsById) {
+function validatedEvidenceIds(rawEvidenceIds, pairIds, prsById) {
   const sides = { A: pairIds[0], B: pairIds[1] };
-  return (Array.isArray(rawEvidence) ? rawEvidence : []).flatMap((item) => {
-    if (!item || !["A", "B"].includes(item.side) || typeof item.quote !== "string" || !item.quote.trim()) return [];
-    const pr = prsById.get(sides[item.side]);
-    if (!pr || !containsDeep(pr, item.quote)) return [];
-    if (item.file && !(pr.files || []).some((file) => file.filename === item.file)) return [];
-    return [{ side: item.side, file: item.file || "", symbol: item.symbol || "", quote: item.quote }];
+  const seen = new Set();
+  return (Array.isArray(rawEvidenceIds) ? rawEvidenceIds : []).flatMap((rawId) => {
+    const id = String(rawId || "").trim();
+    const match = EVIDENCE_ID_PATTERN.exec(id);
+    if (!match || seen.has(id)) return [];
+    const [, side, fileNumber, lineNumber] = match;
+    const pr = prsById.get(sides[side]);
+    const file = pr?.files?.[Number(fileNumber) - 1];
+    const line = String(file?.patch || "").split("\n")[Number(lineNumber) - 1];
+    if (!file || line === undefined || !isEvidenceLine(line)) return [];
+    seen.add(id);
+    return [{ id, side, file: file.filename, symbol: "", quote: /^[+\- ]/.test(line) ? line.slice(1) : line }];
   });
 }
 
@@ -274,10 +310,11 @@ export function normalizeSemanticJudgments(prepared, candidates, rawJudgments, o
     if (ids.length !== 2) return [];
     const comparison = byPair.get(pairKey(ids));
     if (!comparison) return [];
-    const evidence = ids[0] === comparison.prIds[0] ? raw.evidence : (raw.evidence || []).map((item) => ({
-      ...item, side: item.side === "A" ? "B" : item.side === "B" ? "A" : item.side,
-    }));
-    const evidenceObjects = validatedEvidence(evidence, comparison.prIds, prsById);
+    const submittedEvidenceIds = Array.isArray(raw.evidenceIds) ? raw.evidenceIds : [];
+    const evidenceIds = ids[0] === comparison.prIds[0]
+      ? submittedEvidenceIds
+      : submittedEvidenceIds.map(swapEvidenceSide);
+    const evidenceObjects = validatedEvidenceIds(evidenceIds, comparison.prIds, prsById);
     const evidenceSides = new Set(evidenceObjects.map((item) => item.side));
     let assessment = mappedAssessment(raw);
     let evidenceGate = "passed";
@@ -336,7 +373,7 @@ export function normalizeSemanticJudgments(prepared, candidates, rawJudgments, o
         : assessment === "testable-hypothesis"
           ? `Base/A/B/A+B에서 '${testPlan.name || "제안된 상호작용 테스트"}'를 실행해 가설을 검증하세요.`
           : raw.recommendation || comparison.recommendation,
-      evidence: evidenceObjects.map((item) => `${item.side} ${item.file}${item.symbol ? ` (${item.symbol})` : ""}: ${item.quote}`),
+      evidence: evidenceObjects.map((item) => `${item.id} ${item.file}: ${item.quote}`),
       evidenceObjects,
       evidenceGate,
       interactionHypothesis,
