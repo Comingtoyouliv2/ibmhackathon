@@ -1,114 +1,799 @@
-<!doctype html>
-<html lang="ko">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Open PR 사이의 숨은 전제 충돌을 merge 전에 찾는 레이더">
-  <title>Assumption Radar</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MergeScope — Catch semantic PR conflicts before they merge</title>
+<meta name="description" content="MergeScope scans your open pull requests for intent-level conflicts that pass CI and git checks — but silently break logic when merged together.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   MergeScope landing — IBM Carbon (Gray 100 dark) visual language.
+   Tokens first; every component reads from these.
+   Motion policy (per Vercel Web Interface Guidelines):
+   transform/opacity only, no `transition: all`, reduced-motion honored.
+   ═══════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#161616;            /* Carbon Gray 100 */
+  --layer:#262626;         /* Gray 90 */
+  --layer-2:#393939;       /* Gray 80 */
+  --border:#393939;
+  --border-subtle:#2c2c2c;
+  --text:#f4f4f4;
+  --text-2:#a8a8a8;        /* Gray 40 */
+  --text-3:#6f6f6f;
+  --blue:#0f62fe;          /* Carbon interactive */
+  --blue-hover:#0353e9;
+  --link:#78a9ff;          /* Blue 40 — links on dark */
+  --conflict:#fa4d56;      /* Red 50 — conflict semantics only */
+  --warn:#f1c21b;
+  --safe:#42be65;
+  --purple:#be95ff;
+  /* Light tokens for the in-slide app mockups (they mirror the real demo app) */
+  --app-bg:#F3F6F5; --app-panel:#ffffff; --app-ink:#1C2733; --app-muted:#5C6B78;
+  --app-line:#DCE3E6; --app-blue:#0F62FE; --app-red:#D6453A; --app-amber:#DC9B00;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --sans:'IBM Plex Sans',system-ui,sans-serif;
+  --container:1312px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);
+  font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+::selection{background:var(--blue);color:#fff}
+a{color:var(--link);text-decoration:none}
+a:hover{text-decoration:underline}
+button{font-family:inherit;cursor:pointer}
+a,button{touch-action:manipulation}
+:focus-visible{outline:2px solid #ffffff;outline-offset:2px}
+img,svg{max-width:100%}
+section[id]{scroll-margin-top:72px}
+
+.wrap{max-width:var(--container);margin:0 auto;padding:0 32px}
+@media(max-width:640px){.wrap{padding:0 16px}}
+
+/* Skip link (visible on keyboard focus only) */
+.skip{position:absolute;left:-9999px;z-index:100;background:var(--blue);color:#fff;
+  padding:10px 18px;font-size:14px}
+.skip:focus{left:12px;top:12px}
+
+/* Scroll progress bar */
+#progress{position:fixed;top:0;left:0;width:100%;height:2px;background:var(--blue);
+  transform:scaleX(0);transform-origin:left;z-index:60;pointer-events:none}
+
+/* Carbon-style buttons: rectangular, left-aligned label, trailing glyph */
+.btn{display:inline-flex;align-items:center;justify-content:space-between;gap:32px;
+  min-height:48px;padding:0 16px;font-size:15px;font-weight:400;border:1px solid transparent;
+  border-radius:0;text-decoration:none;transition:background .11s,border-color .11s}
+.btn:hover{text-decoration:none}
+.btn .glyph{font-family:var(--mono);flex:none;transition:transform .15s}
+.btn:hover .glyph{transform:translateX(3px)}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-primary:hover{background:var(--blue-hover)}
+.btn-tertiary{background:transparent;color:#fff;border-color:#8d8d8d}
+.btn-tertiary:hover{background:#ffffff14;border-color:#f4f4f4}
+.btn-lg{min-height:56px;padding:0 20px;min-width:230px}
+
+/* Eyebrow labels — mono, uppercase, tracked */
+.eyebrow{font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--link)}
+
+/* Scroll-reveal */
+.rv{opacity:0;transform:translateY(18px);transition:opacity .6s ease,transform .6s ease}
+.rv.in{opacity:1;transform:none}
+
+/* Hover accent line for tiles (Carbon-style, transform-only) */
+.tile-accent{position:relative}
+.tile-accent::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;
+  background:var(--blue);transform:scaleX(0);transform-origin:left;transition:transform .25s ease}
+.tile-accent:hover::before{transform:scaleX(1)}
+
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .rv{opacity:1;transform:none;transition:none}
+  .btn:hover .glyph{transform:none}
+  .tile-accent::before{transition:none}
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important}
+}
+
+/* ── Header ──────────────────────────────────────────────── */
+header{position:sticky;top:0;z-index:40;background:#161616f2;backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--border-subtle)}
+.nav{display:flex;align-items:center;height:56px;gap:8px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15.5px;
+  letter-spacing:-.1px;color:var(--text);text-decoration:none;margin-right:24px}
+.brand:hover{text-decoration:none}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--conflict);flex:none}
+.nav-links{display:flex;gap:2px}
+.nav-links a{color:var(--text-2);font-size:14px;padding:8px 14px;text-decoration:none}
+.nav-links a:hover{color:var(--text);background:#ffffff0f}
+.nav .cta{margin-left:auto}
+.nav .cta .btn{min-height:40px;font-size:14px;gap:20px}
+@media(max-width:720px){.nav-links{display:none}}
+
+/* ── Hero ────────────────────────────────────────────────── */
+.hero{padding:88px 0 64px;border-bottom:1px solid var(--border-subtle);position:relative;overflow:hidden}
+.hero .wrap{position:relative;z-index:1}
+#netbg{position:absolute;top:0;right:0;width:58%;height:100%;pointer-events:none;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 34%);
+  mask-image:linear-gradient(90deg,transparent 0,#000 34%)}
+@media(max-width:900px){#netbg{display:none}}
+.hero .powered{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);
+  font-size:12px;color:var(--link);border:1px solid #0f62fe66;background:#0f62fe1a;
+  padding:5px 12px;margin-bottom:28px}
+.hero h1{font-size:clamp(34px,5vw,58px);line-height:1.12;font-weight:300;
+  letter-spacing:-.02em;max-width:820px;text-wrap:balance}
+.hero h1 b{font-weight:600}
+.hero h1 .break-word{position:relative;white-space:nowrap}
+.hero h1 .break-word::after{content:"";position:absolute;left:-2%;right:-2%;top:54%;height:2px;
+  background:var(--conflict);transform:scaleX(0);transform-origin:left;
+  animation:strike .5s ease .9s forwards}
+@keyframes strike{to{transform:scaleX(1)}}
+@media(prefers-reduced-motion:reduce){.hero h1 .break-word::after{transform:scaleX(1);animation:none}}
+.hero p.lede{margin:24px 0 36px;font-size:18px;line-height:1.6;color:var(--text-2);max-width:600px}
+.hero .actions{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+.hero .fineprint{margin-top:22px;font-size:13px;color:var(--text-3)}
+.hero .fineprint span+span::before{content:"·";margin:0 10px;color:var(--text-3)}
+.hero .chips{display:flex;gap:1px;margin-top:44px;flex-wrap:wrap;background:var(--border-subtle)}
+.hero .chip{background:var(--layer);padding:12px 18px;font-size:13px;color:var(--text-2);
+  display:flex;align-items:center;gap:9px;flex:1 1 240px}
+.hero .chip svg{flex:none}
+
+/* ── See it work — scroll-driven story ───────────────────────
+   Scrolling the page advances the app screens: the stage (right)
+   stays pinned while the numbered captions (left) scroll past and
+   activate their screen. On narrow viewports the stage is dissolved
+   and each screen sits under its own caption (frames are moved by JS). */
+.show{padding:72px 0 8px;border-bottom:1px solid var(--border-subtle)}
+.show .head{display:flex;align-items:baseline;gap:20px;flex-wrap:wrap;margin-bottom:8px}
+.show h2{font-size:clamp(24px,3vw,34px);font-weight:300;letter-spacing:-.01em;text-wrap:balance}
+.show .head .count{font-family:var(--mono);font-size:13px;color:var(--text-3);margin-left:auto;
+  font-variant-numeric:tabular-nums}
+.show .head .num{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+.show .head .num.hotn{color:var(--conflict)}
+.scroll-hint{font-size:13px;color:var(--text-3);margin-bottom:4px}
+.scroll-hint .g{font-family:var(--mono);color:var(--text-2)}
+
+.sc-grid{display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:56px;align-items:start}
+.sc-steps{min-width:0}
+.sc-step{min-height:64vh;display:flex;flex-direction:column;justify-content:center;
+  position:relative;padding:24px 0 24px 26px;scroll-margin-top:80px}
+.sc-step::before{content:"";position:absolute;left:0;top:0;bottom:0;width:1px;background:var(--border-subtle)}
+.sc-step::after{content:"";position:absolute;left:-1px;top:0;bottom:0;width:3px;
+  background:var(--blue);transform:scaleY(0);transform-origin:top;transition:transform .4s ease}
+.sc-step.active::after{transform:scaleY(1)}
+.sc-step .n{font-family:var(--mono);font-size:13px;color:var(--text-3);transition:color .3s}
+.sc-step h3{font-size:21px;font-weight:600;margin:10px 0 12px;color:var(--text-3);transition:color .3s}
+.sc-step p{font-size:15px;line-height:1.65;color:var(--text-3);transition:color .3s}
+.sc-step.active .n{color:var(--link)}
+.sc-step.active h3{color:var(--text)}
+.sc-step.active p{color:var(--text-2)}
+.sc-slot{margin-top:20px}
+
+.sc-stage{position:sticky;top:84px;min-width:0}
+.sc-frames{position:relative;height:min(64vh,480px)}
+.frame{border:1px solid var(--border);background:#0b0b0b;display:flex;flex-direction:column}
+.sc-stage .frame{position:absolute;inset:0;opacity:0;transform:translateY(16px);
+  transition:opacity .45s ease,transform .45s ease;pointer-events:none}
+.sc-stage .frame.active{opacity:1;transform:none;pointer-events:auto}
+.frame .bar{display:flex;align-items:center;gap:6px;padding:9px 12px;
+  border-bottom:1px solid var(--border-subtle);flex:none}
+.frame .bar i{width:9px;height:9px;border-radius:50%;background:var(--layer-2)}
+.frame .bar .url{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-left:10px}
+.screen{background:var(--app-bg);color:var(--app-ink);font-size:12px;line-height:1.45;
+  flex:1;min-height:0;overflow:hidden;position:relative}
+
+/* Narrow: dissolve the stage; JS parks each frame in its caption's slot */
+@media(max-width:920px){
+  .sc-grid{display:block}
+  .sc-stage{display:none}
+  .sc-step{min-height:0;padding:28px 0 12px 22px}
+  .sc-slot .frame{position:static;opacity:1;transform:none;pointer-events:auto}
+  .sc-slot .screen{min-height:330px}
+}
+@media(prefers-reduced-motion:reduce){
+  .sc-stage .frame{transition:none}
+  .sc-step::after{transition:none}
+  .sc-step .n,.sc-step h3,.sc-step p{transition:none}
+}
+
+/* In-slide app mockups (mirror the real demo app, light theme) */
+.m-hd{background:var(--app-panel);border-bottom:1px solid var(--app-line);padding:10px 14px}
+.m-hd .t{font-weight:700;font-size:13px}
+.m-hd .r{font-family:var(--mono);font-size:10.5px;color:var(--app-muted)}
+.m-clone{display:flex;gap:6px;margin-top:8px;max-width:430px}
+.m-clone .in{flex:1;border:1px solid var(--app-line);background:#fff;color:var(--app-muted);
+  font-family:var(--mono);font-size:10.5px;padding:5px 8px;white-space:nowrap;overflow:hidden}
+.m-clone .bt{background:var(--app-blue);color:#fff;font-size:10.5px;font-weight:600;padding:5px 10px}
+.m-funnel{display:flex;margin:10px 14px;flex-wrap:wrap}
+.m-f{background:#fff;border:1px solid var(--app-line);border-left:none;padding:6px 14px 6px 16px;position:relative;min-width:96px}
+.m-f:first-child{border-left:1px solid var(--app-line)}
+.m-f:not(:first-child)::before{content:"";position:absolute;left:-1px;top:50%;transform:translateY(-50%);
+  border:6px solid transparent;border-left-color:var(--app-line)}
+.m-f .n{font-family:var(--mono);font-size:13px;font-weight:600}
+.m-f .l{font-size:9px;color:var(--app-muted)}
+.m-f.hot{background:#FBEBEA;border-color:#EBC7C4}
+.m-f.hot .n{color:var(--app-red)}
+.m-f.blue .n{color:var(--app-blue)}
+.m-row{background:#fff;border:1px solid var(--app-line);border-radius:6px;padding:8px 11px;margin:0 14px 7px}
+.m-row .r1{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.m-row .prn{font-family:var(--mono);font-weight:600;font-size:11px}
+.m-row .vl{font-size:9.5px;font-weight:600}
+.m-row .sc{font-family:var(--mono);font-size:9.5px;color:var(--app-muted);margin-left:auto}
+.m-row .r2{font-size:10.5px;color:var(--app-ink);margin-top:3px}
+.m-badge{font-size:8px;font-weight:700;letter-spacing:.4px;border-radius:3px;padding:1px 5px}
+.m-badge.silent{color:var(--app-red);border:1px solid var(--app-red);background:#FDF4F3}
+.m-badge.git{color:var(--app-muted);border:1px solid var(--app-line);background:var(--app-bg)}
+.m-dot{width:7px;height:7px;border-radius:50%;flex:none}
+.m-rationale{margin:2px 14px 10px;font-size:10.5px;line-height:1.5;border-left:3px solid var(--app-blue);
+  background:#E3EDFF;padding:8px 10px;color:var(--app-ink)}
+.m-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 14px}
+.m-card{background:#fff;border:1px solid var(--app-line);border-radius:6px;padding:8px 10px}
+.m-card .prn{font-family:var(--mono);font-weight:600;font-size:10.5px}
+.m-card .tt{font-size:10px;line-height:1.4;margin-top:2px}
+.m-card .as{font-size:9px;color:var(--app-muted);border-left:2px solid var(--app-line);
+  padding-left:6px;margin-top:6px;line-height:1.45}
+.m-card .as b{color:var(--app-ink)}
+.m-acts{display:flex;gap:6px;margin:0 14px 12px}
+.m-act{font-size:9.5px;font-weight:600;padding:4px 10px;border-radius:4px}
+.m-act.red{background:var(--app-red);color:#fff}
+.m-act.gh{border:1px solid var(--app-line);background:#fff;color:var(--app-muted)}
+.m-diff{margin:0 14px 12px;border:1px solid var(--app-line);border-radius:5px;overflow:hidden;
+  font-family:var(--mono);font-size:9px;background:#fff}
+.m-diff .df{background:var(--app-bg);border-bottom:1px solid var(--app-line);padding:3px 8px;color:var(--app-muted)}
+.m-diff .dl{padding:1.5px 8px;white-space:pre}
+.m-diff .dl.del{background:#FBEBEA;color:#7F1D1D}
+.m-diff .dl.add{background:#E7F6EC;color:#14532D}
+.m-graph-hint{position:absolute;top:10px;left:12px;font-size:9.5px;color:var(--app-muted);
+  background:#ffffffe8;border:1px solid var(--app-line);border-radius:5px;padding:4px 8px}
+
+/* ── How it works ────────────────────────────────────────── */
+.how{padding:88px 0;border-bottom:1px solid var(--border-subtle)}
+.how h2,.built h2{font-size:clamp(26px,3.4vw,38px);font-weight:300;letter-spacing:-.01em;
+  margin:14px 0 48px;max-width:640px;text-wrap:balance}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border-subtle)}
+@media(max-width:980px){.steps{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.steps{grid-template-columns:1fr}}
+.step{background:var(--layer);padding:26px 22px 30px;display:flex;flex-direction:column;gap:12px;
+  min-height:230px;position:relative;transition:background .15s;overflow:hidden}
+.step:hover{background:#2c2c2c}
+.step .num{font-family:var(--mono);font-size:12px;color:var(--link)}
+.step h3{font-size:17px;font-weight:600;line-height:1.35}
+.step p{font-size:14px;color:var(--text-2);line-height:1.6}
+.step .art{margin-top:auto;padding-top:14px}
+
+/* ── Proof band — real/cited numbers only (middle "academic-only" stat dropped per note) ── */
+.proof{padding:64px 0;border-bottom:1px solid var(--border-subtle)}
+.proof-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border-subtle)}
+@media(max-width:700px){.proof-grid{grid-template-columns:1fr}}
+.proof-card{background:var(--layer);padding:32px 28px}
+.proof-num{font-family:var(--mono);font-size:clamp(34px,4.6vw,50px);font-weight:600;
+  color:var(--text);letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+.proof-lbl{margin-top:12px;font-size:14px;color:var(--text-2);line-height:1.55;max-width:400px}
+.proof-src{display:block;margin-top:4px;font-size:12px;color:var(--text-3)}
+
+/* ── Built for ───────────────────────────────────────────── */
+.built{padding:88px 0;border-bottom:1px solid var(--border-subtle)}
+.aud{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border-subtle)}
+@media(max-width:900px){.aud{grid-template-columns:1fr}}
+.aud .card{background:var(--layer);padding:28px 24px 32px;transition:background .15s;overflow:hidden}
+.aud .card:hover{background:#2c2c2c}
+.aud .glyph{font-family:var(--mono);font-size:13px;color:var(--link);display:block;margin-bottom:18px}
+.aud h3{font-size:17px;font-weight:600;margin-bottom:10px}
+.aud p{font-size:14px;color:var(--text-2);line-height:1.65}
+
+/* ── Final CTA ───────────────────────────────────────────── */
+.cta-band{padding:96px 0;text-align:left;background:linear-gradient(180deg,#161616 0%,#101821 100%);
+  border-bottom:1px solid var(--border-subtle)}
+.cta-band h2{font-size:clamp(28px,4vw,44px);font-weight:300;letter-spacing:-.015em;max-width:620px;text-wrap:balance}
+.cta-band p{margin:18px 0 36px;color:var(--text-2);font-size:16px;max-width:520px;line-height:1.6}
+
+/* ── Footer ──────────────────────────────────────────────── */
+footer{padding:36px 0 44px}
+.foot{display:flex;align-items:center;gap:24px;flex-wrap:wrap;font-size:13px;color:var(--text-3)}
+.foot .brand{font-size:14px;margin:0}
+.foot nav{margin-left:auto;display:flex;gap:22px}
+.foot nav a{color:var(--text-2);font-size:13px}
+</style>
 </head>
 <body>
-  <div class="noise"></div>
-  <header class="topbar">
-    <a class="brand" href="/" aria-label="Assumption Radar 홈">
-      <span class="brand-mark"><i></i><i></i><i></i></span>
-      <span>ASSUMPTION<br><b>RADAR</b></span>
-    </a>
-    <div class="top-meta">
-      <span class="live-dot"></span>
-      <span id="systemMode">LOCAL ANALYSIS READY</span>
-      <span class="divider"></span>
-      <span>PRE-MERGE INTELLIGENCE</span>
+
+<a class="skip" href="#top">Skip to content</a>
+<div id="progress" aria-hidden="true"></div>
+
+<!-- ═══════════ NAV ═══════════ -->
+<header>
+  <div class="wrap nav">
+    <a class="brand" href="#top"><span class="dot"></span>MergeScope</a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="#how">How it works</a>
+      <a href="#" title="Docs — coming soon">Docs</a>
+      <a href="#" title="TODO: add repository URL">GitHub</a>
+    </nav>
+    <div class="cta">
+      <a class="btn btn-primary" href="demo.html">Try it free <span class="glyph">→</span></a>
     </div>
-    <a class="ghost-link" href="#method">분석 원리 <span>↗</span></a>
-  </header>
-
-  <main>
-    <section class="hero">
-      <div class="eyebrow"><span>01</span> MERGE 전에 묻지 않은 질문</div>
-      <h1>코드는 충돌하지 않아도,<br><em>전제는 충돌합니다.</em></h1>
-      <p>열려 있는 PR을 함께 읽고, 각 변경이 당연하다고 믿는 데이터·API·순서·기본값의 어긋남을 근거와 함께 설명합니다.</p>
-      <form id="repoForm" class="repo-form">
-        <div class="repo-input-wrap">
-          <span class="prompt-mark">$</span>
-          <input id="repository" name="repository" autocomplete="off" placeholder="owner/repository 또는 GitHub URL" aria-label="GitHub 저장소">
-          <button type="submit">PR 스캔 <span>→</span></button>
-        </div>
-        <div class="form-foot">
-          <label><input id="useAI" type="checkbox" checked><span></span> AI 심층 추론</label>
-          <label title="상위 후보를 Docker에서 Base/A/B/A+B로 실행합니다"><input id="useVerification" type="checkbox"><span></span> 결합 실행 검증</label>
-          <span id="configHint">토큰 상태 확인 중…</span>
-          <button type="button" id="demoButton" class="text-button">샘플 레이더 보기</button>
-        </div>
-      </form>
-    </section>
-
-    <section id="workspace" class="workspace hidden" aria-live="polite">
-      <div class="section-head">
-        <div>
-          <div class="eyebrow"><span>02</span> CROSS-PR SCAN</div>
-          <h2 id="workspaceTitle">충돌 지형</h2>
-        </div>
-        <div class="scan-stamp"><span>LAST SCAN</span><b id="lastScan">—</b></div>
-      </div>
-
-      <div class="metrics" id="metrics"></div>
-
-      <div class="analysis-grid">
-        <section class="radar-card panel">
-          <div class="panel-head">
-            <div><span class="panel-index">A</span><h3>PR 관계 레이더</h3></div>
-            <div class="legend"><span><i class="critical"></i>CONFLICT</span><span><i class="coordination"></i>COORDINATION</span><span><i class="medium"></i>REVIEW</span></div>
-          </div>
-          <div class="radar-wrap">
-            <svg id="radar" viewBox="0 0 720 610" role="img" aria-label="Pull request 충돌 관계도"></svg>
-            <div class="radar-caption"><span>NODE = OPEN PR</span><span>LINE = EVIDENCE-BACKED INTERACTION</span></div>
-          </div>
-        </section>
-
-        <aside class="detail-card panel" id="detailCard">
-          <div class="empty-detail">
-            <span class="crosshair">＋</span>
-            <h3>신호를 선택하세요</h3>
-            <p>레이더의 연결선이나 아래 충돌 카드를 누르면 두 PR의 숨은 전제를 나란히 볼 수 있습니다.</p>
-          </div>
-        </aside>
-      </div>
-
-      <section class="conflicts-section">
-        <div class="section-head compact">
-          <div>
-            <div class="eyebrow"><span>03</span> COLLISION BRIEFS</div>
-            <h2>설명 가능한 경고</h2>
-          </div>
-          <div class="filters" id="filters"></div>
-        </div>
-        <div id="conflictList" class="conflict-list"></div>
-      </section>
-
-      <section id="method" class="method panel">
-        <div class="method-copy">
-          <div class="eyebrow"><span>04</span> HOW IT THINKS</div>
-          <h2>diff가 아니라<br>계약을 비교합니다.</h2>
-        </div>
-        <div class="method-steps">
-          <div><b>01</b><h3>신호 추출</h3><p>API, 스키마, 이벤트, 플래그, 삭제·이름 변경을 diff에서 구조화합니다.</p></div>
-          <div><b>02</b><h3>후보 압축</h3><p>공유 계약이 있는 PR 쌍만 골라 조합 폭발과 AI 비용을 막습니다.</p></div>
-          <div><b>03</b><h3>실행 검증</h3><p>상위 쌍은 Base/A/B/A+B로 실행해 단독 CI가 놓치는 결합 회귀를 재현합니다.</p></div>
-        </div>
-      </section>
-    </section>
-  </main>
-
-  <div id="loading" class="loading hidden" role="status">
-    <div class="loader-radar"><i></i><i></i><i></i><b></b></div>
-    <h2>PR 사이를 스캔하는 중</h2>
-    <p id="loadingText">diff에서 계약 신호를 추출하고 있습니다…</p>
   </div>
-  <div id="toast" class="toast hidden"></div>
-  <script type="module" src="/app.js"></script>
+</header>
+
+<main id="top">
+
+<!-- ═══════════ HERO ═══════════ -->
+<section class="hero">
+  <canvas id="netbg" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <span class="powered rv">Powered by IBM Bob · Opus 4.8</span>
+    <h1 class="rv">Catch <b>semantic PR conflicts</b> before they <span class="break-word">break</span> your main branch.</h1>
+    <p class="lede rv">MergeScope scans your open pull requests for intent-level conflicts that
+      pass CI and git checks — but silently break logic when merged together.</p>
+    <div class="actions rv">
+      <a class="btn btn-primary btn-lg" href="demo.html">View live demo <span class="glyph">→</span></a>
+      <a class="btn btn-tertiary btn-lg" href="#how">How it works <span class="glyph">↓</span></a>
+    </div>
+    <p class="fineprint rv"><span>Free to use</span><span>Open source</span><span>No install needed</span></p>
+    <div class="chips rv">
+      <div class="chip">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><rect x="1" y="1" width="12" height="12" stroke="#78a9ff" stroke-width="1.4"/><path d="M4 7l2 2 4-4" stroke="#78a9ff" stroke-width="1.4" fill="none"/></svg>
+        Works with any GitHub repo
+      </div>
+      <div class="chip">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><circle cx="3.5" cy="7" r="2" stroke="#fa4d56" stroke-width="1.4"/><circle cx="10.5" cy="7" r="2" stroke="#fa4d56" stroke-width="1.4"/><path d="M5.5 7h3" stroke="#fa4d56" stroke-width="1.4" stroke-dasharray="2 1.6"/></svg>
+        Detects semantic, not just syntactic conflicts
+      </div>
+      <div class="chip">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><rect x="1" y="1" width="12" height="12" stroke="#78a9ff" stroke-width="1.4"/><path d="M4 9.5V6m3 3.5V4.5m3 5V7" stroke="#78a9ff" stroke-width="1.4"/></svg>
+        Powered by IBM Bob (Opus 4.8)
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ SEE IT WORK — scroll-driven story.
+     Scrolling advances the screens; no clicking needed.
+     Each .screen is a CSS reconstruction of the real demo UI.
+     To swap in real screenshots later: replace a .screen's contents with
+     <img src="shots/step-1.png" alt="..." style="width:100%;display:block">  ═══════════ -->
+<section class="show" id="see-it-work" aria-label="Product tour">
+  <div class="wrap">
+    <div class="head rv">
+      <span class="eyebrow">See it work</span>
+      <h2>From <span class="num cu" data-to="5151">5,151</span> open PRs to the
+        <span class="num hotn cu" data-to="9">9</span> that will break each other.</h2>
+      <span class="count" id="sc-count" aria-hidden="true">1 / 4</span>
+    </div>
+    <p class="scroll-hint rv">Keep scrolling <span class="g">↓</span> — the demo advances with you.</p>
+
+    <div class="sc-grid">
+      <!-- Captions: scrolling past one activates its screen on the stage -->
+      <div class="sc-steps" id="sc-steps">
+        <div class="sc-step active" data-i="0" id="sw-1">
+          <span class="n">01 / 04</span>
+          <h3>Point it at any repo</h3>
+          <p>Paste a repo URL. The pipeline funnels thousands of open PRs down to a
+            handful of conflict candidates — no install, no CI hook.</p>
+          <div class="sc-slot"></div>
+        </div>
+        <div class="sc-step" data-i="1" id="sw-2">
+          <span class="n">02 / 04</span>
+          <h3>Triage a ranked queue</h3>
+          <p>A work queue ordered by severity, not a wall of PRs. “Silent break” means git
+            and CI both say the merge is clean — only intent-level analysis sees the collision.</p>
+          <div class="sc-slot"></div>
+        </div>
+        <div class="sc-step" data-i="2" id="sw-3">
+          <span class="n">03 / 04</span>
+          <h3>See the bottleneck</h3>
+          <p>The graph maps PRs to the files and functions they share. Red edges are judged
+            conflicts — visible at a glance instead of buried in 3,000 open tabs.</p>
+          <div class="sc-slot"></div>
+        </div>
+        <div class="sc-step" data-i="3" id="sw-4">
+          <span class="n">04 / 04</span>
+          <h3>Get a judgment and a fix</h3>
+          <p>IBM Bob reasons over each candidate pair: severity, confidence, a plain-English
+            explanation — and a concrete fix you can post back to the PR in one click.</p>
+          <div class="sc-slot"></div>
+        </div>
+      </div>
+
+      <!-- Stage: pinned while the captions scroll -->
+      <div class="sc-stage" id="sc-stage">
+        <div class="sc-frames" id="sc-frames">
+
+          <!-- Screen 1 — load repo + funnel -->
+          <div class="frame active" data-i="0">
+            <div class="bar"><i></i><i></i><i></i><span class="url">mergescope — cross-PR semantic conflict radar</span></div>
+            <div class="screen">
+              <div class="m-hd">
+                <span class="t">Cross-PR Semantic Conflict Radar</span>
+                <span class="r"> godotengine/godot · 5,151 open PRs</span>
+                <div class="m-clone">
+                  <span class="in">git clone <a href="https://urldefense.proofpoint.com/v2/url?u=https-3A__github.com_godotengine_godot.git&amp;d=DwQGaQ&amp;c=slrrB7dE8n7gBJbeO0g-IQ&amp;r=AV49iQf2bdJmrjj_aweiYw&amp;m=Ln8-1iRaoBZ30FJs3SLpAgUtjdkNfAn130nTlrPDo4g7xhmdXzXtaNnwiSEVo4T0&amp;s=TIzudyLs50OEgaPaLqR0hhPNvZYeDMdqvaeypCKMYeA&amp;e=">https://github.com/godotengine/godot.git</a></span>
+                  <span class="bt">Load repo</span>
+                </div>
+              </div>
+              <div class="m-funnel">
+                <div class="m-f"><div class="n">5,151</div><div class="l">open PRs</div></div>
+                <div class="m-f"><div class="n">2,128</div><div class="l">Step 0 pass</div></div>
+                <div class="m-f blue"><div class="n">947</div><div class="l">buckets (resources)</div></div>
+                <div class="m-f blue"><div class="n">312</div><div class="l">candidate pairs</div></div>
+                <div class="m-f hot"><div class="n">9</div><div class="l">conflict candidates</div></div>
+              </div>
+              <div class="m-row">
+                <div class="r1"><span class="m-dot" style="background:#D6453A"></span><span class="prn">#112430 ↔ #112907</span>
+                  <span class="vl" style="color:#D6453A">Conflict candidate</span><span class="m-badge silent">SILENT BREAK · merges clean</span><span class="sc">0.92</span></div>
+                <div class="r2">Both PRs own “session restore” — merged together, restore runs twice.</div>
+              </div>
+              <div class="m-row">
+                <div class="r1"><span class="m-dot" style="background:#D6453A"></span><span class="prn">#111203 ↔ #112658</span>
+                  <span class="vl" style="color:#D6453A">Conflict candidate</span><span class="m-badge silent">SILENT BREAK · merges clean</span><span class="sc">0.88</span></div>
+                <div class="r2">max_fps = 0 means “unlimited” in one PR and “invalid” in the other.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Screen 2 — work queue -->
+          <div class="frame" data-i="1">
+            <div class="bar"><i></i><i></i><i></i><span class="url">work queue — ranked by severity</span></div>
+            <div class="screen" style="padding-top:10px">
+              <div class="m-row">
+                <div class="r1"><span class="m-dot" style="background:#D6453A"></span><span class="prn">#112430 ↔ #112907</span>
+                  <span class="vl" style="color:#D6453A">Conflict candidate</span><span class="m-badge silent">SILENT BREAK · merges clean</span><span class="sc">score 0.92</span></div>
+                <div class="r2">Editor session restore: EditorNode vs SceneTabs both claim ownership — restore may run twice.</div>
+              </div>
+              <div class="m-row">
+                <div class="r1"><span class="m-dot" style="background:#D6453A"></span><span class="prn">#111203 ↔ #112658</span>
+                  <span class="vl" style="color:#D6453A">Conflict candidate</span><span class="m-badge silent">SILENT BREAK · merges clean</span><span class="sc">score 0.88</span></div>
+                <div class="r2">Opposite value semantics for max_fps = 0: valid “unlimited” vs rejected as invalid.</div>
+              </div>
+              <div class="m-row">
+                <div class="r1"><span class="m-dot" style="background:#7A4FD6"></span><span class="prn">#109988 ↔ #112215</span>
+                  <span class="vl" style="color:#7A4FD6">Possible duplicate</span><span class="m-badge git">git flags this too</span><span class="sc">score 0.81</span></div>
+                <div class="r2">Two fixes for the same screen-capture bug — merging both would double-correct.</div>
+              </div>
+              <div class="m-row">
+                <div class="r1"><span class="m-dot" style="background:#DC9B00"></span><span class="prn">#110455 ↔ #113120</span>
+                  <span class="vl" style="color:#DC9B00">Uncertain</span><span class="m-badge git">merges clean</span><span class="sc">score 0.64</span></div>
+                <div class="r2">Both reorder boot init — needs a human check on settings vs audio-driver order.</div>
+              </div>
+              <div class="m-row">
+                <div class="r1"><span class="m-dot" style="background:#8E9AA4"></span><span class="prn">#106987 ↔ #113101</span>
+                  <span class="vl" style="color:#8E9AA4">Judged harmless</span><span class="sc">score 0.41</span></div>
+                <div class="r2">Same file, disjoint functions — a file-level false alarm filtered out at function level.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Screen 3 — conflict graph -->
+          <div class="frame" data-i="2">
+            <div class="bar"><i></i><i></i><i></i><span class="url">graph view — PRs × shared resources</span></div>
+            <div class="screen">
+              <div class="m-graph-hint">Click a PR (circle) or a resource (square) · red edge = conflict</div>
+              <svg viewBox="0 0 860 340" style="width:100%;height:100%;display:block" aria-label="Bipartite conflict graph mockup">
+                <g stroke="#B7C1C8" stroke-width="1.2">
+                  <line x1="180" y1="90"  x2="420" y2="150"/>
+                  <line x1="180" y1="250" x2="420" y2="150" stroke-dasharray="2 5"/>
+                  <line x1="640" y1="70"  x2="420" y2="150" stroke-dasharray="2 5"/>
+                  <line x1="700" y1="210" x2="540" y2="260"/>
+                  <line x1="300" y1="300" x2="540" y2="260"/>
+                </g>
+                <line x1="180" y1="90" x2="180" y2="250" stroke="#D6453A" stroke-width="3">
+                  <animate attributeName="stroke-opacity" values="1;.35;1" dur="2.4s" repeatCount="indefinite"/>
+                </line>
+                <line x1="640" y1="70" x2="700" y2="210" stroke="#DC9B00" stroke-width="2" stroke-dasharray="7 4"/>
+                <rect x="404" y="134" width="32" height="32" fill="#EFF3F5" stroke="#5C6B78" stroke-width="1.5"/>
+                <rect x="526" y="246" width="26" height="26" fill="#EFF3F5" stroke="#5C6B78" stroke-width="1.5"/>
+                <g font-family="IBM Plex Mono,monospace" font-size="11" fill="#5C6B78">
+                  <text x="420" y="126" text-anchor="middle">editor_node.cpp</text>
+                  <text x="539" y="240" text-anchor="middle">viewport.cpp</text>
+                  <text x="180" y="72" text-anchor="middle">#112430</text>
+                  <text x="180" y="276" text-anchor="middle">#112907</text>
+                  <text x="640" y="52" text-anchor="middle">#111982</text>
+                  <text x="700" y="196" text-anchor="middle">#113544</text>
+                  <text x="300" y="326" text-anchor="middle">#109988</text>
+                </g>
+                <g fill="#fff" stroke="#1C2733" stroke-width="1.6">
+                  <circle cx="180" cy="90"  r="13" stroke="#D6453A" stroke-width="2.4"/>
+                  <circle cx="180" cy="250" r="13" stroke="#D6453A" stroke-width="2.4"/>
+                  <circle cx="640" cy="70"  r="11"/>
+                  <circle cx="700" cy="210" r="11"/>
+                  <circle cx="300" cy="300" r="11" stroke="#7A4FD6" stroke-width="2.2"/>
+                </g>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Screen 4 — judgment + suggested fix -->
+          <div class="frame" data-i="3">
+            <div class="bar"><i></i><i></i><i></i><span class="url">judgment — #112430 ↔ #112907</span></div>
+            <div class="screen">
+              <div class="m-cards">
+                <div class="m-card">
+                  <span class="prn">#112430</span>
+                  <div class="tt">Editor: unify session (tabs &amp; layout) restore under EditorNode</div>
+                  <div class="as"><b>ownership</b> — session restore is performed by EditorNode alone</div>
+                </div>
+                <div class="m-card">
+                  <span class="prn">#112907</span>
+                  <div class="tt">Scene tabs: add self-managed session restore + lazy loading</div>
+                  <div class="as"><b>ownership</b> — tab restore is owned by SceneTabs; EditorNode only triggers</div>
+                </div>
+              </div>
+              <div class="m-rationale">Both PRs assign “session restore” to different owners. Each is correct in its own world — merged together, restore may run twice or the two paths overwrite each other’s state.</div>
+              <div class="m-diff">
+                <div class="df">editor/gui/editor_scene_tabs.cpp · suggested fix</div>
+                <div class="dl">void SceneTabs::restore_tabs() {</div>
+                <div class="dl del">	_restore_own_session();</div>
+                <div class="dl add">	// Session restore is owned by EditorNode (see #112430).</div>
+                <div class="dl add">	// SceneTabs only supplies tab state via get_tab_state().</div>
+                <div class="dl">}</div>
+              </div>
+              <div class="m-acts">
+                <span class="m-act red">Confirm conflict</span>
+                <span class="m-act gh">Post suggestion to GitHub →</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ HOW IT WORKS ═══════════ -->
+<section class="how" id="how">
+  <div class="wrap">
+    <span class="eyebrow rv">How it works</span>
+    <h2 class="rv">Four steps from open-PR chaos to a short, explained conflict list.</h2>
+    <div class="steps rv">
+      <div class="step tile-accent">
+        <span class="num">Step 1</span>
+        <h3>Connect your repo</h3>
+        <p>Paste a GitHub repo URL and a read-only token. We fetch all open PRs and their diffs — nothing is installed in your CI.</p>
+        <div class="art"><svg width="72" height="20" viewBox="0 0 72 20" fill="none" aria-hidden="true"><rect x="1" y="4" width="30" height="12" stroke="#6f6f6f"/><path d="M36 10h18m0 0-4-4m4 4-4 4" stroke="#78a9ff" stroke-width="1.4"/><circle cx="65" cy="10" r="5" stroke="#78a9ff" stroke-width="1.4"/></svg></div>
+      </div>
+      <div class="step tile-accent">
+        <span class="num">Step 2</span>
+        <h3>IBM Bob extracts intent</h3>
+        <p>Each PR gets an Intent Card — what it tries to do, which functions it touches, and what it assumes about the rest of the code.</p>
+        <div class="art"><svg width="72" height="20" viewBox="0 0 72 20" fill="none" aria-hidden="true"><rect x="1" y="1" width="26" height="18" stroke="#6f6f6f"/><path d="M5 6h14M5 10h18M5 14h10" stroke="#78a9ff" stroke-width="1.3"/></svg></div>
+      </div>
+      <div class="step tile-accent">
+        <span class="num">Step 3</span>
+        <h3>Semantic bucketing</h3>
+        <p>PRs are clustered by functional area, cutting n² comparisons down to a few dozen candidate pairs worth judging.</p>
+        <div class="art"><svg width="72" height="20" viewBox="0 0 72 20" fill="none" aria-hidden="true"><circle cx="8" cy="10" r="4" stroke="#6f6f6f"/><circle cx="22" cy="10" r="4" stroke="#6f6f6f"/><circle cx="15" cy="10" r="9.5" stroke="#78a9ff" stroke-width="1.2" stroke-dasharray="3 3"/><circle cx="50" cy="10" r="4" stroke="#6f6f6f"/><circle cx="64" cy="10" r="4" stroke="#6f6f6f"/><circle cx="57" cy="10" r="9.5" stroke="#78a9ff" stroke-width="1.2" stroke-dasharray="3 3"/></svg></div>
+      </div>
+      <div class="step tile-accent">
+        <span class="num">Step 4</span>
+        <h3>Conflict judgment</h3>
+        <p>IBM Bob reasons over each pair: severity, confidence, and a plain-English explanation of the conflict — plus a suggested fix.</p>
+        <div class="art"><svg width="72" height="20" viewBox="0 0 72 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="5" stroke="#6f6f6f"/><circle cx="40" cy="10" r="5" stroke="#6f6f6f"/><path d="M15 10h20" stroke="#fa4d56" stroke-width="2"/><path d="M52 10h16" stroke="#42be65" stroke-width="1.4"/><path d="m54 10 3 3 6-6" stroke="#42be65" stroke-width="1.4" fill="none"/></svg></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ PROOF — only the two stats we can stand behind ═══════════ -->
+<section class="proof" aria-label="Why this matters">
+  <div class="wrap">
+    <div class="proof-grid rv">
+      <div class="proof-card">
+        <div class="proof-num cu" data-to="3324">3,324</div>
+        <div class="proof-lbl">Open PRs in <b>openclaw/openclaw</b> — our live test repo, right now.</div>
+      </div>
+      <div class="proof-card">
+        <div class="proof-num cu" data-to="26" data-suffix="×">26×</div>
+        <div class="proof-lbl">Higher bug rate in code where a merge conflict needed manual resolution.
+          <span class="proof-src">— OSS merge-conflict study, 143 projects</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ BUILT FOR ═══════════ -->
+<section class="built">
+  <div class="wrap">
+    <span class="eyebrow rv">Built for</span>
+    <h2 class="rv">Anyone staring down a wall of open pull requests.</h2>
+    <div class="aud rv">
+      <div class="card tile-accent">
+        <span class="glyph">[oss]</span>
+        <h3>OSS maintainers</h3>
+        <p>Drowning in AI-generated PRs? See which ones conflict with each other before touching them.</p>
+      </div>
+      <div class="card tile-accent">
+        <span class="glyph">[ai-team]</span>
+        <h3>AI-assisted engineering teams</h3>
+        <p>Running Claude Code or Cursor at scale? Catch the inter-agent conflicts CI misses.</p>
+      </div>
+      <div class="card tile-accent">
+        <span class="glyph">[lead]</span>
+        <h3>Team leads reviewing PRs</h3>
+        <p>Triage large queues by conflict risk. Know which PRs need to be reviewed together.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ FINAL CTA ═══════════ -->
+<section class="cta-band">
+  <div class="wrap">
+    <span class="eyebrow rv">Get started</span>
+    <h2 class="rv" style="margin-top:14px">Scan your first repo in 60 seconds.</h2>
+    <p class="rv">No install, no account required. Just a repo URL and a read-only GitHub token.</p>
+    <a class="btn btn-primary btn-lg rv" href="demo.html">Get started <span class="glyph">→</span></a>
+  </div>
+</section>
+
+</main>
+
+<!-- ═══════════ FOOTER ═══════════ -->
+<footer>
+  <div class="wrap foot">
+    <a class="brand" href="#top"><span class="dot"></span>MergeScope</a>
+    <span>IBM AI Builders Challenge 2026</span>
+    <nav aria-label="Footer">
+      <a href="#" title="TODO: add repository URL">GitHub</a>
+      <a href="#" title="Docs — coming soon">Docs</a>
+      <a href="#" title="About — coming soon">About</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ── Scroll-reveal ── */
+const io = new IntersectionObserver(es => {
+  es.forEach(e => { if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
+}, { threshold: .12 });
+document.querySelectorAll('.rv').forEach((el, i) => {
+  el.style.transitionDelay = Math.min(i % 5, 3) * 60 + 'ms';
+  io.observe(el);
+});
+
+/* ── Scroll progress bar (transform-only) ── */
+(function(){
+  const bar = document.getElementById('progress');
+  let ticking = false;
+  function paint(){
+    const max = document.documentElement.scrollHeight - innerHeight;
+    bar.style.transform = 'scaleX(' + (max > 0 ? scrollY / max : 0) + ')';
+    ticking = false;
+  }
+  addEventListener('scroll', ()=>{ if (!ticking){ ticking = true; requestAnimationFrame(paint); } }, { passive:true });
+  paint();
+})();
+
+/* ── Count-up numbers (skipped under reduced motion; markup keeps final values) ── */
+(function(){
+  if (REDUCE) return;
+  const cuIO = new IntersectionObserver(es => {
+    es.forEach(e => {
+      if (!e.isIntersecting) return;
+      cuIO.unobserve(e.target);
+      const el = e.target, to = +el.dataset.to, suf = el.dataset.suffix || '';
+      const t0 = performance.now(), dur = 900;
+      (function tick(t){
+        const p = Math.min(1, (t - t0) / dur), ease = 1 - Math.pow(1 - p, 3);
+        el.textContent = Math.round(to * ease).toLocaleString('en-US') + suf;
+        if (p < 1) requestAnimationFrame(tick);
+      })(t0);
+    });
+  }, { threshold: .6 });
+  document.querySelectorAll('.cu').forEach(el => cuIO.observe(el));
+})();
+
+/* ── See it work: scroll-driven stage ──
+   Captions are the scroll triggers; the pinned stage swaps screens.
+   On ≤920px the stage dissolves and each frame is parked inside its
+   caption's slot instead. */
+(function(){
+  const steps  = [...document.querySelectorAll('.sc-step')];
+  const frames = [...document.querySelectorAll('#sc-frames .frame')];
+  const stage  = document.getElementById('sc-frames');
+  const count  = document.getElementById('sc-count');
+  const mq     = matchMedia('(max-width: 920px)');
+
+  function activate(i){
+    steps.forEach(s => s.classList.toggle('active', +s.dataset.i === i));
+    frames.forEach(f => f.classList.toggle('active', +f.dataset.i === i));
+    count.textContent = (i + 1) + ' / ' + steps.length;
+  }
+
+  /* A caption crossing the middle band of the viewport activates its screen */
+  const stepIO = new IntersectionObserver(es => {
+    es.forEach(e => { if (e.isIntersecting) activate(+e.target.dataset.i); });
+  }, { rootMargin: '-42% 0px -42% 0px' });
+  steps.forEach(s => stepIO.observe(s));
+
+  /* Responsive frame parking */
+  function layout(){
+    frames.forEach((f, i) => {
+      if (mq.matches) steps[i].querySelector('.sc-slot').appendChild(f);
+      else stage.appendChild(f);
+    });
+  }
+  if (mq.addEventListener) mq.addEventListener('change', layout);
+  else mq.addListener(layout); /* older Safari */
+  layout();
+})();
+
+/* ── Hero ambient network (canvas) ──
+   A quiet drifting PR graph; every few seconds one edge flags red —
+   the product's one-sentence pitch as atmosphere. Paused when the tab
+   is hidden, a single static frame under reduced motion. */
+(function(){
+  const cv = document.getElementById('netbg');
+  if (!cv || !cv.offsetParent) return;
+  const ctx = cv.getContext('2d');
+  const DPR = Math.min(devicePixelRatio || 1, 2);
+  let W, H, nodes, raf = null, conflict = { a:0, b:1, t:0 };
+
+  function size(){
+    W = cv.offsetWidth; H = cv.offsetHeight;
+    cv.width = W * DPR; cv.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  function seed(){
+    nodes = Array.from({ length: 16 }, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      vx: (Math.random() - .5) * .18, vy: (Math.random() - .5) * .18,
+      r: 1.6 + Math.random() * 1.8
+    }));
+  }
+  function pickConflict(){
+    conflict = { a: Math.floor(Math.random() * nodes.length),
+                 b: Math.floor(Math.random() * nodes.length), t: performance.now() };
+    if (conflict.a === conflict.b) conflict.b = (conflict.b + 1) % nodes.length;
+  }
+  function draw(now){
+    ctx.clearRect(0, 0, W, H);
+    for (let i = 0; i < nodes.length; i++){
+      for (let j = i + 1; j < nodes.length; j++){
+        const a = nodes[i], b = nodes[j];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (d > 150) continue;
+        const isC = (i === conflict.a && j === conflict.b) || (i === conflict.b && j === conflict.a);
+        if (isC){
+          const pulse = .35 + .3 * Math.sin((now - conflict.t) / 260);
+          ctx.strokeStyle = 'rgba(250,77,86,' + pulse + ')';
+          ctx.lineWidth = 1.6;
+        } else {
+          ctx.strokeStyle = 'rgba(120,169,255,' + (.13 * (1 - d / 150)) + ')';
+          ctx.lineWidth = 1;
+        }
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+    }
+    nodes.forEach(n => {
+      ctx.fillStyle = 'rgba(168,168,168,.5)';
+      ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, 6.2832); ctx.fill();
+    });
+  }
+  function step(now){
+    nodes.forEach(n => {
+      n.x += n.vx; n.y += n.vy;
+      if (n.x < -8) n.x = W + 8; if (n.x > W + 8) n.x = -8;
+      if (n.y < -8) n.y = H + 8; if (n.y > H + 8) n.y = -8;
+    });
+    if (now - conflict.t > 4200) pickConflict();
+    draw(now);
+    raf = requestAnimationFrame(step);
+  }
+  size(); seed(); pickConflict();
+  if (REDUCE){ draw(performance.now()); return; }  /* one static frame */
+  raf = requestAnimationFrame(step);
+  addEventListener('resize', ()=>{ size(); seed(); if (REDUCE) draw(performance.now()); });
+  document.addEventListener('visibilitychange', ()=>{
+    if (document.hidden){ cancelAnimationFrame(raf); raf = null; }
+    else if (!raf) raf = requestAnimationFrame(step);
+  });
+})();
+</script>
 </body>
 </html>

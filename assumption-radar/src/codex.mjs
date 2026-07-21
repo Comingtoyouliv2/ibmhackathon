@@ -128,7 +128,7 @@ export async function analyzeWithCodex(prepared, options = {}) {
   const settings = {
     model: options.model || process.env.CODEX_MODEL || "gpt-5.4",
     codexBin: options.codexBin || process.env.CODEX_BIN || "codex",
-    reasoningEffort: options.reasoningEffort || "medium",
+    reasoningEffort: options.reasoningEffort || process.env.CODEX_REASONING_EFFORT || "medium",
   };
   const runner = options.runner || ((caseInput) => defaultRunner(caseInput, settings));
   const protocolRuns = await runRepeatedCaseJudgments(cases, (caseInput) => runner(caseInput, settings), options);
