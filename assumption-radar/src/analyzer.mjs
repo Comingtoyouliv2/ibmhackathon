@@ -727,7 +727,29 @@ export function finishAnalysis(prepared, aiFindings = []) {
   const aiByPair = new Map(aiFindings.map((item) => [pairKey(item.prIds), item]));
   const resolved = prepared.comparisons.map((comparison) => {
     if (comparison.verdict === "conflict" && comparison.basis === "deterministic-witness") {
-      return { ...comparison, screeningStatus: aiByPair.has(comparison.key) ? "ai-reviewed" : "static-candidate-unreviewed" };
+      const hypothesis = aiByPair.get(comparison.key);
+      if (!hypothesis?.interactionHypothesis) return {
+        ...comparison,
+        screeningStatus: "static-candidate-unreviewed",
+        confirmationStatus: "unverified-static-candidate",
+        runtimeVerification: "not-run",
+      };
+      const contractBacked = hypothesis.interactionHypothesis.status === "contract-backed-conflict"
+        && hypothesis.evidenceGrade === "contract-backed";
+      return {
+        ...comparison,
+        relationship: contractBacked ? "semantic-conflict" : "review-required",
+        confirmationStatus: contractBacked ? "contract-backed-static" : "unverified-static-candidate",
+        evidenceGrade: contractBacked ? "contract-backed" : "adjudicated",
+        runtimeVerification: "not-run",
+        interactionHypothesis: hypothesis.interactionHypothesis,
+        hypothesisEvidenceObjects: hypothesis.evidenceObjects || [],
+        hypothesisEvidenceGate: hypothesis.evidenceGate,
+        hypothesisSource: hypothesis.source,
+        hypothesisBasis: hypothesis.basis,
+        hypothesisConfidence: hypothesis.confidence,
+        screeningStatus: "ai-reviewed",
+      };
     }
     const aiFinding = aiByPair.get(comparison.key);
     if (aiFinding) return { ...aiFinding, screeningStatus: "ai-reviewed" };
@@ -738,16 +760,21 @@ export function finishAnalysis(prepared, aiFindings = []) {
           : "static-candidate-unreviewed",
     };
   });
-  const findings = resolved.filter((item) => item.verdict === "conflict" || item.verdict === "coordination" || item.verdict === "review");
-  const conflictCount = resolved.filter((item) => item.verdict === "conflict").length;
-  const coordinationCount = resolved.filter((item) => item.verdict === "coordination").length;
-  const reviewCount = resolved.filter((item) => item.verdict === "review").length;
-  const independentCount = resolved.filter((item) => item.verdict === "independent").length;
-  const insufficientCount = resolved.filter((item) => item.verdict === "insufficient").length;
-  const aiReviewedPairCount = resolved.filter((item) => item.screeningStatus === "ai-reviewed").length;
-  const noAlertUnreviewedCount = resolved.filter((item) => item.screeningStatus === "no-alert-unreviewed").length;
-  const staticCandidateUnreviewedCount = resolved.filter((item) => item.screeningStatus === "static-candidate-unreviewed").length;
-  const insufficientEvidenceCount = resolved.filter((item) => item.screeningStatus === "insufficient-evidence").length;
+  const classified = resolved.map((item) => item.verdict === "conflict" && !item.confirmationStatus ? {
+    ...item,
+    confirmationStatus: item.evidenceGrade === "contract-backed" ? "contract-backed-static" : "unverified-static-candidate",
+    runtimeVerification: item.runtimeVerification || "not-run",
+  } : item);
+  const findings = classified.filter((item) => item.verdict === "conflict" || item.verdict === "coordination" || item.verdict === "review");
+  const conflictCount = classified.filter((item) => item.verdict === "conflict").length;
+  const coordinationCount = classified.filter((item) => item.verdict === "coordination").length;
+  const reviewCount = classified.filter((item) => item.verdict === "review").length;
+  const independentCount = classified.filter((item) => item.verdict === "independent").length;
+  const insufficientCount = classified.filter((item) => item.verdict === "insufficient").length;
+  const aiReviewedPairCount = classified.filter((item) => item.screeningStatus === "ai-reviewed").length;
+  const noAlertUnreviewedCount = classified.filter((item) => item.screeningStatus === "no-alert-unreviewed").length;
+  const staticCandidateUnreviewedCount = classified.filter((item) => item.screeningStatus === "static-candidate-unreviewed").length;
+  const insufficientEvidenceCount = classified.filter((item) => item.screeningStatus === "insufficient-evidence").length;
   return {
     generatedAt: new Date().toISOString(),
     summary: {

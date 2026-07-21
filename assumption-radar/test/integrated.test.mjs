@@ -8,6 +8,27 @@ import { buildSemanticJudgeCases, normalizeSemanticJudgments, selectSemanticJudg
 
 const pr = (id, file, patch, title = `PR ${id}`) => ({ id, number: Number(id), title, baseSha: "base", files: [{ filename: file, status: "modified", patch }] });
 
+const contractBackedJudgment = (overrides = {}) => ({
+  prIds: ["1", "2"], assessment: "contract-backed-conflict", category: "api",
+  title: "signature mismatch", summary: "A consumes the contract that B changes.",
+  assumptionOwner: "PR-A", assumption: "old argument remains accepted",
+  violatingChange: "B accepts only NewArg", preconditions: ["both PRs are merged"],
+  triggerSequence: ["call newCall with oldArg"], expectedBehavior: "the call is accepted",
+  possibleActualBehavior: "the combined code no longer compiles",
+  contract: {
+    identity: "newCall", kind: "function-signature", providerSide: "PR-B", consumerSide: "PR-A",
+    providerChange: "newCall accepts NewArg", consumerDependency: "A calls newCall(oldArg)",
+    composedFailure: "oldArg is rejected by the new signature",
+  },
+  testPlan: {
+    name: "compile combined tree", strategy: "targeted-test", setup: [],
+    steps: ["merge A and B", "compile Service.java"], oracle: "compilation succeeds", targetTests: [],
+  },
+  confidence: 0.9,
+  evidenceIds: ["A-F1-L3", "B-F1-L3"],
+  ...overrides,
+});
+
 test("intent retrieval ranks same-module pairs above isolated pairs without inventing blocker verdicts", () => {
   const prs = [
     pr("1", "modules/a/src/Service.java", "@@ -1 +1 @@\n-old()\n+newer()"),
@@ -60,6 +81,11 @@ test("combined verifier requires independent passes and a repeated failure signa
   assert.deepEqual(failureSignatures("panic at 0xabc line 42"), ["panic at 0x# line #"]);
 });
 
+test("generic test summaries do not make unrelated failures reproducible", () => {
+  assert.deepEqual(failureSignatures("1 failed"), []);
+  assert.deepEqual(failureSignatures("FAIL test_a: expected true\n1 failed"), ["fail test_a: expected true"]);
+});
+
 test("semantic judge adds a bounded second look for related independent pairs", () => {
   const prepared = prepareIntegratedAnalysis([
     pr("1", "modules/a/src/Producer.java", "@@ -1 +1 @@\n-old\n+publishReady();"),
@@ -71,6 +97,8 @@ test("semantic judge adds a bounded second look for related independent pairs", 
   const cases = buildSemanticJudgeCases(prepared, selected);
   assert.equal(cases[0].reviewLane, "second-look");
   assert.deepEqual(cases[0].prs.map((item) => item.files.length), [1, 1]);
+  assert.match(cases[0].prs[0].files[0].patch, /\[A-F1-L3\] \+publishReady\(\);/);
+  assert.match(cases[0].prs[1].files[0].patch, /\[B-F1-L3\] \+consumeReady\(\);/);
 });
 
 test("cross-language HTTP contracts retrieve a Python client against a Java server route", () => {
@@ -93,6 +121,10 @@ test("cross-language HTTP contracts retrieve a Python client against a Java serv
   const comparison = prepared.comparisons[0];
   assert.equal(comparison.retrievalFeatures.priority, 0);
   assert.ok(comparison.retrievalFeatures.sharedContracts.includes("api:http:PUT:/setting/restart/{param}"));
+  assert.deepEqual(comparison.retrievalFeatures.contractFiles["api:http:PUT:/setting/restart/{param}"], {
+    left: ["zeppelin-mcp-server/zeppelin_mcp/client.py"],
+    right: ["zeppelin-server/src/main/java/org/apache/zeppelin/rest/InterpreterRestApi.java"],
+  });
   const fileDecoys = Array.from({ length: 8 }, (_, index) => ({
     ...comparison,
     key: `decoy-${index}`,
@@ -111,35 +143,79 @@ test("cross-language HTTP contracts retrieve a Python client against a Java serv
   assert.ok(selected.some((item) => item.key === comparison.key));
 });
 
-test("AI blockers require verbatim evidence from both PRs", () => {
+test("contract provenance keeps provider and consumer files beyond the fallback prefix", () => {
+  const filler = Array.from({ length: 220 }, (_, index) => `+def unrelated_${index}(): return ${index}`);
+  const left = {
+    id: "5277", number: 5277, title: "Add MCP client", baseSha: "base",
+    files: [
+      ...[1, 2, 3].map((index) => ({ filename: `docs/decoy-${index}.md`, status: "modified", patch: `@@ -1 +1 @@\n-old\n+decoy ${index}` })),
+      { filename: "zeppelin-mcp/src/zeppelin_mcp/client.py", status: "modified", patch: [
+        "@@ -0,0 +1,221 @@", ...filler,
+        "+self._request(\"PUT\", f\"/interpreter/setting/restart/{setting_id}\", json=None)",
+      ].join("\n") },
+    ],
+  };
+  const right = pr("5151", "zeppelin-server/src/main/java/org/apache/zeppelin/rest/InterpreterRestApi.java", [
+    "@@ -1 +1,3 @@", " @PUT", " @Path(\"setting/restart/{settingId}\")", "+if (noteId == null) throw new BadRequestException();",
+  ].join("\n"));
+  const prepared = prepareIntegratedAnalysis([left, right]);
+  const comparison = prepared.comparisons[0];
+  const [caseInput] = buildSemanticJudgeCases(prepared, [comparison], { maxPatchChars: 700 });
+  assert.deepEqual(caseInput.prs.map((item) => item.files.map((file) => file.filename)), [
+    ["zeppelin-mcp/src/zeppelin_mcp/client.py"],
+    ["zeppelin-server/src/main/java/org/apache/zeppelin/rest/InterpreterRestApi.java"],
+  ]);
+  assert.match(caseInput.prs[0].files[0].patch, /interpreter\/setting\/restart/);
+  assert.match(caseInput.prs[0].files[0].patch, /\[A-F4-L222\]/);
+  assert.ok(caseInput.prs[0].files[0].patch.length <= 700);
+});
+
+test("evidence-aware compaction also preserves late event contracts", () => {
+  const filler = Array.from({ length: 180 }, (_, index) => `+const unrelated_${index} = ${index};`);
+  const prepared = prepareIntegratedAnalysis([
+    pr("1", "src/producer.js", ["@@ -0,0 +1,181 @@", ...filler, '+publish("payment.captured", payload);'].join("\n")),
+    pr("2", "src/consumer.js", ["@@ -0,0 +1,181 @@", ...filler, '+subscribe("payment.captured", handlePayment);'].join("\n")),
+  ]);
+  const comparison = prepared.comparisons[0];
+  assert.ok(comparison.retrievalFeatures.sharedContracts.includes("event:payment.captured"));
+  const [caseInput] = buildSemanticJudgeCases(prepared, [comparison], { maxPatchChars: 650 });
+  assert.match(caseInput.prs[0].files[0].patch, /publish\("payment\.captured"/);
+  assert.match(caseInput.prs[1].files[0].patch, /subscribe\("payment\.captured"/);
+});
+
+test("AI blockers resolve immutable evidence IDs from both PRs", () => {
   const prepared = prepareIntegratedAnalysis([
     pr("1", "src/Service.java", "@@ -1 +1 @@\n-old\n+newCall(oldArg);"),
     pr("2", "src/Service.java", "@@ -2 +2 @@\n-old\n+void newCall(NewArg arg) {}"),
   ]);
   const candidates = selectSemanticJudgeCandidates(prepared);
-  const base = {
-    prIds: ["1", "2"], verdict: "conflict", failureMechanism: "A adds an old-argument call while B replaces the accepted argument type.",
+  const base = contractBackedJudgment();
+  assert.equal(normalizeSemanticJudgments(prepared, candidates, [base])[0].verdict, "conflict");
+  assert.equal(normalizeSemanticJudgments(prepared, candidates, [base])[0].confirmationStatus, "contract-backed-static");
+  const accepted = normalizeSemanticJudgments(prepared, candidates, [base])[0];
+  assert.deepEqual(accepted.evidenceObjects.map((item) => item.quote), ["newCall(oldArg);", "void newCall(NewArg arg) {}"]);
+  assert.equal(normalizeSemanticJudgments(prepared, candidates, [{ ...base, evidenceIds: base.evidenceIds.slice(0, 1) }])[0].verdict, "review");
+  assert.equal(normalizeSemanticJudgments(prepared, candidates, [{ ...base, evidenceIds: ["A-F99-L99", "B-F1-L3"] }])[0].verdict, "review");
+  assert.equal(normalizeSemanticJudgments(prepared, candidates, [{
+    ...base,
+    evidenceIds: undefined,
     evidence: [
       { side: "A", file: "src/Service.java", symbol: "newCall", quote: "newCall(oldArg);" },
       { side: "B", file: "src/Service.java", symbol: "newCall", quote: "void newCall(NewArg arg) {}" },
     ],
-  };
-  assert.equal(normalizeSemanticJudgments(prepared, candidates, [base])[0].verdict, "conflict");
-  assert.equal(normalizeSemanticJudgments(prepared, candidates, [{ ...base, evidence: base.evidence.slice(0, 1) }])[0].verdict, "review");
+  }])[0].verdict, "review");
 });
 
 test("Anthropic adapter repairs control characters and uses the shared evidence gate", async () => {
   assert.deepEqual(extractJsonObject('prefix {"quote":"a\tb"} suffix'), { quote: "a\tb" });
+  assert.deepEqual(extractJsonObject('```json\n{"assessment":"independent","detail":"brace } in string"}\n```\nusage: {"tokens":42}'), {
+    assessment: "independent", detail: "brace } in string",
+  });
   const prepared = prepareIntegratedAnalysis([
     pr("1", "src/Service.java", "@@ -1 +1 @@\n-old\n+newCall(oldArg);"),
     pr("2", "src/Service.java", "@@ -2 +2 @@\n-old\n+void newCall(NewArg arg) {}"),
   ]);
-  const client = { messages: { create: async () => ({ content: [{ type: "text", text: JSON.stringify({
-    prIds: ["1", "2"], verdict: "conflict", failureMechanism: "old argument no longer accepted", evidence: [
-      { side: "A", file: "src/Service.java", symbol: "newCall", quote: "newCall(oldArg);" },
-      { side: "B", file: "src/Service.java", symbol: "newCall", quote: "void newCall(NewArg arg) {}" },
-    ],
-  }) }] }) } };
+  const client = { messages: { create: async () => ({ content: [{ type: "text", text: JSON.stringify(contractBackedJudgment()) }] }) } };
   const judgments = await analyzeWithAnthropic(prepared, { client, concurrency: 1 });
   assert.equal(judgments[0].verdict, "conflict");
   assert.equal(judgments[0].source, "anthropic");
@@ -150,22 +226,7 @@ test("Codex adapter uses the same second-look and bilateral evidence contract", 
     pr("1", "src/Service.java", "@@ -1 +1 @@\n-old\n+newCall(oldArg);"),
     pr("2", "src/Service.java", "@@ -2 +2 @@\n-old\n+void newCall(NewArg arg) {}"),
   ]);
-  const runner = async (caseInput) => ({
-    prIds: caseInput.prIds,
-    verdict: "conflict",
-    category: "api",
-    title: "signature mismatch",
-    summary: "A uses the old contract while B replaces it.",
-    assumptionA: "old argument remains accepted",
-    assumptionB: "only NewArg is accepted",
-    failureMechanism: "the combined call no longer compiles",
-    recommendation: "update the callsite",
-    confidence: 0.9,
-    evidence: [
-      { side: "A", file: "src/Service.java", symbol: "newCall", quote: "newCall(oldArg);" },
-      { side: "B", file: "src/Service.java", symbol: "newCall", quote: "void newCall(NewArg arg) {}" },
-    ],
-  });
+  const runner = async (caseInput) => contractBackedJudgment({ prIds: caseInput.prIds });
   const judgments = await analyzeWithCodex(prepared, { runner, concurrency: 1 });
   assert.equal(judgments[0].verdict, "conflict");
   assert.equal(judgments[0].source, "codex");

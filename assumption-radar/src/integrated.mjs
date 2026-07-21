@@ -219,8 +219,8 @@ function routeResourceKeys(method, path) {
   return uniq(paths.map((item) => `api:http:${method}:${item}`));
 }
 
-function httpContractResources(pr) {
-  const resources = [];
+function httpContractEntries(pr) {
+  const entries = [];
   for (const file of pr.files || []) {
     for (const side of ["before", "after"]) {
       const lines = patchSideLines(file.patch || "", side);
@@ -233,34 +233,60 @@ function httpContractResources(pr) {
             method = httpMethodOnLine(lines[index - distance]) || httpMethodOnLine(lines[index + distance]);
           }
         }
-        for (const path of paths) resources.push(...routeResourceKeys(method, path));
+        for (const path of paths) {
+          for (const resource of routeResourceKeys(method, path)) {
+            entries.push({ resource, filename: file.filename, side });
+          }
+        }
       }
     }
   }
-  return uniq(resources);
+  return entries.filter((entry, index, values) => values.findIndex((candidate) => candidate.resource === entry.resource
+    && candidate.filename === entry.filename && candidate.side === entry.side) === index);
+}
+
+function matchingResourceFiles(model, value) {
+  const needle = String(value || "").replace(/^.*?:/, "");
+  if (!needle) return [];
+  const normalizedNeedle = needle.toLowerCase();
+  return model.files.filter((file) => [
+    file.filename,
+    ...(file.hunks || []).flatMap((hunk) => [hunk.section, ...(hunk.changes || []).map((change) => change.text)]),
+  ].some((text) => String(text || "").toLowerCase().includes(normalizedNeedle))).map((file) => file.filename);
 }
 
 export function buildContractCard(pr) {
   const model = pr.changeModel;
   const resources = new Set();
+  const provenance = new Map();
+  const add = (resource, filenames = []) => {
+    if (!resource) return;
+    resources.add(resource);
+    const files = provenance.get(resource) || new Set();
+    for (const filename of filenames) if (filename) files.add(filename);
+    provenance.set(resource, files);
+  };
   for (const file of model.files) {
-    resources.add(`file:${file.filename}`);
-    resources.add(pathModule(file.filename));
+    add(`file:${file.filename}`, [file.filename]);
+    add(pathModule(file.filename), [file.filename]);
   }
-  for (const name of [...model.added.api, ...model.removed.api]) resources.add(`api:${name}`);
-  for (const name of [...model.added.events, ...model.removed.events]) resources.add(`event:${name}`);
-  for (const name of [...model.added.env, ...model.removed.env, ...model.added.flags, ...model.removed.flags]) resources.add(`config:${name}`);
-  for (const name of [...model.added.tables, ...model.added.fields, ...model.removed.tables, ...model.removed.fields]) resources.add(`schema:${name}`);
+  for (const name of [...model.added.api, ...model.removed.api]) add(`api:${name}`, matchingResourceFiles(model, name));
+  for (const name of [...model.added.events, ...model.removed.events]) add(`event:${name}`, matchingResourceFiles(model, name));
+  for (const name of [...model.added.env, ...model.removed.env, ...model.added.flags, ...model.removed.flags]) add(`config:${name}`, matchingResourceFiles(model, name));
+  for (const name of [...model.added.tables, ...model.added.fields, ...model.removed.tables, ...model.removed.fields]) add(`schema:${name}`, matchingResourceFiles(model, name));
   for (const entity of model.scir.entities) {
-    if (entity.name?.length >= 4 && !GENERIC_IDENTIFIERS.has(entity.name.toLowerCase())) resources.add(`symbol:${entity.name}`);
+    if (entity.name?.length >= 4 && !GENERIC_IDENTIFIERS.has(entity.name.toLowerCase())) {
+      add(`symbol:${entity.name}`, matchingResourceFiles(model, entity.name));
+    }
   }
-  for (const resource of httpContractResources(pr)) resources.add(resource);
+  for (const entry of httpContractEntries(pr)) add(entry.resource, [entry.filename]);
   return {
     prId: pr.id,
     summary: pr.title,
     resources: [...resources].filter(Boolean).sort(),
     assumptions: pr.assumptions.map((assumption) => assumption.statement),
     intentTokens: [...intentTokens(`${pr.title} ${pr.body}`)].sort(),
+    resourceFiles: Object.fromEntries([...provenance].map(([resource, files]) => [resource, [...files].sort()])),
   };
 }
 
@@ -300,6 +326,10 @@ export function retrievalFeatures(left, right, idf = new Map()) {
     strongContracts,
     sharedSymbols,
     sharedIntent,
+    contractFiles: Object.fromEntries(sharedContracts.map((resource) => [resource, {
+      left: left.resourceFiles?.[resource] || [],
+      right: right.resourceFiles?.[resource] || [],
+    }])),
     reasons: [
       ...sharedFiles.map((value) => `exact-file:${value.slice(5)}`),
       ...sharedModules.map((value) => `module:${value.slice(7)}`),
