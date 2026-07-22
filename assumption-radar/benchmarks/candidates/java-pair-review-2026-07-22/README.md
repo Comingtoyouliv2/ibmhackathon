@@ -35,4 +35,3 @@ No confirmed clean pair-induced regression was found in these three pairs.
   javac/Eclipse test matrix.
 - All synthetic merges and probes were run in disposable worktrees outside the
   application repository.
-
