@@ -75,6 +75,10 @@ export async function analyzeWithAI(prepared, options = {}) {
   const apiKey = options.apiKey || process.env.OPENAI_API_KEY;
   if (!apiKey) return [];
   const model = options.model || process.env.OPENAI_MODEL || "gpt-5.6-terra";
+  const reasoningEffort = options.reasoningEffort || process.env.OPENAI_REASONING_EFFORT || "medium";
+  if (!["none", "low", "medium", "high", "xhigh", "max"].includes(reasoningEffort)) {
+    throw new Error(`지원하지 않는 OpenAI reasoning effort: ${reasoningEffort}`);
+  }
   const candidates = selectSemanticJudgeCandidates(prepared, options);
   if (!candidates.length) return [];
   const cases = buildSemanticJudgeCases(prepared, candidates, options);
@@ -87,7 +91,7 @@ export async function analyzeWithAI(prepared, options = {}) {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model, store: false, reasoning: { effort: options.reasoningEffort || "medium" },
+          model, store: false, reasoning: { effort: reasoningEffort },
           input: [
             { role: "system", content: SEMANTIC_JUDGE_SYSTEM_PROMPT },
             { role: "user", content: JSON.stringify({

@@ -23,6 +23,28 @@ const DEMO_PATH = join(ROOT, "demo", "synthetic-prs.json");
 const PORT = Number(process.env.PORT || 4317);
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".json": "application/json; charset=utf-8" };
 
+function aiRuntimeStatus() {
+  const provider = semanticJudgeProvider();
+  if (provider === "anthropic") return {
+    provider,
+    configured: Boolean(process.env.ANTHROPIC_API_KEY),
+    model: process.env.ANTHROPIC_MODEL || "claude-opus-4-8",
+    reasoningEffort: null,
+  };
+  if (provider === "codex") return {
+    provider,
+    configured: true,
+    model: process.env.CODEX_MODEL || "gpt-5.4",
+    reasoningEffort: process.env.CODEX_REASONING_EFFORT || "medium",
+  };
+  return {
+    provider,
+    configured: Boolean(process.env.OPENAI_API_KEY),
+    model: process.env.OPENAI_MODEL || "gpt-5.6-terra",
+    reasoningEffort: process.env.OPENAI_REASONING_EFFORT || "medium",
+  };
+}
+
 function json(res, status, body) {
   res.writeHead(status, { "Content-Type": MIME[".json"], "Cache-Control": "no-store" });
   res.end(JSON.stringify(body));
@@ -105,6 +127,7 @@ async function handler(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   try {
     if (req.method === "GET" && url.pathname === "/api/status") {
+      const ai = aiRuntimeStatus();
       return json(res, 200, {
         githubConfigured: Boolean(process.env.GITHUB_TOKEN),
         openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
@@ -113,9 +136,10 @@ async function handler(req, res) {
         combinedVerification: true,
         aiJudgmentProtocol: AI_JUDGMENT_PROTOCOL_VERSION,
         aiRepeats: semanticJudgeRepeatCount(),
-        aiProvider: semanticJudgeProvider(),
-        model: semanticJudgeProvider() === "anthropic" ? process.env.ANTHROPIC_MODEL || "claude-opus-4-8"
-          : semanticJudgeProvider() === "codex" ? process.env.CODEX_MODEL || "gpt-5.4" : process.env.OPENAI_MODEL || "gpt-5.6-terra",
+        aiConfigured: ai.configured,
+        aiProvider: ai.provider,
+        model: ai.model,
+        reasoningEffort: ai.reasoningEffort,
       });
     }
     if (req.method === "POST" && url.pathname === "/api/demo") {
