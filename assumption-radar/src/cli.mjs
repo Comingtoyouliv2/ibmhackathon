@@ -2,9 +2,11 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { fetchOpenPullRequests, parseRepository } from "./github.mjs";
+import { partitionEligiblePullRequests } from "./pr-eligibility.mjs";
 import { finishAnalysis } from "./analyzer.mjs";
 import { analyzeWithAI, semanticJudgeProvider } from "./ai.mjs";
 import { prepareAnalysisPipeline } from "./pipeline.mjs";
+import { AI_JUDGMENT_PROTOCOL_VERSION, semanticJudgeRepeatCount } from "./semantic-judge.mjs";
 import { DockerCombinedVerifier, loadVerificationProfiles } from "./docker-verifier.mjs";
 import { GitMergeTreePreflight } from "./preflight.mjs";
 import {
@@ -28,7 +30,7 @@ function help() {
   console.log(`Assumption Radar CLI
 
 Usage:
-  npm run scan -- owner/repository [--limit 20] [--preflight] [--ai] [--ai-provider openai|anthropic|codex]
+  npm run scan -- owner/repository [--limit 20] [--preflight] [--ai] [--ai-provider openai|anthropic|codex] [--ai-repeats 3]
     [--verify] [--verify-limit 3] [--verification-profile profiles.json] [--verification-output cases.jsonl]
     [--json] [--fail-on conflict]
   npm run scan -- --demo [--json]
@@ -40,9 +42,11 @@ Environment:
   CODEX_MODEL      defaults to gpt-5.4 for --ai-provider codex
   OPENAI_MODEL     defaults to gpt-5.6-terra
   ANTHROPIC_MODEL  defaults to claude-opus-4-8
+  AI_JUDGE_REPEATS defaults to 3; 모든 AI 후보가 전원 일치해야 stable로 인정
 
 Verification:
   --verify는 Docker에서 Base/A/B/A+B를 실행하며 --preflight를 자동 활성화합니다.
+  실행 전 draft와 GitHub CI failure PR을 제외하며, pending/unknown은 계속 검증합니다.
   자동 프로필은 package-lock.json, pnpm-lock.yaml, yarn.lock, Python 프로젝트를 지원합니다.`);
 }
 
@@ -50,11 +54,11 @@ function printReport(result, repository) {
   console.log(`\nASSUMPTION RADAR · ${repository}`);
   console.log(`${"─".repeat(68)}`);
   console.log(`${result.summary.prCount} open PR · ${result.summary.pairCount} pairs · ${result.summary.conflictCount} conflicts · ${result.summary.reviewCount} reviews`);
-  if (result.summary.aiReviewedPairCount !== undefined) {
-    console.log(`${result.summary.aiReviewedPairCount} AI-reviewed · ${result.summary.noAlertUnreviewedCount} no-alert/unreviewed · ${result.summary.staticCandidateUnreviewedCount} static candidates awaiting review · ${result.summary.insufficientEvidenceCount} insufficient`);
+  if (result.prEligibility) {
+    console.log(`Eligibility: ${result.prEligibility.eligible}/${result.prEligibility.fetched} PR · ${result.prEligibility.excluded} draft/failed-CI excluded`);
   }
   if (result.summary.verifiedPairCount) {
-    console.log(`${result.summary.verifiedPairCount} verified · ${result.summary.confirmedConflictCount} confirmed pair regressions · ${result.summary.verifiedCompatibleCount} no observed regression`);
+    console.log(`${result.summary.verifiedPairCount} verified · ${result.summary.confirmedConflictCount} confirmed pair regressions · ${result.summary.verifiedCompatibleCount} no observed regressions`);
   }
   console.log(`Verdict: ${result.summary.verdict}\n`);
   for (const conflict of result.findings) {
@@ -72,8 +76,10 @@ function printReport(result, repository) {
 
 async function main() {
   if (has("--help") || has("-h")) return help();
+  const useVerification = has("--verify");
   let prs;
   let repository;
+  let prEligibility = null;
   if (has("--demo")) {
     const demoPath = fileURLToPath(new URL("../demo/synthetic-prs.json", import.meta.url));
     prs = JSON.parse(await readFile(demoPath, "utf8"));
@@ -82,10 +88,14 @@ async function main() {
     if (!positional) throw new Error("owner/repository를 입력하거나 --demo를 사용하세요.");
     repository = parseRepository(positional);
     const limit = Math.max(2, Math.min(100, Number(value("--limit")) || 20));
-    prs = await fetchOpenPullRequests(repository, process.env.GITHUB_TOKEN, { limit });
+    const fetched = await fetchOpenPullRequests(repository, process.env.GITHUB_TOKEN, { limit, includeCiStatus: useVerification });
+    if (useVerification) {
+      const partitioned = partitionEligiblePullRequests(fetched);
+      prs = partitioned.eligible;
+      prEligibility = { ...partitioned.summary, excludedPullRequests: partitioned.excluded };
+    } else prs = fetched;
   }
   if (prs.length < 2) throw new Error("분석할 open PR이 2개 이상 필요합니다.");
-  const useVerification = has("--verify");
   if (useVerification && has("--demo")) throw new Error("--verify는 실제 GitHub repository에서만 사용할 수 있습니다.");
   const preflightEngine = useVerification ? new GitMergeTreePreflight(repository) : null;
   const pipeline = await prepareAnalysisPipeline(prs, {
@@ -94,9 +104,24 @@ async function main() {
     ...(preflightEngine ? { preflightEngine } : {}),
   });
   const prepared = pipeline.prepared;
-  const aiOptions = { aiProvider: value("--ai-provider") };
+  const aiOptions = {
+    aiProvider: value("--ai-provider"),
+    aiRepeats: value("--ai-repeats") ?? process.env.AI_JUDGE_REPEATS,
+  };
   const aiConflicts = has("--ai") ? await analyzeWithAI(prepared, aiOptions) : [];
-  let result = { ...finishAnalysis(prepared, aiConflicts), repository, mode: aiConflicts.length ? "ai+heuristic" : "heuristic", preflight: pipeline.preflight };
+  let result = {
+    ...finishAnalysis(prepared, aiConflicts),
+    repository,
+    mode: aiConflicts.length ? "ai+heuristic" : "heuristic",
+    analysisProtocol: {
+      deterministicRuns: 1,
+      aiProtocolVersion: has("--ai") ? AI_JUDGMENT_PROTOCOL_VERSION : null,
+      aiRepeats: has("--ai") ? semanticJudgeRepeatCount(aiOptions) : 0,
+      unanimityRequired: has("--ai"),
+    },
+    preflight: pipeline.preflight,
+    ...(prEligibility ? { prEligibility } : {}),
+  };
   if (useVerification) {
     const profiles = await loadVerificationProfiles(value("--verification-profile"));
     const candidates = selectVerificationCandidates(prepared, result, { limit: Math.max(1, Number(value("--verify-limit")) || 3) });
@@ -115,7 +140,7 @@ async function main() {
         finding: findings.get([...verification.prIds].sort().join(":")),
         metadata: {
           analyzerVersion: APP_VERSION,
-          promptVersion: has("--ai") ? "semantic-judge-v0.4" : null,
+          promptVersion: has("--ai") ? "interaction-hypothesis-v0.5" : null,
           model: has("--ai") ? (() => {
             const provider = semanticJudgeProvider(aiOptions);
             if (provider === "anthropic") return process.env.ANTHROPIC_MODEL || "claude-opus-4-8";

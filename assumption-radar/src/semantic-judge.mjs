@@ -1,21 +1,51 @@
 import crypto from "node:crypto";
 
-export const SEMANTIC_JUDGE_SYSTEM_PROMPT = `당신은 여러 pull request 사이의 의미적 상호작용을 판정하는 수석 소프트웨어 아키텍트다.
-각 PR은 base에서 독립적으로 정상이라고 가정하고, 두 변경을 함께 적용했을 때 한쪽이 새로 요구하는 계약을 다른 쪽이 깨는지만 판정한다.
-같은 파일·모듈·심볼을 만진다는 사실은 관련성일 뿐 충돌의 증거가 아니다.
-같은 새 파일을 양쪽이 추가해도 내용이 동일하거나 합집합이 그대로 유효하면 compatible이다. add-vs-add 자체를 위험 근거로 쓰지 않는다.
-리팩터링과 기능 추가가 함께 보이더라도 한쪽이 제거·변경한 선언이나 상태를 다른 쪽이 실제로 참조·소비하는 방향성 연결이 없으면 compatible이다.
-contract-backed-conflict는 실행하지 않았더라도 (1) 한쪽의 실제 provider 계약 변경, (2) 다른 쪽의 실제 consumer 의존, (3) 둘을 합쳤을 때의 결정적인 실패 경로를 양쪽 evidence ID로 증명할 수 있을 때만 선택한다.
-testable-hypothesis는 상호작용 가능성이 있고 구체적인 trigger와 oracle을 제시할 수 있지만 위 세 조건 중 하나라도 코드 증거로 닫히지 않을 때 선택한다.
-no-plausible-interaction은 두 변경이 함께 유효한 경우, insufficient-evidence는 저장소 문맥이나 diff가 부족한 경우다.
-coordination-required는 기계적 충돌·중복 구현처럼 조율이 필요하지만 silent semantic conflict로 확정할 수 없는 경우다.
-contract-backed-conflict는 executable-confirmed와 다르다. 최종 실행 재현 여부는 별도 runtimeVerification 필드로 관리한다.
-코드 근거를 다시 쓰거나 요약하지 말고 CASE_JSON diff에 표시된 evidence ID만 evidenceIds로 선택한다. 존재하지 않는 ID를 만들지 않는다.`;
-
-const EVIDENCE_ID_PATTERN = /^(A|B)-F([1-9]\d*)-L([1-9]\d*)$/;
+export const SEMANTIC_JUDGE_SYSTEM_PROMPT = `당신은 pull request pair의 상호작용을 증거 수준별로 판정하는 소프트웨어 검증 엔지니어다.
+같은 파일·모듈·심볼을 만진다는 사실은 후보 검색 신호일 뿐 충돌의 증거가 아니다.
+contract-backed-conflict는 실행하지 않았더라도 (1) 한쪽의 실제 provider 계약 변경, (2) 다른 쪽의 실제 consumer 의존, (3) 둘을 합쳤을 때의 결정적인 실패 경로를 양쪽 코드 인용으로 증명할 수 있을 때만 선택한다.
+testable-hypothesis는 방향성 위험은 있지만 계약 연결이나 실패 결과를 입력만으로 확정할 수 없고 Base/A/B/A+B 실험을 설계할 수 있을 때 선택한다.
+no-plausible-interaction은 제공된 근거에서 두 변경을 연결할 행동 경로가 없을 때, insufficient-evidence는 필요한 구현 파일이나 저장소 문맥이 빠졌을 때 선택한다.
+coordination-required는 기계적 충돌·중복 구현처럼 조율이 필요하지만 pair-induced regression과는 다른 경우다.
+특히 한 PR이 여러 종료 경로에 새 완료·flush·commit 단계를 도입하고 다른 PR이 같은 상태를 다루는 새 종료 경로를 추가한 경우, 새 경로가 완료 단계를 우회하는지 확인하라. 이름에 finish 같은 단어가 있는지만 보지 말고, 상태 축적→종료 경로→완료 호출의 행동 연결을 양쪽 실제 코드로 증명하라.
+contract-backed-conflict는 executable-confirmed와 다르다. 최종 실행 재현 여부는 별도 runtimeVerification 필드로 관리한다.`;
 
 const pairKey = (ids) => [...ids].sort().join(":");
 const uniq = (values) => [...new Set(values.filter(Boolean))];
+
+export const AI_JUDGMENT_PROTOCOL_VERSION = "ai-judgment-v0.1";
+
+export function semanticJudgeRepeatCount(options = {}) {
+  const configured = options.aiRepeats ?? options.repeats ?? process.env.AI_JUDGE_REPEATS ?? 3;
+  const parsed = Number(configured);
+  return Number.isFinite(parsed) ? Math.max(1, Math.min(5, Math.trunc(parsed))) : 3;
+}
+
+export async function runRepeatedCaseJudgments(cases, runCase, options = {}) {
+  const repeats = semanticJudgeRepeatCount(options);
+  const concurrency = Math.max(1, Math.min(8, Number(options.concurrency || 4)));
+  const runs = Array.from({ length: repeats }, () => new Array(cases.length));
+  const tasks = [];
+  for (let repeatIndex = 0; repeatIndex < repeats; repeatIndex += 1) {
+    for (let caseIndex = 0; caseIndex < cases.length; caseIndex += 1) tasks.push({ repeatIndex, caseIndex });
+  }
+  let cursor = 0;
+  async function worker() {
+    while (cursor < tasks.length) {
+      const { repeatIndex, caseIndex } = tasks[cursor++];
+      const caseInput = cases[caseIndex];
+      try {
+        runs[repeatIndex][caseIndex] = await runCase(caseInput, { repeatIndex, caseIndex });
+      } catch (error) {
+        runs[repeatIndex][caseIndex] = {
+          prIds: caseInput.prIds,
+          protocolError: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker()));
+  return { repeats, runs };
+}
 
 function isAdjudicable(comparison) {
   return comparison.mechanicalMerge !== "conflict"
@@ -28,7 +58,7 @@ export function selectSemanticJudgeCandidates(prepared, options = {}) {
   const secondLookLimit = Math.max(0, Number(options.secondLookLimit ?? 8));
   const contractDiscoveryLimit = Math.min(secondLookLimit, Math.max(0, Number(options.contractDiscoveryLimit ?? 2)));
   const primary = prepared.comparisons
-    .filter((comparison) => comparison.verdict === "review" && isAdjudicable(comparison))
+    .filter((comparison) => ["conflict", "review"].includes(comparison.verdict) && isAdjudicable(comparison))
     .slice(0, primaryLimit);
   const selected = new Set(primary.map((comparison) => comparison.key));
   const eligibleSecondLook = prepared.comparisons
@@ -36,9 +66,9 @@ export function selectSemanticJudgeCandidates(prepared, options = {}) {
     .filter((comparison) => (comparison.retrievalScore || 0) > 0)
     .filter((comparison) => (comparison.retrievalFeatures?.priority ?? 3) <= 2)
     .filter((comparison) => !selected.has(comparison.key));
-  // Exact-file proximity otherwise consumes the entire second-look budget.
-  // Reserve a small lane for strong contracts that cross module boundaries,
-  // such as a Python client and Java server sharing a normalized HTTP route.
+  // Exact-file pairs otherwise consume the second-look budget. Reserve a
+  // bounded lane for cross-module contracts such as a Python HTTP consumer
+  // and a Java provider.
   const contractDiscovery = eligibleSecondLook
     .filter((comparison) => comparison.retrievalFeatures?.strongContracts?.length
       && !comparison.retrievalFeatures?.sharedFiles?.length
@@ -70,12 +100,12 @@ function symbolName(resource = "") {
 
 function relevantPaths(comparison, left, right) {
   const paths = new Set((comparison.retrievalFeatures?.sharedFiles || []).map(exactFile).filter(Boolean));
-  for (const files of Object.values(comparison.retrievalFeatures?.contractFiles || {})) {
-    for (const filename of [...(files.left || []), ...(files.right || [])]) paths.add(filename);
-  }
   const modules = (comparison.retrievalFeatures?.sharedModules || []).map(modulePrefix).filter(Boolean);
   const symbols = (comparison.retrievalFeatures?.sharedSymbols || []).map(symbolName).filter(Boolean);
   const allFiles = [...(left.files || []), ...(right.files || [])];
+  for (const provenance of Object.values(comparison.retrievalFeatures?.contractFiles || {})) {
+    for (const path of [...(provenance.left || []), ...(provenance.right || [])]) paths.add(path);
+  }
   for (const file of allFiles) {
     if (modules.some((prefix) => file.filename === prefix || file.filename.startsWith(`${prefix}/`))) paths.add(file.filename);
     if (symbols.some((symbol) => (file.patch || "").includes(symbol))) paths.add(file.filename);
@@ -91,123 +121,19 @@ function relevantPaths(comparison, left, right) {
   return paths;
 }
 
-const FOCUS_TERM_STOP = new Set([
-  "api", "http", "https", "event", "config", "schema", "symbol", "file", "module",
-  "get", "post", "put", "patch", "delete", "head", "options", "param", "params",
-]);
-
-function evidenceTerms(resources = []) {
-  return uniq(resources.flatMap((resource) => String(resource).toLowerCase().match(/[a-z_$][a-z0-9_$-]{2,}/g) || [])
-    .filter((term) => !FOCUS_TERM_STOP.has(term)))
-    .sort((left, right) => right.length - left.length);
-}
-
-function contractResourcesForFile(comparison, side, filename) {
-  return Object.entries(comparison.retrievalFeatures?.contractFiles || {}).flatMap(([resource, files]) => (
-    (files[side] || []).includes(filename) ? [resource] : []
-  ));
-}
-
-function patchPreamble(lines) {
-  const hunkIndex = lines.findIndex((line) => line.startsWith("@@"));
-  return lines.slice(0, hunkIndex < 0 ? Math.min(lines.length, 8) : hunkIndex);
-}
-
-function enclosingHunkHeader(lines, index) {
-  for (let cursor = index; cursor >= 0; cursor -= 1) if (lines[cursor].startsWith("@@")) return lines[cursor];
-  return null;
-}
-
-/**
- * Keeps evidence-bearing windows from anywhere in a long patch. The query is
- * derived from shared contract identities, so this works for HTTP routes,
- * events, config, schemas, and symbols without repository-specific names.
- */
-function isEvidenceLine(line = "") {
-  if (!line.trim()) return false;
-  if (line.startsWith("@@") || line.startsWith("diff --git ") || line.startsWith("index ")) return false;
-  if (line.startsWith("--- ") || line.startsWith("+++ ")) return false;
-  if (/^(new file mode|deleted file mode|old mode|new mode|similarity index|rename from|rename to|Binary files|\\ No newline)/.test(line)) return false;
-  return true;
-}
-
-function evidenceId(side, fileIndex, lineIndex) {
-  return `${side}-F${fileIndex + 1}-L${lineIndex + 1}`;
-}
-
-function annotateEvidenceLines(patch = "", side, fileIndex) {
-  return patch.split("\n").map((line, lineIndex) => (
-    isEvidenceLine(line) ? `[${evidenceId(side, fileIndex, lineIndex)}] ${line}` : line
-  )).join("\n");
-}
-
-function truncateAtLineBoundary(text, maxChars) {
-  if (text.length <= maxChars) return text;
-  const sliced = text.slice(0, maxChars);
-  const boundary = sliced.lastIndexOf("\n");
-  return boundary > 0 ? sliced.slice(0, boundary) : "";
-}
-
-function compactPatch(patch = "", resources = [], maxPatchChars = 9_000, side, fileIndex) {
-  const annotatedPatch = annotateEvidenceLines(patch, side, fileIndex);
-  if (annotatedPatch.length <= maxPatchChars) return annotatedPatch;
-  const terms = evidenceTerms(resources);
-  if (!terms.length) return truncateAtLineBoundary(annotatedPatch, maxPatchChars);
-  const lines = annotatedPatch.split("\n");
-  const hits = lines.flatMap((line, index) => {
-    const lower = line.toLowerCase();
-    const matched = terms.filter((term) => lower.includes(term));
-    return matched.length ? [{ index, score: matched.length * 100 + matched.reduce((sum, term) => sum + term.length, 0) }] : [];
-  }).sort((left, right) => right.score - left.score || left.index - right.index);
-  if (!hits.length) return truncateAtLineBoundary(annotatedPatch, maxPatchChars);
-
-  const snippets = [];
-  const covered = [];
-  const preamble = patchPreamble(lines).join("\n");
-  let used = preamble.length;
-  for (const hit of hits) {
-    if (covered.some(([start, end]) => hit.index >= start && hit.index <= end)) continue;
-    const start = Math.max(0, hit.index - 12);
-    const end = Math.min(lines.length - 1, hit.index + 12);
-    let selectedStart = start;
-    let selectedEnd = end;
-    const header = enclosingHunkHeader(lines, hit.index);
-    const body = lines.slice(start, end + 1);
-    if (header && !body.includes(header)) body.unshift(header);
-    let snippet = body.join("\n");
-    const separator = snippets.length || preamble ? "\n... [unrelated patch content omitted] ...\n" : "";
-    if (used + separator.length + snippet.length > maxPatchChars) {
-      const compactStart = Math.max(0, hit.index - 4);
-      const compactEnd = Math.min(lines.length - 1, hit.index + 4);
-      selectedStart = compactStart;
-      selectedEnd = compactEnd;
-      const compactBody = lines.slice(compactStart, compactEnd + 1);
-      if (header && !compactBody.includes(header)) compactBody.unshift(header);
-      snippet = compactBody.join("\n");
-    }
-    if (used + separator.length + snippet.length > maxPatchChars) continue;
-    snippets.push(`${separator}${snippet}`);
-    covered.push([selectedStart, selectedEnd]);
-    used += separator.length + snippet.length;
-  }
-  if (!snippets.length) return truncateAtLineBoundary(annotatedPatch, maxPatchChars);
-  return truncateAtLineBoundary(`${preamble}${snippets.join("")}`, maxPatchChars);
-}
-
-function compactPr(pr, paths, maxPatchChars, comparison, side, evidenceSide) {
-  const indexedFiles = (pr.files || []).map((file, fileIndex) => ({ file, fileIndex }));
-  const relevant = indexedFiles.filter(({ file }) => paths.has(file.filename));
-  const files = (relevant.length ? relevant : indexedFiles.slice(0, 3)).slice(0, 16);
+function compactPr(pr, paths, maxPatchChars) {
+  const relevant = (pr.files || []).filter((file) => paths.has(file.filename));
+  const files = (relevant.length ? relevant : (pr.files || []).slice(0, 3)).slice(0, 16);
   return {
     id: pr.id,
     number: pr.number,
     title: pr.title,
     body: (pr.body || "").slice(0, 1800),
     assumptions: pr.assumptions || [],
-    files: files.map(({ file, fileIndex }) => ({
+    files: files.map((file) => ({
       filename: file.filename,
       status: file.status,
-      patch: compactPatch(file.patch || "", contractResourcesForFile(comparison, side, file.filename), maxPatchChars, evidenceSide, fileIndex),
+      patch: (file.patch || "").slice(0, maxPatchChars),
     })),
   };
 }
@@ -232,71 +158,64 @@ export function buildSemanticJudgeCases(prepared, candidates, options = {}) {
       witnesses: (comparison.witnesses || []).map(({ type, strength, category, explanation, evidence, causalRole }) => ({
         type, strength, category, explanation, evidence, causalRole,
       })),
-      prs: [
-        compactPr(left, paths, maxPatchChars, comparison, "left", "A"),
-        compactPr(right, paths, maxPatchChars, comparison, "right", "B"),
-      ],
+      prs: [compactPr(left, paths, maxPatchChars), compactPr(right, paths, maxPatchChars)],
     };
   });
 }
 
-function swapEvidenceSide(id) {
-  if (typeof id !== "string") return id;
-  if (id.startsWith("A-")) return `B-${id.slice(2)}`;
-  if (id.startsWith("B-")) return `A-${id.slice(2)}`;
-  return id;
+function containsDeep(value, quote) {
+  if (typeof value === "string") return value.includes(quote);
+  if (Array.isArray(value)) return value.some((item) => containsDeep(item, quote));
+  if (value && typeof value === "object") return Object.values(value).some((item) => containsDeep(item, quote));
+  return false;
 }
 
-function validatedEvidenceIds(rawEvidenceIds, pairIds, prsById) {
+function validatedEvidence(rawEvidence, pairIds, prsById) {
   const sides = { A: pairIds[0], B: pairIds[1] };
-  const seen = new Set();
-  return (Array.isArray(rawEvidenceIds) ? rawEvidenceIds : []).flatMap((rawId) => {
-    const id = String(rawId || "").trim();
-    const match = EVIDENCE_ID_PATTERN.exec(id);
-    if (!match || seen.has(id)) return [];
-    const [, side, fileNumber, lineNumber] = match;
-    const pr = prsById.get(sides[side]);
-    const file = pr?.files?.[Number(fileNumber) - 1];
-    const line = String(file?.patch || "").split("\n")[Number(lineNumber) - 1];
-    if (!file || line === undefined || !isEvidenceLine(line)) return [];
-    seen.add(id);
-    return [{ id, side, file: file.filename, symbol: "", quote: /^[+\- ]/.test(line) ? line.slice(1) : line }];
+  return (Array.isArray(rawEvidence) ? rawEvidence : []).flatMap((item) => {
+    if (!item || !["A", "B"].includes(item.side) || typeof item.quote !== "string" || !item.quote.trim()) return [];
+    const pr = prsById.get(sides[item.side]);
+    if (!pr || !containsDeep(pr, item.quote)) return [];
+    if (item.file && !(pr.files || []).some((file) => file.filename === item.file)) return [];
+    return [{ side: item.side, file: item.file || "", symbol: item.symbol || "", quote: item.quote }];
   });
 }
 
 function mappedAssessment(raw) {
   const value = raw.assessment || raw.verdict || raw.prediction || raw.decision;
   if (["contract-backed-conflict", "conflict"].includes(value)) return "contract-backed-conflict";
+  if (value === "testable-hypothesis") return "testable-hypothesis";
   if (["no-plausible-interaction", "compatible", "independent"].includes(value)) return "no-plausible-interaction";
   if (["coordination-required", "coordination"].includes(value)) return "coordination-required";
-  if (["testable-hypothesis", "uncertain", "review"].includes(value)) return "testable-hypothesis";
   return "insufficient-evidence";
 }
 
 function stringList(value) {
-  return Array.isArray(value) ? value.map(String).map((item) => item.trim()).filter(Boolean) : [];
+  return Array.isArray(value) ? value.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()) : [];
 }
 
 function normalizedTestPlan(raw = {}) {
+  const plan = raw.testPlan && typeof raw.testPlan === "object" ? raw.testPlan : {};
   return {
-    name: String(raw.name || "").trim(),
-    strategy: String(raw.strategy || "").trim(),
-    setup: stringList(raw.setup),
-    steps: stringList(raw.steps),
-    oracle: String(raw.oracle || "").trim(),
-    targetTests: stringList(raw.targetTests),
+    name: String(plan.name || raw.testName || "").trim(),
+    strategy: String(plan.strategy || raw.testStrategy || "targeted-test").trim(),
+    setup: stringList(plan.setup),
+    steps: stringList(plan.steps || raw.triggerSequence),
+    oracle: String(plan.oracle || raw.expectedBehavior || "").trim(),
+    targetTests: stringList(plan.targetTests),
   };
 }
 
 function normalizedContract(raw = {}) {
+  const contract = raw.contract && typeof raw.contract === "object" ? raw.contract : {};
   return {
-    identity: String(raw.identity || "").trim(),
-    kind: String(raw.kind || "").trim(),
-    providerSide: String(raw.providerSide || "unknown").trim(),
-    consumerSide: String(raw.consumerSide || "unknown").trim(),
-    providerChange: String(raw.providerChange || "").trim(),
-    consumerDependency: String(raw.consumerDependency || "").trim(),
-    composedFailure: String(raw.composedFailure || "").trim(),
+    identity: String(contract.identity || "").trim(),
+    kind: String(contract.kind || "").trim(),
+    providerSide: ["PR-A", "PR-B"].includes(contract.providerSide) ? contract.providerSide : "unknown",
+    consumerSide: ["PR-A", "PR-B"].includes(contract.consumerSide) ? contract.consumerSide : "unknown",
+    providerChange: String(contract.providerChange || "").trim(),
+    consumerDependency: String(contract.consumerDependency || "").trim(),
+    composedFailure: String(contract.composedFailure || "").trim(),
   };
 }
 
@@ -310,30 +229,31 @@ export function normalizeSemanticJudgments(prepared, candidates, rawJudgments, o
     if (ids.length !== 2) return [];
     const comparison = byPair.get(pairKey(ids));
     if (!comparison) return [];
-    const submittedEvidenceIds = Array.isArray(raw.evidenceIds) ? raw.evidenceIds : [];
-    const evidenceIds = ids[0] === comparison.prIds[0]
-      ? submittedEvidenceIds
-      : submittedEvidenceIds.map(swapEvidenceSide);
-    const evidenceObjects = validatedEvidenceIds(evidenceIds, comparison.prIds, prsById);
+    const evidence = ids[0] === comparison.prIds[0] ? raw.evidence : (raw.evidence || []).map((item) => ({
+      ...item, side: item.side === "A" ? "B" : item.side === "B" ? "A" : item.side,
+    }));
+    const evidenceObjects = validatedEvidence(evidence, comparison.prIds, prsById);
     const evidenceSides = new Set(evidenceObjects.map((item) => item.side));
     let assessment = mappedAssessment(raw);
+    const rawAssessment = assessment;
     let evidenceGate = "passed";
-    const assumption = String(raw.assumption || raw.assumptionA || raw.assumptionB || "").trim();
-    const violatingChange = String(raw.violatingChange || raw.failureMechanism || raw.consequence || raw.explanation || "").trim();
+    const assumption = String(raw.assumption || raw.assumptionA || "").trim();
+    const violatingChange = String(raw.violatingChange || raw.assumptionB || "").trim();
     const triggerSequence = stringList(raw.triggerSequence);
     const expectedBehavior = String(raw.expectedBehavior || "").trim();
-    const possibleActualBehavior = String(raw.possibleActualBehavior || raw.failureMechanism || raw.consequence || "").trim();
-    const testPlan = normalizedTestPlan(raw.testPlan);
-    const contract = normalizedContract(raw.contract);
+    const possibleActualBehavior = String(raw.possibleActualBehavior || raw.failureMechanism || raw.consequence || raw.explanation || "").trim();
+    const testPlan = normalizedTestPlan(raw);
+    const contract = normalizedContract(raw);
     const causalAssessment = assessment === "testable-hypothesis" || assessment === "contract-backed-conflict";
-    if (causalAssessment && (!evidenceSides.has("A") || !evidenceSides.has("B") || !assumption || !violatingChange
-      || !triggerSequence.length || !expectedBehavior || !possibleActualBehavior || !testPlan.steps.length || !testPlan.oracle)) {
+    if (causalAssessment && (
+      !evidenceSides.has("A") || !evidenceSides.has("B") || !assumption || !violatingChange
+      || !triggerSequence.length || !expectedBehavior || !possibleActualBehavior || !testPlan.steps.length || !testPlan.oracle
+    )) {
       assessment = "insufficient-evidence";
       evidenceGate = "downgraded-incomplete-causal-evidence";
     } else if (assessment === "contract-backed-conflict" && (
-      !contract.identity || !contract.kind || !contract.providerChange || !contract.consumerDependency || !contract.composedFailure
-      || !["PR-A", "PR-B"].includes(contract.providerSide)
-      || !["PR-A", "PR-B"].includes(contract.consumerSide)
+      !contract.identity || !contract.providerChange || !contract.consumerDependency || !contract.composedFailure
+      || contract.providerSide === "unknown" || contract.consumerSide === "unknown"
       || contract.providerSide === contract.consumerSide
     )) {
       assessment = "testable-hypothesis";
@@ -359,8 +279,8 @@ export function normalizeSemanticJudgments(prepared, candidates, rawJudgments, o
       verdict,
       relationship: assessment === "contract-backed-conflict" ? "semantic-conflict"
         : assessment === "testable-hypothesis" ? "review-required"
-          : assessment === "no-plausible-interaction" ? "no-plausible-interaction"
-            : assessment,
+        : assessment === "no-plausible-interaction" ? "no-plausible-interaction"
+          : assessment,
       category: raw.category || comparison.category || "code",
       title: raw.title || (assessment === "contract-backed-conflict" ? "코드 계약으로 뒷받침된 semantic conflict"
         : assessment === "testable-hypothesis" ? "실행으로 검증할 상호작용 가설" : comparison.title),
@@ -371,11 +291,12 @@ export function normalizeSemanticJudgments(prepared, candidates, rawJudgments, o
       recommendation: assessment === "contract-backed-conflict"
         ? "양쪽 코드 계약이 충돌합니다. 병합 전에 provider 또는 consumer를 같은 계약으로 맞추고, 필요하면 targeted 실행으로 최고 증거 등급까지 승격하세요."
         : assessment === "testable-hypothesis"
-          ? `Base/A/B/A+B에서 '${testPlan.name || "제안된 상호작용 테스트"}'를 실행해 가설을 검증하세요.`
-          : raw.recommendation || comparison.recommendation,
-      evidence: evidenceObjects.map((item) => `${item.id} ${item.file}: ${item.quote}`),
+        ? `Base/A/B/A+B에서 '${testPlan.name || "제안된 상호작용 테스트"}'를 실행해 가설을 검증하세요.`
+        : raw.recommendation || comparison.recommendation,
+      evidence: evidenceObjects.map((item) => `${item.side} ${item.file}${item.symbol ? ` (${item.symbol})` : ""}: ${item.quote}`),
       evidenceObjects,
       evidenceGate,
+      rawAssessment,
       interactionHypothesis,
       evidenceGrade: assessment === "contract-backed-conflict" ? "contract-backed" : "adjudicated",
       confirmationStatus: assessment === "contract-backed-conflict" ? "contract-backed-static" : "unverified-static-candidate",
@@ -384,5 +305,87 @@ export function normalizeSemanticJudgments(prepared, candidates, rawJudgments, o
       basis,
       source,
     }];
+  });
+}
+
+const assessmentRisk = {
+  "contract-backed-conflict": 0,
+  "testable-hypothesis": 1,
+  "coordination-required": 2,
+  "insufficient-evidence": 3,
+  "no-plausible-interaction": 4,
+};
+
+export function aggregateSemanticJudgmentRuns(prepared, candidates, protocolRuns, options = {}) {
+  const repeats = Math.max(1, Number(protocolRuns?.repeats) || semanticJudgeRepeatCount(options));
+  const runs = Array.isArray(protocolRuns?.runs) ? protocolRuns.runs : [];
+  const normalizedRuns = runs.map((rawJudgments) => normalizeSemanticJudgments(
+    prepared,
+    candidates,
+    (rawJudgments || []).filter((raw) => raw && !raw.protocolError),
+    options,
+  ));
+  const rawByRun = runs.map((rawJudgments) => new Map((rawJudgments || [])
+    .filter((raw) => Array.isArray(raw?.prIds) && raw.prIds.length === 2)
+    .map((raw) => [pairKey(raw.prIds), raw])));
+  const normalizedByRun = normalizedRuns.map((judgments) => new Map(judgments.map((item) => [item.key, item])));
+
+  return candidates.map((comparison) => {
+    const judgments = normalizedByRun.map((run) => run.get(comparison.key) || null);
+    const rawEntries = rawByRun.map((run) => run.get(comparison.key) || null);
+    const completed = judgments.filter(Boolean);
+    const assessments = judgments.map((item) => item?.interactionHypothesis?.status || "missing");
+    const rawAssessments = rawEntries.map((raw) => raw?.protocolError ? "error" : raw ? mappedAssessment(raw) : "missing");
+    const verdicts = judgments.map((item) => item?.verdict || "missing");
+    const uniqueAssessments = uniq(assessments.filter((item) => item !== "missing"));
+    const stable = completed.length === repeats && uniqueAssessments.length === 1;
+    const representative = [...completed].sort((left, right) =>
+      (assessmentRisk[left.interactionHypothesis?.status] ?? 9) - (assessmentRisk[right.interactionHypothesis?.status] ?? 9))[0];
+    const protocol = {
+      version: AI_JUDGMENT_PROTOCOL_VERSION,
+      requestedRepeats: repeats,
+      completedRepeats: completed.length,
+      failedRepeats: repeats - completed.length,
+      rawAssessments,
+      assessments,
+      verdicts,
+      stable,
+      consensusAssessment: stable ? uniqueAssessments[0] : null,
+      finalTriage: stable ? representative?.verdict || "review" : "needs-review",
+    };
+
+    if (stable && representative) return {
+      ...representative,
+      aiProtocol: protocol,
+      aiStability: "stable",
+      aiVerdicts: verdicts,
+      aiAssessments: assessments,
+    };
+
+    const fallback = representative || comparison;
+    const observed = assessments.filter((item) => item !== "missing");
+    const failureNote = completed.length < repeats ? `; ${repeats - completed.length}회 호출 실패 또는 누락` : "";
+    return {
+      ...fallback,
+      id: crypto.randomUUID(),
+      verdict: "review",
+      relationship: "review-required",
+      title: "AI 반복 판정이 일치하지 않아 사람 검토 필요",
+      summary: `동일 입력 ${repeats}회 판정 결과가 전원 일치하지 않았습니다: ${observed.join(" / ") || "유효 판정 없음"}${failureNote}`,
+      recommendation: "자동 conflict 또는 independent로 확정하지 말고 입력 증거를 확인하거나 Base/A/B/A+B 실행으로 검증하세요.",
+      confirmationStatus: "unstable-ai-candidate",
+      runtimeVerification: "not-run",
+      evidenceGrade: "adjudicated",
+      interactionHypothesis: {
+        ...(representative?.interactionHypothesis || {}),
+        status: "unstable-ai-judgment",
+      },
+      aiProtocol: protocol,
+      aiStability: "unstable",
+      aiVerdicts: verdicts,
+      aiAssessments: assessments,
+      basis: options.basis || "ai-semantic-judgment",
+      source: options.source || "ai",
+    };
   });
 }

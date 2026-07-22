@@ -1,3 +1,5 @@
+import { summarizeCommitChecks } from "./pr-eligibility.mjs";
+
 const API = "https://api.github.com";
 
 function headers(token) {
@@ -78,6 +80,25 @@ async function fetchFiles(repo, number, token) {
   return files;
 }
 
+export async function fetchCommitChecks(repo, sha, token) {
+  const unknown = (lookup = "unavailable") => ({
+    status: "unknown", totalChecks: 0, failedChecks: [], pendingChecks: [], inconclusiveChecks: [], legacyStatus: null, lookup,
+  });
+  if (!sha) return unknown("missing-head-sha");
+  try {
+    const [checks, status] = await Promise.all([
+      request(`/repos/${repo}/commits/${sha}/check-runs?per_page=100`, token),
+      request(`/repos/${repo}/commits/${sha}/status?per_page=100`, token),
+    ]);
+    return { ...summarizeCommitChecks(checks.check_runs || [], status), lookup: "available" };
+  } catch (error) {
+    // CI metadata is an optimization, not the source of truth. Repositories
+    // without check-run permission must still reach the Base/A/B verifier.
+    if ([403, 404, 422].includes(error.status)) return unknown();
+    throw error;
+  }
+}
+
 export async function fetchOpenPullRequests(repository, token = process.env.GITHUB_TOKEN, options = {}) {
   const repo = parseRepository(repository);
   const pulls = await listOpenPullRequests(repo, token, options);
@@ -86,15 +107,17 @@ export async function fetchOpenPullRequests(repository, token = process.env.GITH
   const workers = Array.from({ length: Math.min(5, queue.length) }, async () => {
     while (queue.length) {
       const pr = queue.shift();
-      const [details, files] = await Promise.all([
+      const [details, files, ci] = await Promise.all([
         request(`/repos/${repo}/pulls/${pr.number}`, token),
         fetchFiles(repo, pr.number, token),
+        options.includeCiStatus ? fetchCommitChecks(repo, pr.head?.sha, token) : null,
       ]);
       hydrated.push({
         id: String(pr.id), number: pr.number, title: pr.title, body: pr.body || "",
         author: pr.user?.login || "unknown", url: pr.html_url, head: pr.head?.ref, headSha: pr.head?.sha,
         base: pr.base?.ref, baseSha: pr.base?.sha, draft: Boolean(pr.draft), updatedAt: pr.updated_at, additions: details.additions,
         deletions: details.deletions, files,
+        ...(ci ? { ci } : {}),
       });
     }
   });

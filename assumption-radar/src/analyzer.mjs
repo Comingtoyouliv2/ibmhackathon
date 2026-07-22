@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import { buildScirChangeSet } from "./adapters/registry.mjs";
-import { javaCodeOnly } from "./adapters/java.mjs";
 
 const CATEGORY_LABELS = {
   api: "API 계약", data: "데이터 모델", config: "설정·플래그", auth: "인증·권한",
@@ -22,17 +21,13 @@ const CAUSAL_ROLE_BY_TYPE = Object.freeze({
   "shared-contract": "composition-risk",
   "schema-vs-access": "dependency",
   "event-producer-consumer": "dependency",
-  "constructor-behavior-composition": "dependency",
+  "lifecycle-completion-gap": "composition-risk",
   "same-declaration": "relevance",
   "overlapping-base-region": "relevance",
   "same-file-only": "proximity",
 });
 
 const PROOF_ROLES = new Set(["contradiction", "dependency", "composition-risk"]);
-// These names are commonly nested in unrelated generated/domain types. Without
-// a resolved owner, matching them across files turns proximity into a false
-// direct conflict (for example ShardProfile.Builder vs GrpcTlsConfig.Builder).
-const UNRESOLVED_CROSS_FILE_SYMBOLS = new Set(["builder", "kind"]);
 
 const uniq = (values) => [...new Set(values.filter(Boolean))];
 const intersect = (a, b) => { const set = new Set(b); return uniq(a.filter((value) => set.has(value))); };
@@ -50,7 +45,7 @@ function identifiers(text) {
 
 function declaration(line) {
   const text = line.trim();
-  const typeDeclaration = text.match(/^(?:(?:export|public|private|protected|internal|abstract|final|static)\s+)*(?:class|interface|enum|struct|record|trait)\s+([A-Za-z_$][\w$]*)(?=\s*(?:[({:]|extends\b|implements\b|$))/);
+  const typeDeclaration = text.match(/^(?:(?:export|public|private|protected|internal|abstract|final)\s+)*(?:class|interface|enum|struct|record|trait)\s+([A-Za-z_$][\w$]*)(?=\s*(?:[({:]|extends\b|implements\b|$))/);
   if (typeDeclaration) return { name: typeDeclaration[1], signature: normalizeLine(text), kind: "type", arity: null, identity: `type:${typeDeclaration[1]}` };
   const typeAlias = text.match(/^(?:export\s+)?type\s+([A-Za-z_$][\w$]*)(?=\s*(?:<|=|$))/);
   if (typeAlias) return { name: typeAlias[1], signature: normalizeLine(text), kind: "type", arity: null, identity: `type:${typeAlias[1]}` };
@@ -209,7 +204,7 @@ function projectedHunkText(hunk, side) {
 function mayStartDeclaration(line) {
   const text = line.trim();
   if (!text) return false;
-  if (/^(?:(?:export|public|private|protected|internal|abstract|final|static)\s+)*(?:class|interface|enum|struct|record|trait)\b/.test(text)) return true;
+  if (/^(?:(?:export|public|private|protected|internal|abstract|final)\s+)*(?:class|interface|enum|struct|record|trait)\b/.test(text)) return true;
   if (/^(?:export\s+)?type\s+[A-Za-z_$][\w$]*/.test(text)) return true;
   if (/^(?:(?:export|public|private|protected|internal|static|final|async)\s+)*(?:def|func|function)\b/.test(text)) return true;
   if (/^(?:(?:public|private|protected|internal|static|final|volatile|transient|readonly|const)\s+)+[\w$<>,.?\[\]:]+\s+[A-Za-z_$][\w$]*\s*(?:=|;)/.test(text)) return true;
@@ -254,6 +249,12 @@ function memberAccesses(lines) {
   return uniq(lines.flatMap((line) => [...line.matchAll(/\.\s*([A-Za-z_$][\w$]*)\b/g)].map((match) => match[1])));
 }
 
+function memberReceivers(lines) {
+  return uniq(lines.flatMap((line) => [...line.matchAll(/\b([A-Za-z_$][\w$]*)\s*\./g)]
+    .map((match) => match[1])
+    .filter((name) => !["this", "super"].includes(name))));
+}
+
 function eventShapes(lines) {
   const shapes = [];
   for (const line of lines) {
@@ -294,17 +295,32 @@ function modelFile(file) {
   const oldSignatureDeclarations = declarationsFromHunks(hunks, "old", false);
   const sections = hunks.map((hunk) => sectionDeclaration(hunk.section)).filter(Boolean);
   const codeFile = /\.(?:c|cc|cpp|cs|go|h|hpp|java|js|jsx|kt|kts|mjs|php|py|rb|rs|scala|swift|ts|tsx)$/i.test(file.filename);
-  const codeLines = (changes) => {
-    if (!codeFile) return [];
-    const lines = changes.map((change) => change.text);
-    if (file.filename.endsWith(".java")) return javaCodeOnly(lines);
-    return lines.filter((line) => !/^\s*(?:\/\/|#|\*|\/\*)/.test(line));
-  };
+  const codeLines = (changes) => codeFile ? changes.map((change) => change.text).filter((line) => !/^\s*(?:\/\/|#|\*|\/\*)/.test(line)) : [];
   const addedCodeLines = codeLines(added);
   const removedCodeLines = codeLines(removed);
   const referenceLines = (lines) => lines.filter((line) => !/^\s*(?:import|package)\b/.test(line));
   const codeAddedIdentifiers = identifiers(referenceLines(addedCodeLines).join("\n"));
   const codeRemovedIdentifiers = identifiers(referenceLines(removedCodeLines).join("\n"));
+  const addedInvocationSites = hunks.flatMap((hunk) => subtractInvocations(
+    invocations(projectedHunkText(hunk, "new")),
+    invocations(projectedHunkText(hunk, "old")),
+  ).map((invocation) => {
+    const hunkAddedCallableNames = declarationsFromHunks([hunk], "new")
+      .filter((item) => item.kind === "callable")
+      .map((item) => item.name);
+    return {
+      ...invocation,
+      oldStart: hunk.oldStart,
+      oldCount: hunk.oldCount,
+      section: sectionDeclaration(hunk.section),
+      hunkAddedCallableNames,
+    };
+  }));
+  const addedCallableExitLines = hunks.flatMap((hunk) => {
+    const addedCallables = declarationsFromHunks([hunk], "new").filter((item) => item.kind === "callable");
+    if (!addedCallables.length) return [];
+    return hunk.changes.filter((change) => change.kind === "add" && /\breturn\b/.test(change.text)).map((change) => change.text);
+  });
   const signals = {};
   for (const kind of ["added", "removed"]) {
     const changes = kind === "added" ? added : removed;
@@ -319,7 +335,9 @@ function modelFile(file) {
     filename: file.filename, previousFilename: file.previousFilename, status: file.status || "modified", url: file.url,
     hunks, addedLines: added.map((change) => change.text), removedLines: removed.map((change) => change.text),
     addedDeclarations, removedDeclarations, newSignatureDeclarations, oldSignatureDeclarations,
-    addedInvocations: hunks.flatMap((hunk) => subtractInvocations(invocations(projectedHunkText(hunk, "new")), invocations(projectedHunkText(hunk, "old")))),
+    addedInvocations: addedInvocationSites,
+    addedInvocationSites,
+    addedCallableExitLines,
     changedDeclarations: uniq([...sections, ...addedDeclarations.map((item) => item.name), ...removedDeclarations.map((item) => item.name)]),
     addedIdentifiers: identifiers(added.map((change) => change.text).join("\n")),
     removedIdentifiers: identifiers(removed.map((change) => change.text).join("\n")),
@@ -327,6 +345,7 @@ function modelFile(file) {
     codeRemovedIdentifiers,
     netAddedIdentifiers: codeAddedIdentifiers.filter((item) => !codeRemovedIdentifiers.includes(item)),
     netAddedMemberAccesses: memberAccesses(referenceLines(addedCodeLines)).filter((item) => !memberAccesses(referenceLines(removedCodeLines)).includes(item)),
+    netAddedMemberReceivers: memberReceivers(referenceLines(addedCodeLines)).filter((item) => !memberReceivers(referenceLines(removedCodeLines)).includes(item)),
     eventShapes: { added: eventShapes(added.map((change) => change.text)), removed: eventShapes(removed.map((change) => change.text)) },
     structuralTables: structuralTables(added.map((change) => change.text)),
     configValues: configValues(added.map((change) => change.text)),
@@ -373,9 +392,6 @@ function buildChangeModel(pr, adapters = undefined) {
     .filter((item) => !addedDeclarationNames.has(item.name))
     .map((item) => ({ ...item, file: file.filename })));
   const removedIdentifiers = new Set(files.flatMap((file) => file.codeRemovedIdentifiers));
-  const netAddedIdentifierReferences = files.flatMap((file) => file.codeAddedIdentifiers
-    .filter((item) => !removedIdentifiers.has(item))
-    .map((name) => ({ name, file: file.filename })));
   return {
     scir,
     files,
@@ -390,7 +406,6 @@ function buildChangeModel(pr, adapters = undefined) {
     addedInvocations: files.flatMap((file) => file.addedInvocations.map((item) => ({ ...item, file: file.filename }))),
     removedDeclarations,
     netAddedIdentifiers: uniq(files.flatMap((file) => file.codeAddedIdentifiers).filter((item) => !removedIdentifiers.has(item))),
-    netAddedIdentifierReferences,
   };
 }
 
@@ -439,11 +454,7 @@ function compareFiles(a, b, options = {}) {
       continue;
     }
     if (left.status === "added" && right.status === "added") {
-      const leftContent = left.addedLines.map(normalizeLine).filter(Boolean);
-      const rightContent = right.addedLines.map(normalizeLine).filter(Boolean);
-      if (leftContent.length !== rightContent.length || leftContent.some((line, index) => line !== rightContent[index])) {
-        witnesses.push(createWitness("add-vs-add", "semantic", "code", `${label}을 양쪽이 다르게 추가함`, "두 PR이 같은 새 경로에 서로 다른 내용을 정의합니다. 병합 결과가 어느 정의를 보존해야 하는지 확인해야 합니다.", [label]));
-      }
+      witnesses.push(createWitness("add-vs-add", "semantic", "code", `${label}을 양쪽이 추가함`, "두 PR이 같은 경로의 새 파일을 정의합니다. 이는 우선 Git의 기계적 mergeability로 확인할 대상입니다.", [label]));
     }
     const sharedRemoved = intersect(left.removedLines.map(normalizeLine).filter((line) => line.length > 8), right.removedLines.map(normalizeLine).filter((line) => line.length > 8));
     const addedA = left.addedLines.map(normalizeLine).filter(Boolean);
@@ -477,25 +488,6 @@ function compareFiles(a, b, options = {}) {
       } else {
         witnesses.push(createWitness("same-declaration", "semantic", "code", `${name}의 의미를 양쪽이 변경함`, "같은 선언을 수정하지만 텍스트만으로 두 변경의 합성 가능성을 확정할 수 없습니다.", [label, name]));
       }
-    }
-    const className = label.split("/").at(-1)?.replace(/\.java$/, "");
-    const assignedState = (lines) => new Set(lines.flatMap((line) => [...line.matchAll(/\bthis\.([A-Za-z_$][\w$]*)\s*=/g)].map((match) => match[1])));
-    const changesInitialization = (file) => intersect([...assignedState(file.addedLines)], [...assignedState(file.removedLines)]).length > 0;
-    const leftChangesConstructor = Boolean(className && left.changedDeclarations.includes(className)
-      && changesInitialization(left));
-    const rightChangesConstructor = Boolean(className && right.changedDeclarations.includes(className)
-      && changesInitialization(right));
-    const leftChangesOtherBehavior = left.addedLines.some((line) => /\b(?:return|throw|new)\b|[.][A-Za-z_$][\w$]*\s*\(/.test(line));
-    const rightChangesOtherBehavior = right.addedLines.some((line) => /\b(?:return|throw|new)\b|[.][A-Za-z_$][\w$]*\s*\(/.test(line));
-    const sharedMemberDeclarations = sharedDeclarations.filter((name) => name !== className);
-    if (!sharedMemberDeclarations.length && ((leftChangesConstructor && rightChangesOtherBehavior) || (rightChangesConstructor && leftChangesOtherBehavior))) {
-      witnesses.push(createWitness(
-        "constructor-behavior-composition", "semantic", "behavior",
-        `${className} 초기화 변경과 메서드 동작 변경이 합성됨`,
-        "한 PR은 객체의 초기 상태를 바꾸고 다른 PR은 같은 클래스의 런타임 동작을 바꿉니다. 새 상태가 새 동작의 전제조건을 만족하는지 방향성 통합 검증이 필요합니다.",
-        [label, ...(leftChangesConstructor ? left.addedLines : right.addedLines).slice(0, 2), ...(leftChangesConstructor ? right.addedLines : left.addedLines).slice(0, 2)],
-        "dependency",
-      ));
     }
     if (options.comparableBase && !sharedDeclarations.length && left.hunks.some((one) => right.hunks.some((two) => rangesOverlap(one, two)))) {
       witnesses.push(createWitness("overlapping-base-region", "semantic", "behavior", `${label}의 같은 base 영역을 수정함`, "두 PR의 hunk가 같은 원본 라인 범위에 닿습니다. 실제 의도 결합을 확인해야 합니다.", [label]));
@@ -582,7 +574,12 @@ function compareContracts(a, b) {
       const { file, simpleName, qualified, conflictEligible } = removedImport.metadata;
       if (!conflictEligible) continue;
       const requirement = requirements.find((dependency) => dependency.target.scope === file && dependency.target.name === simpleName);
-      const replacementExists = addedBindings.some((operation) => operation.metadata.file === file && operation.metadata.simpleName === simpleName)
+      const replacementExists = addedBindings.some((operation) => operation.metadata.file === file && (
+        operation.metadata.simpleName === simpleName
+        || (operation.metadata.wildcard
+          && Boolean(operation.metadata.static) === Boolean(removedImport.metadata.static)
+          && qualified.startsWith(operation.metadata.qualified.slice(0, -1)))
+      ))
         || requirement?.metadata.localType || requirement?.metadata.qualifiedReference;
       if (!requirement || replacementExists) continue;
       const key = `${file}:${simpleName}`;
@@ -604,7 +601,6 @@ function compareContracts(a, b) {
     for (const change of changes) {
       if (change.kind !== "callable" || change.before.arity === null || change.after.arity === null || change.before.arity === change.after.arity) continue;
       for (const call of calls.filter((item) => item.name === change.name && item.arity === change.before.arity)) {
-        if (change.file !== call.file && UNRESOLVED_CROSS_FILE_SYMBOLS.has(change.name.toLowerCase())) continue;
         const key = `${change.file}:${change.name}:${change.before.arity}:${call.file}`;
         if (emitted.has(key)) continue;
         emitted.add(key);
@@ -620,20 +616,10 @@ function compareContracts(a, b) {
   compareSignatureCalls(a.signatureChanges, b.addedInvocations);
   compareSignatureCalls(b.signatureChanges, a.addedInvocations);
 
-  const compareRemovedSymbols = (removingModel, referenceModel) => {
-    const scirReferences = referenceModel.scir.dependencies.filter((dependency) => dependency.relation === "references" && dependency.status === "added");
-    const replacementDeclarations = new Set(referenceModel.scir.operations.filter((operation) => operation.kind === "add")
-      .map((operation) => `${operation.metadata.file}:${referenceModel.scir.entities.find((entity) => entity.id === operation.entityId)?.name}`));
-    for (const declaration of removingModel.removedDeclarations) {
-      const scopedReference = scirReferences.find((dependency) => dependency.target.name === declaration.name
-        && dependency.target.scope === declaration.file);
-      const identifierReferences = referenceModel.netAddedIdentifierReferences.filter((reference) => reference.name === declaration.name);
-      const crossFileTypeReference = declaration.kind === "type" && /^[A-Z]/.test(declaration.name)
-        && identifierReferences.length > 0
-        && !(UNRESOLVED_CROSS_FILE_SYMBOLS.has(declaration.name.toLowerCase())
-          && identifierReferences.every((reference) => reference.file !== declaration.file));
-      if ((!scopedReference && !crossFileTypeReference)
-        || replacementDeclarations.has(`${declaration.file}:${declaration.name}`)) continue;
+  const compareRemovedSymbols = (removed, references) => {
+    for (const declaration of removed) {
+      if (declaration.kind !== "type" || !/^[A-Z]/.test(declaration.name)) continue;
+      if (!references.includes(declaration.name)) continue;
       witnesses.push(createWitness(
         "removed-symbol-vs-new-reference", "direct", "api",
         `${declaration.name} 제거 뒤 다른 PR이 새 참조를 추가함`,
@@ -642,8 +628,57 @@ function compareContracts(a, b) {
       ));
     }
   };
-  compareRemovedSymbols(a, b);
-  compareRemovedSymbols(b, a);
+  compareRemovedSymbols(a.removedDeclarations, b.netAddedIdentifiers);
+  compareRemovedSymbols(b.removedDeclarations, a.netAddedIdentifiers);
+  return witnesses;
+}
+
+function compareLifecycleCompletion(a, b) {
+  const witnesses = [];
+  const compareDirection = (pathAddingModel, completionModel) => {
+    const completionByPath = new Map(completionModel.files.map((file) => [file.filename, file]));
+    for (const pathFile of pathAddingModel.files) {
+      const completionFile = completionByPath.get(pathFile.filename);
+      if (!completionFile) continue;
+
+      const addedCallableNames = new Set(completionFile.addedDeclarations
+        .filter((item) => item.kind === "callable")
+        .map((item) => item.name));
+      const invocationSites = new Map();
+      for (const invocation of completionFile.addedInvocationSites) {
+        if (!addedCallableNames.has(invocation.name)) continue;
+        if (invocation.oldCount <= 0 || invocation.hunkAddedCallableNames.includes(invocation.name)) continue;
+        if (!invocationSites.has(invocation.name)) invocationSites.set(invocation.name, new Set());
+        invocationSites.get(invocation.name).add(String(invocation.oldStart));
+      }
+      const repeatedCompletionCalls = [...invocationSites]
+        .filter(([, sites]) => sites.size >= 2)
+        .map(([name]) => name);
+      if (!repeatedCompletionCalls.length) continue;
+
+      const addsCallablePath = pathFile.addedDeclarations.some((item) => item.kind === "callable");
+      const addsExit = pathFile.addedCallableExitLines.length > 0;
+      if (!addsCallablePath || !addsExit) continue;
+
+      const sharedStateReceivers = intersect(pathFile.netAddedMemberReceivers, completionFile.netAddedMemberReceivers);
+      if (!sharedStateReceivers.length) continue;
+
+      for (const completionName of repeatedCompletionCalls) {
+        if (pathFile.addedInvocations.some((item) => item.name === completionName)) continue;
+        const completionLines = completionFile.addedLines.filter((line) => line.includes(`${completionName}(`)).slice(0, 2);
+        const exitLine = [...pathFile.addedCallableExitLines].sort((left, right) => normalizeLine(left).length - normalizeLine(right).length)[0];
+        witnesses.push(createWitness(
+          "lifecycle-completion-gap", "semantic", "behavior",
+          `${pathFile.filename}의 새 실행 경로가 ${completionName} 완료 단계를 우회할 수 있음`,
+          `한 PR은 같은 상태(${sharedStateReceivers.join(", ")})를 다루는 여러 기존 종료 경로에 ${completionName} 호출을 추가하지만, 다른 PR이 추가한 새 callable 종료 경로에는 그 호출이 없습니다. 실행 전에는 구성 위험이며 교차 테스트로 확인해야 합니다.`,
+          [pathFile.filename, completionName, ...sharedStateReceivers.slice(0, 3), exitLine, ...completionLines],
+          "composition-risk",
+        ));
+      }
+    }
+  };
+  compareDirection(a, b);
+  compareDirection(b, a);
   return witnesses;
 }
 
@@ -655,6 +690,7 @@ export const DEFAULT_DETECTORS = Object.freeze([
     }),
   },
   { id: "contract-lifecycle", detect: (a, b) => compareContracts(a.changeModel, b.changeModel) },
+  { id: "lifecycle-completion", detect: (a, b) => compareLifecycleCompletion(a.changeModel, b.changeModel) },
 ]);
 
 function comparePair(a, b, detectors) {
@@ -676,7 +712,7 @@ function comparePair(a, b, detectors) {
     summary: relevanceOnly ? "같은 선언을 수정했다는 사실은 관련성 신호일 뿐입니다. 한 변경이 다른 변경의 실패 조건에 도달한다는 dependency·composition·contract 증거가 없어 review 경고로 승격하지 않습니다." : primary?.explanation || "공유 계약이나 동일 선언을 변경한다는 증거를 찾지 못했습니다.",
     assumptionA: `${a.title} 변경이 자신의 diff 밖 계약을 깨지 않는다고 전제합니다.`,
     assumptionB: `${b.title} 변경이 자신의 diff 밖 계약을 깨지 않는다고 전제합니다.`,
-    consequence: verdict === "conflict" ? "두 변경을 그대로 합치면 한쪽이 요구하는 계약이나 구현이 사라질 수 있습니다." : verdict === "review" ? "구성 위험이나 방향성 의존성은 확인됐지만 최종 호환 여부는 통합 검증이 필요합니다." : verdict === "insufficient" ? "patch가 없거나 생략되어 두 변경의 상호작용을 판단할 수 없습니다." : relevanceOnly ? "관련성만으로 리뷰 예산을 소모하지 않지만, 아직 호환성을 실행 증명한 것은 아닙니다." : "현재 탐지 신호가 없지만 호환성을 실행 검증한 것은 아닙니다.",
+    consequence: verdict === "conflict" ? "두 변경을 그대로 합치면 한쪽이 요구하는 계약이나 구현이 사라질 수 있습니다." : verdict === "review" ? "구성 위험이나 방향성 의존성은 확인됐지만 최종 호환 여부는 통합 검증이 필요합니다." : verdict === "insufficient" ? "patch가 없거나 생략되어 두 변경의 상호작용을 판단할 수 없습니다." : relevanceOnly ? "관련성만으로 리뷰 예산을 소모하지 않지만, 아직 호환성을 실행 증명한 것은 아닙니다." : "현재 증거로는 두 변경을 독립적으로 취급할 수 있습니다.",
     recommendation: verdict === "conflict" ? "두 PR을 같은 integration branch에 합쳐 witness가 가리키는 계약을 먼저 통일하세요." : verdict === "review" ? "causal witness가 가리키는 경로를 대상으로 교차 테스트를 추가하고 담당자 확인을 받으세요." : verdict === "insufficient" ? "전체 diff 또는 checkout 기반 분석을 다시 실행하세요." : relevanceOnly ? "낮은 우선순위 근거로만 보존하고, dependency 또는 contract contradiction이 추가로 발견될 때 다시 승격하세요." : "별도의 merge 차단 없이 기존 테스트를 유지하세요.",
     evidence: uniq(witnesses.flatMap((item) => item.evidence)).slice(0, 8),
     basis: direct.length ? "deterministic-witness" : supportedSemantic.length ? "causal-witness" : relevanceOnly ? "relevance-only" : "proximity-only",
@@ -728,12 +764,7 @@ export function finishAnalysis(prepared, aiFindings = []) {
   const resolved = prepared.comparisons.map((comparison) => {
     if (comparison.verdict === "conflict" && comparison.basis === "deterministic-witness") {
       const hypothesis = aiByPair.get(comparison.key);
-      if (!hypothesis?.interactionHypothesis) return {
-        ...comparison,
-        screeningStatus: "static-candidate-unreviewed",
-        confirmationStatus: "unverified-static-candidate",
-        runtimeVerification: "not-run",
-      };
+      if (!hypothesis?.interactionHypothesis) return comparison;
       const contractBacked = hypothesis.interactionHypothesis.status === "contract-backed-conflict"
         && hypothesis.evidenceGrade === "contract-backed";
       return {
@@ -748,17 +779,13 @@ export function finishAnalysis(prepared, aiFindings = []) {
         hypothesisSource: hypothesis.source,
         hypothesisBasis: hypothesis.basis,
         hypothesisConfidence: hypothesis.confidence,
-        screeningStatus: "ai-reviewed",
+        aiProtocol: hypothesis.aiProtocol || null,
+        aiStability: hypothesis.aiStability || null,
+        aiVerdicts: hypothesis.aiVerdicts || [],
+        aiAssessments: hypothesis.aiAssessments || [],
       };
     }
-    const aiFinding = aiByPair.get(comparison.key);
-    if (aiFinding) return { ...aiFinding, screeningStatus: "ai-reviewed" };
-    return {
-      ...comparison,
-      screeningStatus: comparison.verdict === "independent" ? "no-alert-unreviewed"
-        : comparison.verdict === "insufficient" ? "insufficient-evidence"
-          : "static-candidate-unreviewed",
-    };
+    return aiByPair.get(comparison.key) || comparison;
   });
   const classified = resolved.map((item) => item.verdict === "conflict" && !item.confirmationStatus ? {
     ...item,
@@ -771,16 +798,11 @@ export function finishAnalysis(prepared, aiFindings = []) {
   const reviewCount = classified.filter((item) => item.verdict === "review").length;
   const independentCount = classified.filter((item) => item.verdict === "independent").length;
   const insufficientCount = classified.filter((item) => item.verdict === "insufficient").length;
-  const aiReviewedPairCount = classified.filter((item) => item.screeningStatus === "ai-reviewed").length;
-  const noAlertUnreviewedCount = classified.filter((item) => item.screeningStatus === "no-alert-unreviewed").length;
-  const staticCandidateUnreviewedCount = classified.filter((item) => item.screeningStatus === "static-candidate-unreviewed").length;
-  const insufficientEvidenceCount = classified.filter((item) => item.screeningStatus === "insufficient-evidence").length;
   return {
     generatedAt: new Date().toISOString(),
     summary: {
       prCount: prepared.prs.length, pairCount: prepared.comparisons.length,
       candidateCount: prepared.candidates.length, conflictCount, coordinationCount, reviewCount, independentCount, insufficientCount,
-      aiReviewedPairCount, noAlertUnreviewedCount, staticCandidateUnreviewedCount, insufficientEvidenceCount,
       verdict: conflictCount ? "충돌 witness 확인" : coordinationCount ? "Git merge 조율 필요" : reviewCount ? "의미 검토 필요" : "직접 충돌 근거 없음",
     },
     prs: prepared.prs, findings, conflicts: findings, categories: CATEGORY_LABELS,
