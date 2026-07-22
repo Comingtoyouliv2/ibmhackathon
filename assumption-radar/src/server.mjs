@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fetchOpenPullRequests, parseRepository } from "./github.mjs";
+import { partitionEligiblePullRequests } from "./pr-eligibility.mjs";
 import { finishAnalysis } from "./analyzer.mjs";
 import { analyzeWithAI, semanticJudgeProvider } from "./ai.mjs";
 import { prepareAnalysisPipeline } from "./pipeline.mjs";
@@ -131,17 +132,25 @@ async function handler(req, res) {
       const input = await body(req);
       const repository = parseRepository(input.repository);
       const limit = Math.max(2, Math.min(100, Number(input.limit) || 20));
-      const prs = await fetchOpenPullRequests(repository, process.env.GITHUB_TOKEN, { limit });
+      const useVerification = input.useVerification === true;
+      const fetched = await fetchOpenPullRequests(repository, process.env.GITHUB_TOKEN, { limit, includeCiStatus: useVerification });
+      const partitioned = useVerification ? partitionEligiblePullRequests(fetched) : { eligible: fetched, excluded: [], summary: null };
+      const prs = partitioned.eligible;
+      if (prs.length < 2) return json(res, 422, { error: "단독 merge eligibility를 통과한 open PR이 2개 미만입니다.", prEligibility: partitioned.summary });
       const result = await analyze(prs, {
         repository,
         useAI: input.useAI !== false,
         aiProvider: input.aiProvider,
         aiRepeats: input.aiRepeats ?? process.env.AI_JUDGE_REPEATS,
         useMergePreflight: input.useMergePreflight !== false,
-        useVerification: input.useVerification === true,
+        useVerification,
         verificationLimit: input.verificationLimit,
       });
-      return json(res, 200, { ...result, repository });
+      return json(res, 200, {
+        ...result,
+        repository,
+        ...(useVerification ? { prEligibility: { ...partitioned.summary, excludedPullRequests: partitioned.excluded } } : {}),
+      });
     }
     if (req.method !== "GET") return json(res, 404, { error: "Not found" });
     const requested = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
