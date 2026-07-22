@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { analyzeWithCodex } from "../src/codex.mjs";
 import { prepareIntegratedAnalysis } from "../src/integrated.mjs";
+import { AI_JUDGMENT_PROTOCOL_VERSION, semanticJudgeRepeatCount } from "../src/semantic-judge.mjs";
 
 const args = process.argv.slice(2);
 const value = (flag, fallback) => {
@@ -17,6 +18,7 @@ const output = resolve(value("--output", "benchmarks/comparisons/integrated-v0.2
 const model = value("--model", process.env.CODEX_MODEL || "gpt-5.4");
 const reasoningEffort = value("--reasoning-effort", "medium");
 const concurrency = Math.max(1, Math.min(8, Number(value("--concurrency", "4"))));
+const aiRepeats = semanticJudgeRepeatCount({ aiRepeats: value("--ai-repeats", process.env.AI_JUDGE_REPEATS) });
 const limit = Math.max(0, Number(value("--limit", "0")));
 
 const [inputText, promptSha256] = await Promise.all([
@@ -65,8 +67,8 @@ async function worker() {
     try {
       const prepared = prepareIntegratedAnalysis(record.prs);
       const deterministic = prepared.comparisons[0];
-      const judgments = await analyzeWithCodex(prepared, { model, reasoningEffort, concurrency: 1 });
-      if (judgments.length) modelCalls += 1;
+      const judgments = await analyzeWithCodex(prepared, { model, reasoningEffort, concurrency: 1, aiRepeats });
+      modelCalls += judgments.reduce((count, item) => count + (item.aiProtocol?.requestedRepeats || 0), 0);
       const resolved = deterministic.verdict === "conflict" && deterministic.basis === "deterministic-witness"
         ? deterministic : judgments[0] || deterministic;
       predictions[index] = {
@@ -101,6 +103,9 @@ await Promise.all([
     systemName: "integrated-v0.2-codex-live",
     version: "integrated-v0.2",
     model,
+    aiJudgmentProtocol: AI_JUDGMENT_PROTOCOL_VERSION,
+    aiRepeats,
+    unanimityRequired: true,
     promptSha256,
     startedAt: startedAt.toISOString(),
     finishedAt: new Date().toISOString(),

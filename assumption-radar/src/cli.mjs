@@ -5,6 +5,7 @@ import { fetchOpenPullRequests, parseRepository } from "./github.mjs";
 import { finishAnalysis } from "./analyzer.mjs";
 import { analyzeWithAI, semanticJudgeProvider } from "./ai.mjs";
 import { prepareAnalysisPipeline } from "./pipeline.mjs";
+import { AI_JUDGMENT_PROTOCOL_VERSION, semanticJudgeRepeatCount } from "./semantic-judge.mjs";
 import { DockerCombinedVerifier, loadVerificationProfiles } from "./docker-verifier.mjs";
 import { GitMergeTreePreflight } from "./preflight.mjs";
 import {
@@ -28,7 +29,7 @@ function help() {
   console.log(`Assumption Radar CLI
 
 Usage:
-  npm run scan -- owner/repository [--limit 20] [--preflight] [--ai] [--ai-provider openai|anthropic|codex]
+  npm run scan -- owner/repository [--limit 20] [--preflight] [--ai] [--ai-provider openai|anthropic|codex] [--ai-repeats 3]
     [--verify] [--verify-limit 3] [--verification-profile profiles.json] [--verification-output cases.jsonl]
     [--json] [--fail-on conflict]
   npm run scan -- --demo [--json]
@@ -40,6 +41,7 @@ Environment:
   CODEX_MODEL      defaults to gpt-5.4 for --ai-provider codex
   OPENAI_MODEL     defaults to gpt-5.6-terra
   ANTHROPIC_MODEL  defaults to claude-opus-4-8
+  AI_JUDGE_REPEATS defaults to 3; 모든 AI 후보가 전원 일치해야 stable로 인정
 
 Verification:
   --verify는 Docker에서 Base/A/B/A+B를 실행하며 --preflight를 자동 활성화합니다.
@@ -50,11 +52,8 @@ function printReport(result, repository) {
   console.log(`\nASSUMPTION RADAR · ${repository}`);
   console.log(`${"─".repeat(68)}`);
   console.log(`${result.summary.prCount} open PR · ${result.summary.pairCount} pairs · ${result.summary.conflictCount} conflicts · ${result.summary.reviewCount} reviews`);
-  if (result.summary.aiReviewedPairCount !== undefined) {
-    console.log(`${result.summary.aiReviewedPairCount} AI-reviewed · ${result.summary.noAlertUnreviewedCount} no-alert/unreviewed · ${result.summary.staticCandidateUnreviewedCount} static candidates awaiting review · ${result.summary.insufficientEvidenceCount} insufficient`);
-  }
   if (result.summary.verifiedPairCount) {
-    console.log(`${result.summary.verifiedPairCount} verified · ${result.summary.confirmedConflictCount} confirmed pair regressions · ${result.summary.verifiedCompatibleCount} no observed regression`);
+    console.log(`${result.summary.verifiedPairCount} verified · ${result.summary.confirmedConflictCount} confirmed pair regressions · ${result.summary.verifiedCompatibleCount} no observed regressions`);
   }
   console.log(`Verdict: ${result.summary.verdict}\n`);
   for (const conflict of result.findings) {
@@ -94,9 +93,23 @@ async function main() {
     ...(preflightEngine ? { preflightEngine } : {}),
   });
   const prepared = pipeline.prepared;
-  const aiOptions = { aiProvider: value("--ai-provider") };
+  const aiOptions = {
+    aiProvider: value("--ai-provider"),
+    aiRepeats: value("--ai-repeats") ?? process.env.AI_JUDGE_REPEATS,
+  };
   const aiConflicts = has("--ai") ? await analyzeWithAI(prepared, aiOptions) : [];
-  let result = { ...finishAnalysis(prepared, aiConflicts), repository, mode: aiConflicts.length ? "ai+heuristic" : "heuristic", preflight: pipeline.preflight };
+  let result = {
+    ...finishAnalysis(prepared, aiConflicts),
+    repository,
+    mode: aiConflicts.length ? "ai+heuristic" : "heuristic",
+    analysisProtocol: {
+      deterministicRuns: 1,
+      aiProtocolVersion: has("--ai") ? AI_JUDGMENT_PROTOCOL_VERSION : null,
+      aiRepeats: has("--ai") ? semanticJudgeRepeatCount(aiOptions) : 0,
+      unanimityRequired: has("--ai"),
+    },
+    preflight: pipeline.preflight,
+  };
   if (useVerification) {
     const profiles = await loadVerificationProfiles(value("--verification-profile"));
     const candidates = selectVerificationCandidates(prepared, result, { limit: Math.max(1, Number(value("--verify-limit")) || 3) });
@@ -115,7 +128,7 @@ async function main() {
         finding: findings.get([...verification.prIds].sort().join(":")),
         metadata: {
           analyzerVersion: APP_VERSION,
-          promptVersion: has("--ai") ? "semantic-judge-v0.4" : null,
+          promptVersion: has("--ai") ? "interaction-hypothesis-v0.4" : null,
           model: has("--ai") ? (() => {
             const provider = semanticJudgeProvider(aiOptions);
             if (provider === "anthropic") return process.env.ANTHROPIC_MODEL || "claude-opus-4-8";

@@ -6,6 +6,7 @@ import { fetchOpenPullRequests, parseRepository } from "./github.mjs";
 import { finishAnalysis } from "./analyzer.mjs";
 import { analyzeWithAI, semanticJudgeProvider } from "./ai.mjs";
 import { prepareAnalysisPipeline } from "./pipeline.mjs";
+import { AI_JUDGMENT_PROTOCOL_VERSION, semanticJudgeRepeatCount } from "./semantic-judge.mjs";
 import { DockerCombinedVerifier, loadVerificationProfiles } from "./docker-verifier.mjs";
 import { GitMergeTreePreflight } from "./preflight.mjs";
 import {
@@ -52,7 +53,18 @@ async function analyze(prs, options = {}) {
     try { aiConflicts = await analyzeWithAI(prepared, options); }
     catch (error) { aiError = error.message; }
   }
-  let result = { ...finishAnalysis(prepared, aiConflicts), mode: aiConflicts.length ? "ai+heuristic" : "heuristic", aiError, preflight: pipeline.preflight };
+  let result = {
+    ...finishAnalysis(prepared, aiConflicts),
+    mode: aiConflicts.length ? "ai+heuristic" : "heuristic",
+    aiError,
+    analysisProtocol: {
+      deterministicRuns: 1,
+      aiProtocolVersion: options.useAI ? AI_JUDGMENT_PROTOCOL_VERSION : null,
+      aiRepeats: options.useAI ? semanticJudgeRepeatCount(options) : 0,
+      unanimityRequired: Boolean(options.useAI),
+    },
+    preflight: pipeline.preflight,
+  };
   if (options.useVerification && options.repository) {
     try {
       const profiles = await loadVerificationProfiles(process.env.VERIFICATION_PROFILE_PATH);
@@ -70,7 +82,7 @@ async function analyze(prs, options = {}) {
         finding: findings.get([...verification.prIds].sort().join(":")),
         metadata: {
           analyzerVersion: "1.0.0",
-          promptVersion: options.useAI ? "semantic-judge-v0.4" : null,
+          promptVersion: options.useAI ? "interaction-hypothesis-v0.4" : null,
           model: options.useAI ? (() => {
             const provider = semanticJudgeProvider(options);
             if (provider === "anthropic") return process.env.ANTHROPIC_MODEL || "claude-opus-4-8";
@@ -98,6 +110,8 @@ async function handler(req, res) {
         anthropicConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
         mergeTreePreflight: true,
         combinedVerification: true,
+        aiJudgmentProtocol: AI_JUDGMENT_PROTOCOL_VERSION,
+        aiRepeats: semanticJudgeRepeatCount(),
         aiProvider: semanticJudgeProvider(),
         model: semanticJudgeProvider() === "anthropic" ? process.env.ANTHROPIC_MODEL || "claude-opus-4-8"
           : semanticJudgeProvider() === "codex" ? process.env.CODEX_MODEL || "gpt-5.4" : process.env.OPENAI_MODEL || "gpt-5.6-terra",
@@ -106,7 +120,12 @@ async function handler(req, res) {
     if (req.method === "POST" && url.pathname === "/api/demo") {
       const prs = JSON.parse(await readFile(DEMO_PATH, "utf8"));
       const input = await body(req);
-      return json(res, 200, await analyze(prs, { useAI: Boolean(input.useAI), aiProvider: input.aiProvider, useMergePreflight: false }));
+      return json(res, 200, await analyze(prs, {
+        useAI: Boolean(input.useAI),
+        aiProvider: input.aiProvider,
+        aiRepeats: input.aiRepeats ?? process.env.AI_JUDGE_REPEATS,
+        useMergePreflight: false,
+      }));
     }
     if (req.method === "POST" && url.pathname === "/api/analyze") {
       const input = await body(req);
@@ -117,6 +136,7 @@ async function handler(req, res) {
         repository,
         useAI: input.useAI !== false,
         aiProvider: input.aiProvider,
+        aiRepeats: input.aiRepeats ?? process.env.AI_JUDGE_REPEATS,
         useMergePreflight: input.useMergePreflight !== false,
         useVerification: input.useVerification === true,
         verificationLimit: input.verificationLimit,

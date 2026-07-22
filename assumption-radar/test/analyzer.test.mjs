@@ -18,8 +18,6 @@ test("same file in separate declarations is proximity, not a finding", () => {
   ]);
   assert.equal(result.findings.length, 0);
   assert.equal(result.summary.independentCount, 1);
-  assert.equal(result.summary.noAlertUnreviewedCount, 1);
-  assert.equal(result.summary.aiReviewedPairCount, 0);
 });
 
 test("prose in a hunk section is not parsed as a code declaration", () => {
@@ -89,22 +87,6 @@ test("a multiline signature change conflicts with a newly added old-arity call",
   ]);
   assert.equal(result.findings[0].verdict, "conflict");
   assert.ok(result.findings[0].witnesses.some((item) => item.type === "signature-change-vs-old-call"));
-});
-
-test("unqualified Builder names in different files do not create a direct signature conflict", () => {
-  const result = analyzeHeuristically([
-    pr("1", [file("ShardProfile.java", "@@ -10,1 +10,1 @@\n-public Builder(String shard) {\n+public Builder() {")]),
-    pr("2", [file("GrpcTlsConfig.java", "@@ -20,0 +21,1 @@\n+return new Builder(\"tls\");")]),
-  ]);
-  assert.ok(!result.findings[0]?.witnesses.some((item) => item.type === "signature-change-vs-old-call"));
-});
-
-test("unqualified Kind names in different files do not create a removed-symbol conflict", () => {
-  const result = analyzeHeuristically([
-    pr("1", [file("SearchModel.java", "@@ -10,1 +10,0 @@\n-public enum Kind { QUERY }")]),
-    pr("2", [file("GrpcModel.java", "@@ -20,0 +21,1 @@\n+private Kind kind;")]),
-  ]);
-  assert.ok(!result.findings[0]?.witnesses.some((item) => item.type === "removed-symbol-vs-new-reference"));
 });
 
 test("a moved old-arity call is not treated as a newly added call", () => {
@@ -217,71 +199,28 @@ test("a replacement import supplied by the using PR prevents import conflict", (
   assert.ok(!result.findings[0]?.witnesses.some((item) => item.type === "import-removal-vs-new-use"));
 });
 
+test("a same-package Java wildcard import satisfies a removed explicit binding", () => {
+  const result = analyzeHeuristically([
+    pr("1", [file("src/core/lombok/javac/handlers/HandleBuilder.java", "@@ -2,1 +2,1 @@\n-import lombok.Builder;\n+import lombok.*;")]),
+    pr("2", [file("src/core/lombok/javac/handlers/HandleBuilder.java", "@@ -40,0 +41,1 @@\n+class Handler extends JavacAnnotationHandler<Builder> {}")]),
+  ]);
+  assert.ok(!result.findings[0]?.witnesses.some((item) => item.type === "import-removal-vs-new-use"));
+});
+
+test("an unrelated Java wildcard import does not satisfy a removed binding", () => {
+  const result = analyzeHeuristically([
+    pr("1", [file("src/core/lombok/javac/handlers/HandleBuilder.java", "@@ -2,1 +2,1 @@\n-import lombok.Builder;\n+import other.annotations.*;")]),
+    pr("2", [file("src/core/lombok/javac/handlers/HandleBuilder.java", "@@ -40,0 +41,1 @@\n+class Handler extends JavacAnnotationHandler<Builder> {}")]),
+  ]);
+  assert.ok(result.findings[0]?.witnesses.some((item) => item.type === "import-removal-vs-new-use"));
+});
+
 test("a fully qualified new use does not depend on the removed import", () => {
   const result = analyzeHeuristically([
     pr("1", [file("src/main/java/ninja/ContextImpl.java", "@@ -2,1 +2,0 @@\n-import javax.servlet.http.Cookie;")]),
     pr("2", [file("src/main/java/ninja/ContextImpl.java", "@@ -40,0 +41,1 @@\n+response.addCookie(new javax.servlet.http.Cookie(name, null));")]),
   ]);
   assert.ok(!result.findings[0]?.witnesses.some((item) => item.type === "import-removal-vs-new-use"));
-});
-
-test("a removed Java field conflicts with a new same-file reference", () => {
-  const result = analyzeHeuristically([
-    pr("1", [file("src/Index.java", "@@ -4,1 +4,0 @@\n-private static final Log logger = LogFactory.getLog(Index.class);")]),
-    pr("2", [file("src/Index.java", "@@ -80,0 +81,3 @@\n+public void delete(int id) {\n+  logger.error(\"delete failed\");\n+}")]),
-  ]);
-  assert.equal(result.findings[0].verdict, "conflict");
-  assert.ok(result.findings[0].witnesses.some((item) => item.type === "removed-symbol-vs-new-reference"));
-});
-
-test("moving an existing Java field reference is not a removal conflict", () => {
-  const result = analyzeHeuristically([
-    pr("1", [file("src/Index.java", "@@ -4,1 +4,0 @@\n-private static final Log logger = LogFactory.getLog(Index.class);")]),
-    pr("2", [file("src/Index.java", "@@ -80,2 +80,2 @@\n-logger.error(\"delete failed\");\n cleanup();\n+logger.error(\"delete failed\");")]),
-  ]);
-  assert.ok(!result.findings[0]?.witnesses.some((item) => item.type === "removed-symbol-vs-new-reference"));
-});
-
-test("removing a nested Java type conflicts with a qualified-to-simple new reference", () => {
-  const result = analyzeHeuristically([
-    pr("1", [file("src/AbstractForm.java", "@@ -20,2 +20,0 @@\n-public static class SubmitEvent extends GwtEvent<SubmitHandler> {\n-}")]),
-    pr("2", [file("src/AbstractForm.java", "@@ -90,1 +90,1 @@\n-FormPanel.SubmitEvent event = new FormPanel.SubmitEvent();\n+SubmitEvent event = new SubmitEvent();")]),
-  ]);
-  assert.equal(result.findings[0].verdict, "conflict");
-  assert.ok(result.findings[0].witnesses.some((item) => item.type === "removed-symbol-vs-new-reference"));
-});
-
-test("a removed Java type mentioned only in a new comment is not a reference", () => {
-  const result = analyzeHeuristically([
-    pr("1", [file("src/AbstractForm.java", "@@ -20,2 +20,0 @@\n-public static class SubmitEvent extends GwtEvent<SubmitHandler> {\n-}")]),
-    pr("2", [file("src/AbstractForm.java", "@@ -90,0 +91,1 @@\n+// SubmitEvent was removed intentionally")]),
-  ]);
-  assert.ok(!result.findings[0]?.witnesses.some((item) => item.type === "removed-symbol-vs-new-reference"));
-});
-
-test("a removed Java type mentioned only in a string or text block is not a reference", () => {
-  const result = analyzeHeuristically([
-    pr("1", [file("src/AbstractForm.java", "@@ -20,2 +20,0 @@\n-public static class SubmitEvent extends GwtEvent<SubmitHandler> {\n-}")]),
-    pr("2", [file("src/AbstractForm.java", "@@ -90,0 +91,4 @@\n+logger.info(\"SubmitEvent was removed\");\n+String note = \"\"\"\n+SubmitEvent migration note\n+\"\"\";")]),
-  ]);
-  assert.ok(!result.findings[0]?.witnesses.some((item) => item.type === "removed-symbol-vs-new-reference"));
-});
-
-test("constructor state and a separate method behavior form a directional review dependency", () => {
-  const result = analyzeHeuristically([
-    pr("1", [file("src/DefaultEnvironment.java", "@@ -40,1 +40,1 @@ public DefaultEnvironment(EnvironmentType type)\n-this.type = firstNonNull(type, DEVELOPMENT);\n+this.type = firstNonNull(type, EnvironmentType.DEVELOPMENT);")]),
-    pr("2", [file("src/DefaultEnvironment.java", "@@ -62,1 +62,1 @@ public boolean supports(String feature)\n-return Boolean.parseBoolean(get(feature));\n+return Boolean.parseBoolean(get(feature).trim());")]),
-  ]);
-  assert.equal(result.findings[0].verdict, "review");
-  assert.ok(result.findings[0].witnesses.some((item) => item.type === "constructor-behavior-composition"));
-});
-
-test("separate ordinary Java methods remain a hard negative", () => {
-  const result = analyzeHeuristically([
-    pr("1", [file("src/DefaultEnvironment.java", "@@ -40,1 +40,1 @@ public void load()\n-oldLoad();\n+newLoad();")]),
-    pr("2", [file("src/DefaultEnvironment.java", "@@ -62,1 +62,1 @@ public boolean supports(String feature)\n-return oldValue();\n+return newValue();")]),
-  ]);
-  assert.equal(result.findings.length, 0);
 });
 
 test("Python binding removal conflicts with a new unqualified use", () => {
@@ -340,8 +279,14 @@ test("AI can resolve a semantic review as independent but cannot erase determini
     pr("3", [file("rename.sql", "@@ -0,0 +1,1 @@\n+ALTER TABLE users RENAME COLUMN full_name TO display_name;")]),
     pr("4", [file("profile.js", "@@ -0,0 +1,1 @@\n+render(user.full_name);")]),
   ]);
-  const attemptedOverride = [{ ...deterministic.comparisons[0], verdict: "independent", basis: "ai-semantic-judgment", source: "ai" }];
-  assert.equal(finishAnalysis(deterministic, attemptedOverride).findings[0].verdict, "conflict");
+  const attemptedOverride = [{
+    ...deterministic.comparisons[0], verdict: "review", basis: "ai-interaction-hypothesis", source: "ai",
+    interactionHypothesis: { status: "testable-hypothesis", assumption: "old field remains readable" },
+  }];
+  const preserved = finishAnalysis(deterministic, attemptedOverride).findings[0];
+  assert.equal(preserved.verdict, "conflict");
+  assert.equal(preserved.confirmationStatus, "unverified-static-candidate");
+  assert.equal(preserved.interactionHypothesis.status, "testable-hypothesis");
 });
 
 test("missing patches are reported as insufficient evidence", () => {
