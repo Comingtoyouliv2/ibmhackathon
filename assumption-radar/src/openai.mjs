@@ -109,6 +109,6 @@ export async function analyzeWithAI(prepared, options = {}) {
   if (errors.length === repeats) throw new Error(`모든 OpenAI 반복 판정이 실패했습니다: ${errors[0]}`);
   return aggregateSemanticJudgmentRuns(prepared, candidates, { repeats, runs }, {
     ...options,
-    source: "openai", basis: "openai-interaction-hypothesis-v0.4",
+    source: "openai", basis: "openai-interaction-hypothesis-v0.5",
   });
 }

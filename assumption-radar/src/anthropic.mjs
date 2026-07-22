@@ -77,6 +77,6 @@ export async function analyzeWithAnthropic(prepared, options = {}) {
   }
   return aggregateSemanticJudgmentRuns(prepared, candidates, protocolRuns, {
     ...options,
-    source: "anthropic", basis: "anthropic-interaction-hypothesis-v0.4",
+    source: "anthropic", basis: "anthropic-interaction-hypothesis-v0.5",
   });
 }

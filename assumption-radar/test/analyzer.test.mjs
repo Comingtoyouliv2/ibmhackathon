@@ -266,6 +266,60 @@ test("event removal versus a new consumer produces a contract conflict", () => {
   assert.equal(result.findings[0].category, "event");
 });
 
+test("a new exit path that bypasses another PR's repeated completion step is routed to review", () => {
+  const result = analyzeHeuristically([
+    pr("1", [file("src/Decoder.java", [
+      "@@ -140,0 +141,5 @@ public class Decoder",
+      "+protected Object decodeSpecial(Context context) {",
+      "+    _pendingCollector.stage(context, result);",
+      "+    return result;",
+      "+}",
+    ].join("\n"))]),
+    pr("2", [file("src/Decoder.java", [
+      "@@ -40,1 +40,1 @@ protected Object decodeDefault(Context context)",
+      "-return result;",
+      "+return completePending(context, result);",
+      "@@ -80,1 +80,1 @@ protected Object decodeAlternate(Context context)",
+      "-return result;",
+      "+return completePending(context, result);",
+      "@@ -200,0 +201,5 @@ public class Decoder",
+      "+private Object completePending(Context context, Object result) {",
+      "+    _pendingCollector.flush(context, result);",
+      "+    return result;",
+      "+}",
+    ].join("\n"))]),
+  ]);
+  assert.equal(result.findings[0].verdict, "review");
+  assert.ok(result.findings[0].witnesses.some((item) => item.type === "lifecycle-completion-gap"));
+  assert.equal(result.findings[0].causalAnalysis.status, "supported-interaction");
+});
+
+test("a new exit path that invokes the completion step is not a lifecycle gap", () => {
+  const result = analyzeHeuristically([
+    pr("1", [file("src/Decoder.java", [
+      "@@ -140,0 +141,5 @@ public class Decoder",
+      "+protected Object decodeSpecial(Context context) {",
+      "+    _pendingCollector.stage(context, result);",
+      "+    return completePending(context, result);",
+      "+}",
+    ].join("\n"))]),
+    pr("2", [file("src/Decoder.java", [
+      "@@ -40,1 +40,1 @@ protected Object decodeDefault(Context context)",
+      "-return result;",
+      "+return completePending(context, result);",
+      "@@ -80,1 +80,1 @@ protected Object decodeAlternate(Context context)",
+      "-return result;",
+      "+return completePending(context, result);",
+      "@@ -200,0 +201,5 @@ public class Decoder",
+      "+private Object completePending(Context context, Object result) {",
+      "+    _pendingCollector.flush(context, result);",
+      "+    return result;",
+      "+}",
+    ].join("\n"))]),
+  ]);
+  assert.ok(!result.findings[0]?.witnesses.some((item) => item.type === "lifecycle-completion-gap"));
+});
+
 test("AI can resolve a semantic review as independent but cannot erase deterministic conflicts", () => {
   const semantic = prepareAnalysis([
     pr("1", [file("src/Service.java", "@@ -10,1 +10,1 @@ public void execute()\n-legacyCall();\n+newA();")]),

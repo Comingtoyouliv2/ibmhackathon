@@ -137,6 +137,6 @@ export async function analyzeWithCodex(prepared, options = {}) {
   }
   return aggregateSemanticJudgmentRuns(prepared, candidates, protocolRuns, {
     ...options,
-    source: "codex", basis: "codex-interaction-hypothesis-v0.4",
+    source: "codex", basis: "codex-interaction-hypothesis-v0.5",
   });
 }

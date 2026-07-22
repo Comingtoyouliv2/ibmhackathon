@@ -6,6 +6,7 @@ contract-backed-conflict는 실행하지 않았더라도 (1) 한쪽의 실제 pr
 testable-hypothesis는 방향성 위험은 있지만 계약 연결이나 실패 결과를 입력만으로 확정할 수 없고 Base/A/B/A+B 실험을 설계할 수 있을 때 선택한다.
 no-plausible-interaction은 제공된 근거에서 두 변경을 연결할 행동 경로가 없을 때, insufficient-evidence는 필요한 구현 파일이나 저장소 문맥이 빠졌을 때 선택한다.
 coordination-required는 기계적 충돌·중복 구현처럼 조율이 필요하지만 pair-induced regression과는 다른 경우다.
+특히 한 PR이 여러 종료 경로에 새 완료·flush·commit 단계를 도입하고 다른 PR이 같은 상태를 다루는 새 종료 경로를 추가한 경우, 새 경로가 완료 단계를 우회하는지 확인하라. 이름에 finish 같은 단어가 있는지만 보지 말고, 상태 축적→종료 경로→완료 호출의 행동 연결을 양쪽 실제 코드로 증명하라.
 contract-backed-conflict는 executable-confirmed와 다르다. 최종 실행 재현 여부는 별도 runtimeVerification 필드로 관리한다.`;
 
 const pairKey = (ids) => [...ids].sort().join(":");

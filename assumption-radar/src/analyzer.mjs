@@ -21,6 +21,7 @@ const CAUSAL_ROLE_BY_TYPE = Object.freeze({
   "shared-contract": "composition-risk",
   "schema-vs-access": "dependency",
   "event-producer-consumer": "dependency",
+  "lifecycle-completion-gap": "composition-risk",
   "same-declaration": "relevance",
   "overlapping-base-region": "relevance",
   "same-file-only": "proximity",
@@ -248,6 +249,12 @@ function memberAccesses(lines) {
   return uniq(lines.flatMap((line) => [...line.matchAll(/\.\s*([A-Za-z_$][\w$]*)\b/g)].map((match) => match[1])));
 }
 
+function memberReceivers(lines) {
+  return uniq(lines.flatMap((line) => [...line.matchAll(/\b([A-Za-z_$][\w$]*)\s*\./g)]
+    .map((match) => match[1])
+    .filter((name) => !["this", "super"].includes(name))));
+}
+
 function eventShapes(lines) {
   const shapes = [];
   for (const line of lines) {
@@ -294,6 +301,26 @@ function modelFile(file) {
   const referenceLines = (lines) => lines.filter((line) => !/^\s*(?:import|package)\b/.test(line));
   const codeAddedIdentifiers = identifiers(referenceLines(addedCodeLines).join("\n"));
   const codeRemovedIdentifiers = identifiers(referenceLines(removedCodeLines).join("\n"));
+  const addedInvocationSites = hunks.flatMap((hunk) => subtractInvocations(
+    invocations(projectedHunkText(hunk, "new")),
+    invocations(projectedHunkText(hunk, "old")),
+  ).map((invocation) => {
+    const hunkAddedCallableNames = declarationsFromHunks([hunk], "new")
+      .filter((item) => item.kind === "callable")
+      .map((item) => item.name);
+    return {
+      ...invocation,
+      oldStart: hunk.oldStart,
+      oldCount: hunk.oldCount,
+      section: sectionDeclaration(hunk.section),
+      hunkAddedCallableNames,
+    };
+  }));
+  const addedCallableExitLines = hunks.flatMap((hunk) => {
+    const addedCallables = declarationsFromHunks([hunk], "new").filter((item) => item.kind === "callable");
+    if (!addedCallables.length) return [];
+    return hunk.changes.filter((change) => change.kind === "add" && /\breturn\b/.test(change.text)).map((change) => change.text);
+  });
   const signals = {};
   for (const kind of ["added", "removed"]) {
     const changes = kind === "added" ? added : removed;
@@ -308,7 +335,9 @@ function modelFile(file) {
     filename: file.filename, previousFilename: file.previousFilename, status: file.status || "modified", url: file.url,
     hunks, addedLines: added.map((change) => change.text), removedLines: removed.map((change) => change.text),
     addedDeclarations, removedDeclarations, newSignatureDeclarations, oldSignatureDeclarations,
-    addedInvocations: hunks.flatMap((hunk) => subtractInvocations(invocations(projectedHunkText(hunk, "new")), invocations(projectedHunkText(hunk, "old")))),
+    addedInvocations: addedInvocationSites,
+    addedInvocationSites,
+    addedCallableExitLines,
     changedDeclarations: uniq([...sections, ...addedDeclarations.map((item) => item.name), ...removedDeclarations.map((item) => item.name)]),
     addedIdentifiers: identifiers(added.map((change) => change.text).join("\n")),
     removedIdentifiers: identifiers(removed.map((change) => change.text).join("\n")),
@@ -316,6 +345,7 @@ function modelFile(file) {
     codeRemovedIdentifiers,
     netAddedIdentifiers: codeAddedIdentifiers.filter((item) => !codeRemovedIdentifiers.includes(item)),
     netAddedMemberAccesses: memberAccesses(referenceLines(addedCodeLines)).filter((item) => !memberAccesses(referenceLines(removedCodeLines)).includes(item)),
+    netAddedMemberReceivers: memberReceivers(referenceLines(addedCodeLines)).filter((item) => !memberReceivers(referenceLines(removedCodeLines)).includes(item)),
     eventShapes: { added: eventShapes(added.map((change) => change.text)), removed: eventShapes(removed.map((change) => change.text)) },
     structuralTables: structuralTables(added.map((change) => change.text)),
     configValues: configValues(added.map((change) => change.text)),
@@ -603,6 +633,55 @@ function compareContracts(a, b) {
   return witnesses;
 }
 
+function compareLifecycleCompletion(a, b) {
+  const witnesses = [];
+  const compareDirection = (pathAddingModel, completionModel) => {
+    const completionByPath = new Map(completionModel.files.map((file) => [file.filename, file]));
+    for (const pathFile of pathAddingModel.files) {
+      const completionFile = completionByPath.get(pathFile.filename);
+      if (!completionFile) continue;
+
+      const addedCallableNames = new Set(completionFile.addedDeclarations
+        .filter((item) => item.kind === "callable")
+        .map((item) => item.name));
+      const invocationSites = new Map();
+      for (const invocation of completionFile.addedInvocationSites) {
+        if (!addedCallableNames.has(invocation.name)) continue;
+        if (invocation.oldCount <= 0 || invocation.hunkAddedCallableNames.includes(invocation.name)) continue;
+        if (!invocationSites.has(invocation.name)) invocationSites.set(invocation.name, new Set());
+        invocationSites.get(invocation.name).add(String(invocation.oldStart));
+      }
+      const repeatedCompletionCalls = [...invocationSites]
+        .filter(([, sites]) => sites.size >= 2)
+        .map(([name]) => name);
+      if (!repeatedCompletionCalls.length) continue;
+
+      const addsCallablePath = pathFile.addedDeclarations.some((item) => item.kind === "callable");
+      const addsExit = pathFile.addedCallableExitLines.length > 0;
+      if (!addsCallablePath || !addsExit) continue;
+
+      const sharedStateReceivers = intersect(pathFile.netAddedMemberReceivers, completionFile.netAddedMemberReceivers);
+      if (!sharedStateReceivers.length) continue;
+
+      for (const completionName of repeatedCompletionCalls) {
+        if (pathFile.addedInvocations.some((item) => item.name === completionName)) continue;
+        const completionLines = completionFile.addedLines.filter((line) => line.includes(`${completionName}(`)).slice(0, 2);
+        const exitLine = [...pathFile.addedCallableExitLines].sort((left, right) => normalizeLine(left).length - normalizeLine(right).length)[0];
+        witnesses.push(createWitness(
+          "lifecycle-completion-gap", "semantic", "behavior",
+          `${pathFile.filename}의 새 실행 경로가 ${completionName} 완료 단계를 우회할 수 있음`,
+          `한 PR은 같은 상태(${sharedStateReceivers.join(", ")})를 다루는 여러 기존 종료 경로에 ${completionName} 호출을 추가하지만, 다른 PR이 추가한 새 callable 종료 경로에는 그 호출이 없습니다. 실행 전에는 구성 위험이며 교차 테스트로 확인해야 합니다.`,
+          [pathFile.filename, completionName, ...sharedStateReceivers.slice(0, 3), exitLine, ...completionLines],
+          "composition-risk",
+        ));
+      }
+    }
+  };
+  compareDirection(a, b);
+  compareDirection(b, a);
+  return witnesses;
+}
+
 export const DEFAULT_DETECTORS = Object.freeze([
   {
     id: "file-interaction",
@@ -611,6 +690,7 @@ export const DEFAULT_DETECTORS = Object.freeze([
     }),
   },
   { id: "contract-lifecycle", detect: (a, b) => compareContracts(a.changeModel, b.changeModel) },
+  { id: "lifecycle-completion", detect: (a, b) => compareLifecycleCompletion(a.changeModel, b.changeModel) },
 ]);
 
 function comparePair(a, b, detectors) {
