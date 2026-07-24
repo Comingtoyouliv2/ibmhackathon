@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "maxIterations": 3,
+  "gate": {
+    "total": 85,
+    "minimumCriterion": 15,
+    "minimumTotalGain": 3,
+    "maximumFatalRisks": 0,
+    "minimumSubscores": {
+      "technical_execution.ibm_bob_integration": 2.5,
+      "technical_execution.demo_operability": 1.5
+    }
+  },
+  "jury": {
+    "model": "gpt-5.6-terra",
+    "reasoningEffort": "high",
+    "timeoutSeconds": 600
+  },
+  "implementer": {
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "high",
+    "timeoutSeconds": 900
+  },
+  "productDirectory": "assumption-radar",
+  "verificationCommands": [
+    ["npm", ["run", "check"]],
+    ["npm", ["test"]]
+  ],
+  "allowedImplementationPaths": [
+    "README.md",
+    "technical-plan.md",
+    "assumption-radar/README.md",
+    "assumption-radar/src/",
+    "assumption-radar/public/",
+    "assumption-radar/test/",
+    "assumption-radar/docs/",
+    "assumption-radar/config/",
+    "assumption-radar/demo/"
+  ],
+  "forbiddenImplementationPaths": [
+    ".agents/",
+    ".codex/",
+    ".githooks/",
+    ".github/",
+    "hackathon/judging/",
+    "assumption-radar/benchmarks/",
+    "assumption-radar/eval/rubric.json",
+    "assumption-radar/package.json",
+    "assumption-radar/package-lock.json",
+    ".env",
+    "assumption-radar/.env"
+  ]
+}

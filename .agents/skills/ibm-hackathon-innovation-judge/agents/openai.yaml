@@ -1,0 +1,4 @@
+interface:
+  display_name: "IBM Innovation Judge"
+  short_description: "Score novelty and differentiation with evidence"
+  default_prompt: "Use $ibm-hackathon-innovation-judge to score the current staged project evidence."

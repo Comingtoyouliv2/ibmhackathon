@@ -1,0 +1,4 @@
+interface:
+  display_name: "IBM Impact Judge"
+  short_description: "Score real-world outcomes and validation strength"
+  default_prompt: "Use $ibm-hackathon-impact-judge to score the current staged project evidence."

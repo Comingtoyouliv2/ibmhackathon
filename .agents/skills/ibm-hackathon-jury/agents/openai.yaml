@@ -1,0 +1,4 @@
+interface:
+  display_name: "IBM AI Builders Mock Jury"
+  short_description: "Run all five judges and drive score improvements"
+  default_prompt: "Use $ibm-hackathon-jury to score the staged snapshot and recommend the highest-leverage improvements."
