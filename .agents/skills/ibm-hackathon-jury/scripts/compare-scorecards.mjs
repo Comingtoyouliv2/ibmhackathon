@@ -1,19 +1,34 @@
 #!/usr/bin/env node
 
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const rubric = JSON.parse(readFileSync(resolve(scriptDir, "../references/rubric.json"), "utf8"));
+
+function repositoryRoot() {
+  const result = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
+  return result.status === 0 ? result.stdout.trim() : process.cwd();
+}
+
+const root = repositoryRoot();
+
+function artifactPath(path) {
+  return isAbsolute(path) ? path : resolve(root, path);
+}
 
 if (process.argv.length !== 4) {
   process.stderr.write("Usage: compare-scorecards.mjs BEFORE.json AFTER.json\n");
   process.exit(1);
 }
 
-const before = JSON.parse(readFileSync(resolve(process.argv[2]), "utf8"));
-const after = JSON.parse(readFileSync(resolve(process.argv[3]), "utf8"));
+const before = JSON.parse(readFileSync(artifactPath(process.argv[2]), "utf8"));
+const after = JSON.parse(readFileSync(artifactPath(process.argv[3]), "utf8"));
 
 if (before.rubricHash !== after.rubricHash) {
   process.stderr.write("Scorecards use different rubric hashes and are not trend-comparable.\n");

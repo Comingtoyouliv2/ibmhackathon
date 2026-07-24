@@ -1,11 +1,26 @@
 #!/usr/bin/env node
 
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const rubric = JSON.parse(readFileSync(resolve(scriptDir, "../references/rubric.json"), "utf8"));
+
+function repositoryRoot() {
+  const result = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
+  return result.status === 0 ? result.stdout.trim() : process.cwd();
+}
+
+const root = repositoryRoot();
+
+function artifactPath(path) {
+  return isAbsolute(path) ? path : resolve(root, path);
+}
 
 function parseArgs(argv) {
   const options = { scorecard: null, evidence: null, render: null };
@@ -88,7 +103,7 @@ function render(scorecard) {
 }
 
 const options = parseArgs(process.argv.slice(2));
-const scorecard = JSON.parse(readFileSync(resolve(options.scorecard), "utf8"));
+const scorecard = JSON.parse(readFileSync(artifactPath(options.scorecard), "utf8"));
 const errors = [];
 
 if (scorecard.schemaVersion !== 1) errors.push("schemaVersion must be 1");
@@ -119,7 +134,7 @@ if (!Array.isArray(scorecard.topImprovements) || scorecard.topImprovements.lengt
 }
 
 if (options.evidence) {
-  const evidence = JSON.parse(readFileSync(resolve(options.evidence), "utf8"));
+  const evidence = JSON.parse(readFileSync(artifactPath(options.evidence), "utf8"));
   if (scorecard.rubricHash !== evidence.rubricHash) errors.push("rubricHash does not match evidence bundle");
   if (scorecard.snapshot.id !== evidence.snapshot.id) errors.push("snapshot id does not match evidence bundle");
   if (scorecard.snapshot.type !== evidence.snapshot.type) errors.push("snapshot type does not match evidence bundle");
@@ -131,7 +146,7 @@ if (errors.length) {
 }
 
 if (options.render) {
-  const output = resolve(options.render);
+  const output = artifactPath(options.render);
   mkdirSync(dirname(output), { recursive: true });
   writeFileSync(output, render(scorecard));
 }

@@ -98,10 +98,22 @@ function keywordMatches(root, target, ref) {
 
 function mismatchForVerification(root, target, ref, productRelative) {
   if (target === "worktree") return [];
-  const args = target === "commit"
+  const trackedArgs = target === "commit"
     ? ["diff", "--name-only", ref, "--", productRelative]
     : ["diff", "--name-only", "--", productRelative];
-  return lines(git(root, args).stdout);
+  const tracked = lines(git(root, trackedArgs).stdout);
+  // Verification always runs in the current worktree.  An untracked file can
+  // therefore change a test, dynamically loaded module, config, or demo asset
+  // without being represented by a staged/commit snapshot.  Treat it as
+  // contamination instead of awarding verification evidence to that snapshot.
+  const untracked = lines(git(root, [
+    "ls-files",
+    "--others",
+    "--exclude-standard",
+    "--",
+    productRelative,
+  ]).stdout);
+  return [...new Set([...tracked, ...untracked])].sort();
 }
 
 function verifyProduct(root, productDir, target, ref) {
