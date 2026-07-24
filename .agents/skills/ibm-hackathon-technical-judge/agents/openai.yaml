@@ -1,0 +1,4 @@
+interface:
+  display_name: "IBM Technical Judge"
+  short_description: "Score technical execution from reproducible evidence"
+  default_prompt: "Use $ibm-hackathon-technical-judge to score the current staged project evidence."

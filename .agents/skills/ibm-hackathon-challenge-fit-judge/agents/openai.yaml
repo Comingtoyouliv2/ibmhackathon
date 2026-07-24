@@ -1,0 +1,4 @@
+interface:
+  display_name: "IBM Challenge Fit Judge"
+  short_description: "Score Future of Work and IBM Bob alignment"
+  default_prompt: "Use $ibm-hackathon-challenge-fit-judge to score the current staged project evidence."

@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "source": "User-supplied AI Builders Challenge brief, 2026-07-24",
+  "weightingAssumption": "The official brief supplied no weights; this mock jury assigns 20 points to each of five criteria.",
+  "criteria": {
+    "technical_execution": {
+      "name": "Technical Execution",
+      "max": 20,
+      "dimensions": {
+        "end_to_end_functionality": 5,
+        "ibm_bob_integration": 4,
+        "architecture_and_engineering_depth": 4,
+        "validation_reliability_and_security": 5,
+        "demo_operability": 2
+      },
+      "caps": [
+        { "when": "No reproducible core flow exists", "max": 8 },
+        { "when": "The demonstrated flow is materially mocked while presented as live", "max": 10 },
+        { "when": "IBM Bob is only planned or named, not implemented", "max": 16 },
+        { "when": "Critical security or secret-handling failure exists", "max": 10 }
+      ]
+    },
+    "innovation": {
+      "name": "Innovation",
+      "max": 20,
+      "dimensions": {
+        "problem_reframing": 5,
+        "differentiation": 5,
+        "technical_novelty": 4,
+        "defensibility_and_learning": 3,
+        "demo_aha_moment": 3
+      },
+      "caps": [
+        { "when": "The product is a generic AI wrapper with no differentiated workflow", "max": 8 },
+        { "when": "Differentiation is asserted without competitor or baseline evidence", "max": 15 },
+        { "when": "Novelty exists only in the pitch and not in the artifact", "max": 12 }
+      ]
+    },
+    "feasibility": {
+      "name": "Feasibility",
+      "max": 20,
+      "dimensions": {
+        "mvp_scope_and_completion": 4,
+        "architecture_and_dependency_realism": 4,
+        "deployment_and_operations": 4,
+        "security_privacy_and_governance": 3,
+        "adoption_integration_and_maintenance": 3,
+        "delivery_plan_and_risk_control": 2
+      },
+      "caps": [
+        { "when": "A judge cannot run or view the core demo", "max": 10 },
+        { "when": "The critical path depends on an unimplemented external integration", "max": 13 },
+        { "when": "No credible deployment or adoption path is shown", "max": 15 },
+        { "when": "Critical operating costs, privacy, or platform constraints are ignored", "max": 14 }
+      ]
+    },
+    "challenge_fit": {
+      "name": "Challenge Fit",
+      "max": 20,
+      "dimensions": {
+        "future_of_work_outcome": 5,
+        "ai_as_collaborator": 5,
+        "automation_decision_speed": 4,
+        "workflow_integration": 3,
+        "ibm_bob_and_program_alignment": 3
+      },
+      "caps": [
+        { "when": "The solution is generic AI with no concrete work outcome", "max": 10 },
+        { "when": "It does not show where it enters a real individual or team workflow", "max": 14 },
+        { "when": "IBM Bob alignment is only branding or future intent", "max": 17 }
+      ]
+    },
+    "real_world_impact": {
+      "name": "Real-World Impact",
+      "max": 20,
+      "dimensions": {
+        "pain_and_stakes": 4,
+        "target_user_specificity": 3,
+        "measurable_outcome_definition": 4,
+        "real_world_validation": 4,
+        "scale_reach_and_accessibility": 3,
+        "adoption_and_roi_story": 2
+      },
+      "caps": [
+        { "when": "No target user and baseline workflow are specified", "max": 9 },
+        { "when": "There is no real-world repository, user, or outcome validation", "max": 13 },
+        { "when": "Impact is expressed only as potential with no measurable outcome", "max": 14 },
+        { "when": "Claims materially exceed the evidence", "max": 10 }
+      ]
+    }
+  },
+  "bands": [
+    { "min": 90, "label": "winner-ready evidence package" },
+    { "min": 80, "label": "finalist-ready with limited exposed risk" },
+    { "min": 70, "label": "competitive concept with material proof gaps" },
+    { "min": 60, "label": "promising prototype" },
+    { "min": 0, "label": "not submission-ready" }
+  ],
+  "defaultTarget": {
+    "total": 85,
+    "minimumCriterion": 15,
+    "requiresNoFatalRisk": true,
+    "requiresReproducibleDemo": true,
+    "requiresVisibleBobValue": true
+  }
+}

@@ -1,0 +1,264 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "judgedAt",
+    "snapshot",
+    "rubricHash",
+    "weightingNote",
+    "criteria",
+    "total",
+    "band",
+    "fatalRisks",
+    "topImprovements",
+    "verdict"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "judgedAt": { "type": "string" },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id", "baseCommit"],
+      "properties": {
+        "type": { "enum": ["staged", "commit", "worktree"] },
+        "id": { "type": "string" },
+        "baseCommit": { "type": "string" }
+      }
+    },
+    "rubricHash": { "type": "string" },
+    "weightingNote": { "type": "string" },
+    "criteria": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "technical_execution",
+        "innovation",
+        "feasibility",
+        "challenge_fit",
+        "real_world_impact"
+      ],
+      "properties": {
+        "technical_execution": { "$ref": "#/$defs/technicalCriterion" },
+        "innovation": { "$ref": "#/$defs/innovationCriterion" },
+        "feasibility": { "$ref": "#/$defs/feasibilityCriterion" },
+        "challenge_fit": { "$ref": "#/$defs/challengeFitCriterion" },
+        "real_world_impact": { "$ref": "#/$defs/impactCriterion" }
+      }
+    },
+    "total": { "type": "number", "minimum": 0, "maximum": 100, "multipleOf": 0.5 },
+    "band": { "type": "string" },
+    "fatalRisks": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "topImprovements": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["criterion", "action", "expectedGain", "acceptanceEvidence"],
+        "properties": {
+          "criterion": { "type": "string" },
+          "action": { "type": "string" },
+          "expectedGain": { "type": "string" },
+          "acceptanceEvidence": { "type": "string" }
+        }
+      }
+    },
+    "verdict": { "type": "string" }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tier", "claim", "source"],
+      "properties": {
+        "tier": { "type": "string", "enum": ["E0", "E1", "E2", "E3", "E4"] },
+        "claim": { "type": "string" },
+        "source": { "type": "string" }
+      }
+    },
+    "cap": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["max", "reason"],
+          "properties": {
+            "max": { "type": "number", "minimum": 0, "maximum": 20 },
+            "reason": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "nextAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "acceptanceEvidence"],
+      "properties": {
+        "action": { "type": "string" },
+        "acceptanceEvidence": { "type": "string" }
+      }
+    },
+    "technicalCriterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "score",
+        "max",
+        "subscores",
+        "capApplied",
+        "evidence",
+        "deductions",
+        "nextAction"
+      ],
+      "properties": {
+        "score": { "type": "number", "minimum": 0, "maximum": 20, "multipleOf": 0.5 },
+        "max": { "type": "number", "const": 20 },
+        "subscores": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "end_to_end_functionality",
+            "ibm_bob_integration",
+            "architecture_and_engineering_depth",
+            "validation_reliability_and_security",
+            "demo_operability"
+          ],
+          "properties": {
+            "end_to_end_functionality": { "type": "number", "minimum": 0, "maximum": 5, "multipleOf": 0.5 },
+            "ibm_bob_integration": { "type": "number", "minimum": 0, "maximum": 4, "multipleOf": 0.5 },
+            "architecture_and_engineering_depth": { "type": "number", "minimum": 0, "maximum": 4, "multipleOf": 0.5 },
+            "validation_reliability_and_security": { "type": "number", "minimum": 0, "maximum": 5, "multipleOf": 0.5 },
+            "demo_operability": { "type": "number", "minimum": 0, "maximum": 2, "multipleOf": 0.5 }
+          }
+        },
+        "capApplied": { "$ref": "#/$defs/cap" },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidence" }
+        },
+        "deductions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "nextAction": { "$ref": "#/$defs/nextAction" }
+      }
+    },
+    "innovationCriterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score", "max", "subscores", "capApplied", "evidence", "deductions", "nextAction"],
+      "properties": {
+        "score": { "type": "number", "minimum": 0, "maximum": 20, "multipleOf": 0.5 },
+        "max": { "type": "number", "const": 20 },
+        "subscores": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["problem_reframing", "differentiation", "technical_novelty", "defensibility_and_learning", "demo_aha_moment"],
+          "properties": {
+            "problem_reframing": { "type": "number", "minimum": 0, "maximum": 5, "multipleOf": 0.5 },
+            "differentiation": { "type": "number", "minimum": 0, "maximum": 5, "multipleOf": 0.5 },
+            "technical_novelty": { "type": "number", "minimum": 0, "maximum": 4, "multipleOf": 0.5 },
+            "defensibility_and_learning": { "type": "number", "minimum": 0, "maximum": 3, "multipleOf": 0.5 },
+            "demo_aha_moment": { "type": "number", "minimum": 0, "maximum": 3, "multipleOf": 0.5 }
+          }
+        },
+        "capApplied": { "$ref": "#/$defs/cap" },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+        "deductions": { "type": "array", "items": { "type": "string" } },
+        "nextAction": { "$ref": "#/$defs/nextAction" }
+      }
+    },
+    "feasibilityCriterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score", "max", "subscores", "capApplied", "evidence", "deductions", "nextAction"],
+      "properties": {
+        "score": { "type": "number", "minimum": 0, "maximum": 20, "multipleOf": 0.5 },
+        "max": { "type": "number", "const": 20 },
+        "subscores": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mvp_scope_and_completion",
+            "architecture_and_dependency_realism",
+            "deployment_and_operations",
+            "security_privacy_and_governance",
+            "adoption_integration_and_maintenance",
+            "delivery_plan_and_risk_control"
+          ],
+          "properties": {
+            "mvp_scope_and_completion": { "type": "number", "minimum": 0, "maximum": 4, "multipleOf": 0.5 },
+            "architecture_and_dependency_realism": { "type": "number", "minimum": 0, "maximum": 4, "multipleOf": 0.5 },
+            "deployment_and_operations": { "type": "number", "minimum": 0, "maximum": 4, "multipleOf": 0.5 },
+            "security_privacy_and_governance": { "type": "number", "minimum": 0, "maximum": 3, "multipleOf": 0.5 },
+            "adoption_integration_and_maintenance": { "type": "number", "minimum": 0, "maximum": 3, "multipleOf": 0.5 },
+            "delivery_plan_and_risk_control": { "type": "number", "minimum": 0, "maximum": 2, "multipleOf": 0.5 }
+          }
+        },
+        "capApplied": { "$ref": "#/$defs/cap" },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+        "deductions": { "type": "array", "items": { "type": "string" } },
+        "nextAction": { "$ref": "#/$defs/nextAction" }
+      }
+    },
+    "challengeFitCriterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score", "max", "subscores", "capApplied", "evidence", "deductions", "nextAction"],
+      "properties": {
+        "score": { "type": "number", "minimum": 0, "maximum": 20, "multipleOf": 0.5 },
+        "max": { "type": "number", "const": 20 },
+        "subscores": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["future_of_work_outcome", "ai_as_collaborator", "automation_decision_speed", "workflow_integration", "ibm_bob_and_program_alignment"],
+          "properties": {
+            "future_of_work_outcome": { "type": "number", "minimum": 0, "maximum": 5, "multipleOf": 0.5 },
+            "ai_as_collaborator": { "type": "number", "minimum": 0, "maximum": 5, "multipleOf": 0.5 },
+            "automation_decision_speed": { "type": "number", "minimum": 0, "maximum": 4, "multipleOf": 0.5 },
+            "workflow_integration": { "type": "number", "minimum": 0, "maximum": 3, "multipleOf": 0.5 },
+            "ibm_bob_and_program_alignment": { "type": "number", "minimum": 0, "maximum": 3, "multipleOf": 0.5 }
+          }
+        },
+        "capApplied": { "$ref": "#/$defs/cap" },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+        "deductions": { "type": "array", "items": { "type": "string" } },
+        "nextAction": { "$ref": "#/$defs/nextAction" }
+      }
+    },
+    "impactCriterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score", "max", "subscores", "capApplied", "evidence", "deductions", "nextAction"],
+      "properties": {
+        "score": { "type": "number", "minimum": 0, "maximum": 20, "multipleOf": 0.5 },
+        "max": { "type": "number", "const": 20 },
+        "subscores": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["pain_and_stakes", "target_user_specificity", "measurable_outcome_definition", "real_world_validation", "scale_reach_and_accessibility", "adoption_and_roi_story"],
+          "properties": {
+            "pain_and_stakes": { "type": "number", "minimum": 0, "maximum": 4, "multipleOf": 0.5 },
+            "target_user_specificity": { "type": "number", "minimum": 0, "maximum": 3, "multipleOf": 0.5 },
+            "measurable_outcome_definition": { "type": "number", "minimum": 0, "maximum": 4, "multipleOf": 0.5 },
+            "real_world_validation": { "type": "number", "minimum": 0, "maximum": 4, "multipleOf": 0.5 },
+            "scale_reach_and_accessibility": { "type": "number", "minimum": 0, "maximum": 3, "multipleOf": 0.5 },
+            "adoption_and_roi_story": { "type": "number", "minimum": 0, "maximum": 2, "multipleOf": 0.5 }
+          }
+        },
+        "capApplied": { "$ref": "#/$defs/cap" },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+        "deductions": { "type": "array", "items": { "type": "string" } },
+        "nextAction": { "$ref": "#/$defs/nextAction" }
+      }
+    }
+  }
+}

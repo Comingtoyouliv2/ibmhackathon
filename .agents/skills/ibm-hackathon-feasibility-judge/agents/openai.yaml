@@ -1,0 +1,4 @@
+interface:
+  display_name: "IBM Feasibility Judge"
+  short_description: "Score buildability adoption and operational risk"
+  default_prompt: "Use $ibm-hackathon-feasibility-judge to score the current staged project evidence."
