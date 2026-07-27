@@ -2,3 +2,15 @@
 node_modules/
 benchmarks/comparisons/frozen-comparison-v0.2-smoke-2026-07-17/team1/*/.work/
 benchmarks/comparisons/frozen-comparison-v0.2-smoke-2026-07-17/team1/*-score/
+
+# 로컬 자격증명 (절대 커밋 금지)
+.env
+.env.local
+.env.*.local
+
+# 대용량 원본 덤프 (재생성 가능, GitHub 100MB 초과) — md 리포트만 커밋
+reports/raw-*.json
+
+# 러너 진행 로그 + 중간 작업 파일 (전이적 아티팩트)
+reports/_runner-*.log
+reports/_*.json

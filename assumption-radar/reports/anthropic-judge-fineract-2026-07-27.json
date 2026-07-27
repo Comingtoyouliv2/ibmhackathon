@@ -1,0 +1,510 @@
+{
+  "model": "claude-opus-4-8",
+  "effort": "medium",
+  "repeats": 3,
+  "usage": {
+    "input": 23328,
+    "output": 15666
+  },
+  "results": [
+    {
+      "prs": [
+        6110,
+        6024
+      ],
+      "titles": [
+        "FINERACT-2647: Decouple client module",
+        "FINERACT-2652: Decouple SavingsAccount from injected collaborators"
+      ],
+      "category": "rollout",
+      "summary": "한 PR은 getActivationDate을 getActivatedOnDate로 바꾸지만 다른 PR은 기존 이름을 새 코드에서 참조합니다.",
+      "runs": [
+        {
+          "prIds": [
+            6110,
+            6024
+          ],
+          "isConflict": true,
+          "conflictType": "compile-level",
+          "onMoneyPath": false,
+          "moneyPathReason": "컴파일 에러는 CI가 병합 후 잡으므로 런타임 금액 손실은 보수적으로 0",
+          "confidence": 0.6,
+          "changedSide": "both",
+          "reasoning": "한 PR이 SavingsAccount의 getActivationDate를 getActivatedOnDate로 rename하는데, 다른 PR의 새 코드가 여전히 getActivationDate()를 호출하여 정적 타입에서 없는 메서드 호출로 컴파일 에러가 발생한다. 이는 Java 컴파일 단계에서 CI가 잡아내는 compile-level 충돌이다.",
+          "keyQuote": "getActivationDate → getActivatedOnDate; final Object[] defaultUserArgs = Arrays.asList(transactionDate, getActivationDate()).toArray();"
+        },
+        {
+          "prIds": [
+            6110,
+            6024
+          ],
+          "isConflict": true,
+          "conflictType": "compile-level",
+          "onMoneyPath": true,
+          "moneyPathReason": "getActivationDate()는 이자 계산 기준일(startInterestCalculationDate 비교, transactionDate 인자)에 사용되어 금액 경로에 닿지만, 컴파일 에러이므로 CI가 병합 시 잡아 런타임 손실은 0으로 보수 처리",
+          "confidence": 0.72,
+          "changedSide": "both",
+          "reasoning": "한 PR이 getActivationDate를 getActivatedOnDate로 rename하고 다른 PR의 새 코드가 여전히 getActivationDate()를 호출하면 존재하지 않는 메서드 참조로 컴파일 에러가 발생한다. 이는 정적 타입 단계에서 CI가 잡는 compile-level 충돌이다.",
+          "keyQuote": "getActivationDate → getActivatedOnDate ; startInterestCalculationLocalDate = getActivationDate();"
+        },
+        {
+          "prIds": [
+            6110,
+            6024
+          ],
+          "isConflict": true,
+          "conflictType": "compile-level",
+          "onMoneyPath": false,
+          "moneyPathReason": "getActivationDate()는 이자계산일(startInterestCalculationDate) 로직에 쓰여 금액 경로에 닿으나, 컴파일 에러이므로 CI가 병합 후 잡아 런타임 금액 손실은 보수적으로 0",
+          "confidence": 0.72,
+          "changedSide": "both",
+          "reasoning": "한 PR이 SavingsAccount의 getActivationDate를 getActivatedOnDate로 리네임했는데, 다른 PR의 새 코드가 여전히 getActivationDate()를 호출한다. 이는 존재하지 않는 메서드 호출로 Java 정적 타입에서 컴파일 에러가 발생한다.",
+          "keyQuote": "getActivationDate → getActivatedOnDate; startInterestCalculationLocalDate = getActivationDate();"
+        }
+      ],
+      "stable": true,
+      "verdicts": [
+        "true/compile-level",
+        "true/compile-level",
+        "true/compile-level"
+      ]
+    },
+    {
+      "prs": [
+        6158,
+        6151
+      ],
+      "titles": [
+        "FINERACT-2649: batch migrate Tier 4 loan tests to feign",
+        "FINERACT-2455: Rework transaction reprocessing"
+      ],
+      "category": "rollout",
+      "summary": "한 PR은 loan을 zeroInterestLoanId로 바꾸지만 다른 PR은 기존 이름을 새 코드에서 참조합니다.",
+      "runs": [
+        {
+          "prIds": [
+            6158,
+            6151
+          ],
+          "isConflict": true,
+          "conflictType": "compile-level",
+          "onMoneyPath": false,
+          "moneyPathReason": "충돌은 통합 테스트 파일의 변수명(loan vs zeroInterestLoanId) 불일치로 인한 컴파일 에러이며, 프로덕션 금액 계산 로직이 아니라 테스트 코드에 국한된다.",
+          "confidence": 0.55,
+          "changedSide": "both",
+          "reasoning": "한 PR이 변수를 zeroInterestLoanId로 이름 변경하는데 다른 PR의 코드에서는 기존 이름 loan을 참조하므로 병합 시 심볼 미해결로 컴파일 에러가 발생한다. 이는 Java 정적 타입 단계에서 CI가 잡으므로 런타임 금액 손실은 없다.",
+          "keyQuote": "loan = applyAndApproveProgressiveLoan(clientId, loanProductId, \"1 September 2019\", 1200.0, 0.0, 4, null); ... loan → zeroInterestLoanId"
+        },
+        {
+          "prIds": [
+            6158,
+            6151
+          ],
+          "isConflict": true,
+          "conflictType": "compile-level",
+          "onMoneyPath": false,
+          "moneyPathReason": "변경은 integration-test 소스(LoanInterestPauseApiTest)에 국한되며 프로덕션 금액 계산 경로가 아니라 테스트 코드다.",
+          "confidence": 0.5,
+          "changedSide": "both",
+          "reasoning": "한 PR이 로컬 변수 loan을 zeroInterestLoanId로 리네임하는 반면 다른 PR은 동일 테스트에서 기존 이름 loan을 disburseLoan/verifyTransactions 등에 계속 참조한다. 병합 시 Java 정적 타입에서 미정의 심볼로 컴파일 에러가 발생하므로 compile-level이며 CI가 병합 후 잡는다.",
+          "keyQuote": "loan → zeroInterestLoanId / disburseLoan(loan, BigDecimal.valueOf(1200.0), \"1 September 2019\");"
+        },
+        {
+          "prIds": [
+            6158,
+            6151
+          ],
+          "isConflict": true,
+          "conflictType": "compile-level",
+          "onMoneyPath": false,
+          "moneyPathReason": "변경 대상이 integration-test 파일(LoanInterestPauseApiTest 등)의 로컬 변수/헬퍼일 뿐 프로덕션 금액 계산 로직이 아니므로 런타임 금액 손실 경로에 닿지 않는다.",
+          "confidence": 0.55,
+          "changedSide": "both",
+          "reasoning": "한 PR이 테스트에서 loan 변수를 zeroInterestLoanId로 리네임하고 다른 PR이 disburseLoan(loan,...)·verifyTransactions(loan,...)처럼 기존 이름을 참조하면 병합 후 미정의 심볼로 Java 컴파일 에러가 난다. 이는 CI가 병합 시 잡는 compile-level 충돌이며 테스트 코드에 국한되어 금액 경로가 아니다.",
+          "keyQuote": "loan → zeroInterestLoanId / disburseLoan(loan, BigDecimal.valueOf(1200.0), \"1 September 2019\"); / verifyTransactions(loan, //"
+        }
+      ],
+      "stable": true,
+      "verdicts": [
+        "true/compile-level",
+        "true/compile-level",
+        "true/compile-level"
+      ]
+    },
+    {
+      "prs": [
+        6158,
+        6169
+      ],
+      "titles": [
+        "FINERACT-2649: batch migrate Tier 4 loan tests to feign",
+        "FINERACT-2698: (Progressive) Loan originators - Updating Originators during disbursement"
+      ],
+      "category": "code",
+      "summary": "두 PR이 base의 서로 다른 위치에 동일한 선언 identity를 새로 추가합니다. 각 변경은 단독으로 유효하지만 clean merge 결과에는 중복 선언이 남습니다.",
+      "runs": [
+        {
+          "prIds": [
+            6158,
+            6169
+          ],
+          "isConflict": false,
+          "conflictType": "none",
+          "onMoneyPath": false,
+          "moneyPathReason": "인용된 코드는 Swagger 문서화 필드와 통합테스트 헬퍼 호출로, 실제 금액 계산·정산 로직 경로가 아니다.",
+          "confidence": 0.3,
+          "changedSide": "unknown",
+          "reasoning": "제공된 verbatim 인용만으로는 두 PR이 동일 클래스의 같은 위치에 'public Long id;' 선언을 각각 중복 추가했다는 사실을 확인할 수 없다. PR-A는 통합테스트를 feign으로 마이그레이션하고 PR-B는 originator 갱신 로직을 다루는데, 이 두 변경이 동일 선언 identity를 충돌시킨다는 근거가 인용에 나타나지 않는다.",
+          "keyQuote": "public Long id;"
+        },
+        {
+          "prIds": [
+            6158,
+            6169
+          ],
+          "isConflict": false,
+          "conflictType": "none",
+          "onMoneyPath": false,
+          "moneyPathReason": "제공된 인용은 disbursement 금액(1200.0)을 포함하나, 두 PR이 실제로 충돌한다는 증거가 없어 금액 경로 손상 판정 불가",
+          "confidence": 0.7,
+          "changedSide": "unknown",
+          "reasoning": "인용된 증거는 PR-A의 통합테스트 마이그레이션(feign 관련 loanId 변경)과 별개 Swagger 파일의 'public Long id;' 선언 하나를 보여줄 뿐, 두 PR이 동일 위치에 동일 identity를 각각 새로 추가한다는 verbatim 증거가 없다. 서로 다른 파일/영역을 건드리며 중복 선언이 실제로 발생함을 입증하는 인용이 존재하지 않는다.",
+          "keyQuote": "public Long id;"
+        },
+        {
+          "prIds": [
+            6158,
+            6169
+          ],
+          "isConflict": false,
+          "conflictType": "none",
+          "onMoneyPath": false,
+          "moneyPathReason": "인용된 증거는 테스트 파일 마이그레이션(A)과 originator 로직/Swagger DTO(B)로 서로 다른 파일에 흩어져 있어 실제 금액 계산 경로 충돌을 보여주지 않는다.",
+          "confidence": 0.3,
+          "changedSide": "unknown",
+          "reasoning": "제공된 verbatim 인용은 서로 다른 파일(LoansApiResourceSwagger.java, LoanInterestPauseApiTest.java)의 단편들로, 두 PR이 동일 스코프에 동일한 'public Long id;' 선언을 중복 추가한다는 것을 실제로 입증하지 못한다. Swagger DTO의 id 필드는 보통 여러 nested static class에 각각 존재하므로 중복 선언 근거가 약하고, A는 테스트, B는 프로덕션 로직으로 접점이 명확하지 않다.",
+          "keyQuote": "public Long id;"
+        }
+      ],
+      "stable": true,
+      "verdicts": [
+        "false/none",
+        "false/none",
+        "false/none"
+      ]
+    },
+    {
+      "prs": [
+        6158,
+        6078
+      ],
+      "titles": [
+        "FINERACT-2649: batch migrate Tier 4 loan tests to feign",
+        "FINERACT-2672: Isolate standing-instruction execution so one failure cannot revert the whole run"
+      ],
+      "category": "rollout",
+      "summary": "한 PR은 schedulerJobHelper을 schedulerHelper로 바꾸지만 다른 PR은 기존 이름을 새 코드에서 참조합니다.",
+      "runs": [
+        {
+          "prIds": [
+            6158,
+            6078
+          ],
+          "isConflict": true,
+          "conflictType": "compile-level",
+          "onMoneyPath": false,
+          "moneyPathReason": "인용된 코드는 통합 테스트(LoanCOBCatchUpInstanceModeIntegrationTest)의 스케줄러 헬퍼 변수 참조로, 실제 런타임 금액 처리 경로가 아니라 테스트 스캐폴딩이다.",
+          "confidence": 0.4,
+          "changedSide": "both",
+          "reasoning": "한 PR이 schedulerJobHelper를 schedulerHelper로 리네임하는 반면 다른 PR은 새/기존 코드에서 여전히 schedulerJobHelper를 참조하므로 동일 심볼이 정의되지 않아 Java 컴파일 에러가 발생한다. 이는 정적 타입 단계에서 CI가 잡는 compile-level 충돌이며 런타임 로직 오류(silent)가 아니다. 다만 제공된 인용이 한 파일·단편에 한정되어 두 PR이 실제로 동일 파일/심볼을 공유하는지 확증이 약하다.",
+          "keyQuote": "schedulerJobHelper → schedulerHelper / originalSchedulerStatus = schedulerJobHelper.getSchedulerStatus();"
+        },
+        {
+          "prIds": [
+            6158,
+            6078
+          ],
+          "isConflict": true,
+          "conflictType": "compile-level",
+          "onMoneyPath": false,
+          "moneyPathReason": "변경 대상은 통합 테스트 파일(LoanCOBCatchUpInstanceModeIntegrationTest.java)의 헬퍼 필드 참조로 실제 자금 이체·계산 로직이 아니다.",
+          "confidence": 0.5,
+          "changedSide": "both",
+          "reasoning": "한 PR이 schedulerJobHelper를 schedulerHelper로 리네임하는데, 다른 PR은 동일 파일에서 여전히 schedulerJobHelper.getSchedulerStatus()/updateSchedulerStatus를 참조한다. 병합 시 존재하지 않는 심볼 참조로 컴파일 에러가 발생하며 CI가 잡으므로 런타임 금액 손실은 0으로 본다.",
+          "keyQuote": "originalSchedulerStatus = schedulerJobHelper.getSchedulerStatus(); schedulerJobHelper.updateSchedulerStatus(false); (schedulerJobHelper → schedulerHelper)"
+        },
+        {
+          "prIds": [
+            6158,
+            6078
+          ],
+          "isConflict": true,
+          "conflictType": "compile-level",
+          "onMoneyPath": false,
+          "moneyPathReason": "인용된 코드는 모두 integration-test 파일(LoanCOBCatchUpInstanceModeIntegrationTest.java)의 스케줄러 헬퍼 참조로, 프로덕션 금액 처리 경로가 아니라 테스트 코드다.",
+          "confidence": 0.5,
+          "changedSide": "both",
+          "reasoning": "한 PR이 필드/변수 schedulerJobHelper를 schedulerHelper로 리네임하는데 다른 PR은 여전히 schedulerJobHelper.getSchedulerStatus()/updateSchedulerStatus(false) 같은 옛 이름을 참조하므로 병합 시 심볼 미해결로 컴파일 에러가 난다. 이는 CI가 병합 후 잡는 정적 타입 오류이며 런타임 금액 손실은 없다.",
+          "keyQuote": "schedulerJobHelper → schedulerHelper / originalSchedulerStatus = schedulerJobHelper.getSchedulerStatus();"
+        }
+      ],
+      "stable": true,
+      "verdicts": [
+        "true/compile-level",
+        "true/compile-level",
+        "true/compile-level"
+      ]
+    },
+    {
+      "prs": [
+        6024,
+        6015
+      ],
+      "titles": [
+        "FINERACT-2652: Decouple SavingsAccount from injected collaborators",
+        "FINERACT-2291: New command processing - update and delete group"
+      ],
+      "category": "rollout",
+      "summary": "한 PR은 getActivationDate을 getActivatedOnDate로 바꾸지만 다른 PR은 기존 이름을 새 코드에서 참조합니다.",
+      "runs": [
+        {
+          "prIds": [
+            6024,
+            6015
+          ],
+          "isConflict": true,
+          "conflictType": "compile-level",
+          "onMoneyPath": false,
+          "moneyPathReason": "getActivationDate는 이자계산 시작일(startInterestCalculationDate) 판정에 쓰이는 금액 경로지만, 메서드명 불일치는 Java 정적 타입 컴파일 에러로 CI가 병합 시 즉시 잡으므로 직접 금액 손실은 보수적으로 0.",
+          "confidence": 0.45,
+          "changedSide": "A",
+          "moneyPathReason2": "",
+          "reasoning": "PR-A(#6024)가 SavingsAccount의 getActivationDate를 getActivatedOnDate로 rename하며, PR-B가 병합될 코드에서 기존 이름 getActivationDate를 참조하면 없는 메서드 호출로 컴파일이 실패한다. 다만 제공된 verbatim 인용은 모두 SavingsAccount.java 내부의 사용부이고, PR-B 측 파일(SavingsApplicationProcessWritePlatformServiceJpaRepositoryImpl.java)이 실제로 getActivationDate를 호출한다는 코드 인용이 없어 확신도는 낮다.",
+          "keyQuote": "getActivationDate → getActivatedOnDate; startInterestCalculationLocalDate = getActivationDate();"
+        },
+        {
+          "prIds": [
+            6024,
+            6015
+          ],
+          "isConflict": true,
+          "conflictType": "compile-level",
+          "onMoneyPath": false,
+          "moneyPathReason": "getActivationDate는 이자계산 기준일(금액경로)에 관여하지만 rename 후 기존 이름 참조는 Java 정적 타입에서 컴파일 에러가 되어 CI가 병합 후 즉시 차단하므로 직접 런타임 금액 손실은 보수적으로 0이다.",
+          "confidence": 0.5,
+          "changedSide": "A",
+          "moneyPathReason_dup": null,
+          "reasoning": "PR-A(#6024)가 SavingsAccount의 getActivationDate를 getActivatedOnDate로 rename하는데, 다른 코드에서 여전히 getActivationDate()를 호출하면 존재하지 않는 메서드 호출로 컴파일이 실패한다. 이는 정적 타입 단계에서 잡히는 compile-level 충돌이며 silent-runtime이 아니다.",
+          "keyQuote": "getActivationDate → getActivatedOnDate / startInterestCalculationLocalDate = getActivationDate();"
+        },
+        {
+          "prIds": [
+            6024,
+            6015
+          ],
+          "isConflict": true,
+          "conflictType": "compile-level",
+          "onMoneyPath": false,
+          "moneyPathReason": "getActivationDate→getActivatedOnDate 리네임은 컴파일 시점에 해소되며, 남은 old-name 참조는 정적 타입에서 컴파일 에러로 CI가 병합 후 잡으므로 런타임 금액 손실은 보수적으로 0",
+          "confidence": 0.5,
+          "changedSide": "both",
+          "reasoning": "PR-A가 SavingsAccount의 getActivationDate를 getActivatedOnDate로 리네임하는데, 인용된 코드들은 여전히 getActivationDate()를 호출한다. old name을 참조하는 코드가 남으면 없는 메서드 호출로 컴파일 에러가 발생하는 compile-level 충돌이다. 다만 PR-B의 provider 서비스 파일에서 old name을 실제 호출하는 verbatim 인용은 파일 경로만 제시되어 확정 근거가 약하다.",
+          "keyQuote": "getActivationDate → getActivatedOnDate ... final Object[] defaultUserArgs = Arrays.asList(transactionDate, getActivationDate()).toArray();"
+        }
+      ],
+      "stable": true,
+      "verdicts": [
+        "true/compile-level",
+        "true/compile-level",
+        "true/compile-level"
+      ]
+    },
+    {
+      "prs": [
+        6158,
+        6133
+      ],
+      "titles": [
+        "FINERACT-2649: batch migrate Tier 4 loan tests to feign",
+        "FINERACT-2455: Working Capital loan mark as fraud"
+      ],
+      "category": "rollout",
+      "summary": "한 PR은 loan을 zeroInterestLoanId로 바꾸지만 다른 PR은 기존 이름을 새 코드에서 참조합니다.",
+      "runs": [
+        {
+          "prIds": [
+            6158,
+            6133
+          ],
+          "isConflict": true,
+          "conflictType": "compile-level",
+          "onMoneyPath": false,
+          "moneyPathReason": "인용된 코드는 모두 integration-tests 하위의 테스트 파일(LoanInterestPauseApiTest.java)이며 프로덕션 금액 계산 경로가 아니다.",
+          "confidence": 0.35,
+          "changedSide": "both",
+          "reasoning": "한 PR이 변수를 loan에서 zeroInterestLoanId로 리네임하고 다른 PR이 기존 이름 loan을 사용하는 코드(applyAndApproveProgressiveLoan, disburseLoan, verifyTransactions)를 추가하면 미해결 심볼로 컴파일 에러가 발생한다. 다만 인용에는 두 PR 각각의 변경 주체가 명확히 구분되어 있지 않아 확신은 낮다.",
+          "keyQuote": "loan → zeroInterestLoanId / loan = applyAndApproveProgressiveLoan(...); disburseLoan(loan, ...)"
+        },
+        {
+          "prIds": [
+            6158,
+            6133
+          ],
+          "isConflict": true,
+          "conflictType": "compile-level",
+          "onMoneyPath": false,
+          "moneyPathReason": "변경은 integration-tests의 테스트 코드 내 지역 변수 이름(loan→zeroInterestLoanId) 리네임이며, 프로덕션 금액 계산 경로가 아니다.",
+          "confidence": 0.5,
+          "changedSide": "both",
+          "reasoning": "한 PR이 테스트에서 loan 변수를 zeroInterestLoanId로 리네임하고, 다른 PR의 새 코드가 disburseLoan(loan,...), verifyTransactions(loan,...)처럼 기존 이름 loan을 참조하면 Java 정적 타입에서 undefined symbol 컴파일 에러가 발생한다. 이는 테스트 파일에 한정되고 병합 후 CI가 잡으므로 직접 금액 손실은 0으로 본다.",
+          "keyQuote": "loan → zeroInterestLoanId / disburseLoan(loan, BigDecimal.valueOf(1200.0), \"1 September 2019\"); / verifyTransactions(loan, //"
+        },
+        {
+          "prIds": [
+            6158,
+            6133
+          ],
+          "isConflict": false,
+          "conflictType": "none",
+          "onMoneyPath": false,
+          "moneyPathReason": "제공된 인용은 통합테스트 파일 내 변수명 변경(loan→zeroInterestLoanId)일 뿐이며, PR-B(fraud)가 동일 변수를 새 코드에서 참조한다는 verbatim 증거가 없다.",
+          "confidence": 0.5,
+          "changedSide": "A",
+          "reasoning": "인용된 코드는 모두 PR-A의 LoanInterestPauseApiTest.java 리팩토링(변수 rename)이며, PR-B의 Working Capital fraud 관련 코드가 이 변수를 참조한다는 실제 인용이 없다. 두 PR이 같은 심볼을 충돌하게 사용한다는 근거가 인용에 존재하지 않으므로 pair-induced conflict로 판정할 수 없다.",
+          "keyQuote": "loan = applyAndApproveProgressiveLoan(clientId, loanProductId, \"1 September 2019\", 1200.0, 0.0, 4, null);"
+        }
+      ],
+      "stable": false,
+      "verdicts": [
+        "true/compile-level",
+        "true/compile-level",
+        "false/none"
+      ]
+    },
+    {
+      "prs": [
+        6158,
+        5895
+      ],
+      "titles": [
+        "FINERACT-2649: batch migrate Tier 4 loan tests to feign",
+        "FINERACT-2048: Make amount and recurrence fields optional for Dues-based Standing Instructions"
+      ],
+      "category": "rollout",
+      "summary": "한 PR은 loan을 zeroInterestLoanId로 바꾸지만 다른 PR은 기존 이름을 새 코드에서 참조합니다.",
+      "runs": [
+        {
+          "prIds": [
+            6158,
+            5895
+          ],
+          "isConflict": false,
+          "conflictType": "none",
+          "onMoneyPath": false,
+          "moneyPathReason": "PR-B는 Standing Instructions의 amount/recurrence 필드 optional화이고, 인용된 코드는 모두 LoanInterestPauseApiTest.java의 loan 테스트 변수 rename 관련으로, PR-B가 이 파일이나 변수를 참조한다는 verbatim 증거가 없다.",
+          "confidence": 0.8,
+          "changedSide": "A",
+          "moneyPathReason_dup": "",
+          "reasoning": "제공된 인용은 전부 PR-A의 LoanInterestPauseApiTest.java 내 loan→zeroInterestLoanId rename만 보여준다. PR-B(Standing Instructions optional 필드)가 동일 파일이나 변수 이름을 참조한다는 verbatim 코드 인용이 전혀 없어 pair-induced 충돌을 근거지을 수 없다.",
+          "keyQuote": "loan = applyAndApproveProgressiveLoan(clientId, loanProductId, \"1 September 2019\", 1200.0, 0.0, 4, null);"
+        },
+        {
+          "prIds": [
+            6158,
+            5895
+          ],
+          "isConflict": false,
+          "conflictType": "none",
+          "onMoneyPath": false,
+          "moneyPathReason": "제공된 인용은 loan 테스트 rename만 보여주며, PR-B(Standing Instructions optional fields)가 동일 파일/심볼을 참조한다는 verbatim 증거가 없다.",
+          "confidence": 0.4,
+          "changedSide": "A",
+          "reasoning": "인용된 코드는 모두 LoanInterestPauseApiTest.java의 loan→zeroInterestLoanId 관련 변경(PR-A쪽)뿐이며, PR-B가 이 이름을 새 코드에서 참조한다는 증거 인용이 전혀 없다. 두 PR은 서로 다른 도메인(loan 테스트 vs standing instructions)이라 교차 참조를 입증할 verbatim이 부재하므로 pair-induced conflict를 확정할 수 없다.",
+          "keyQuote": "loan = applyAndApproveProgressiveLoan(clientId, loanProductId, \"1 September 2019\", 1200.0, 0.0, 4, null);"
+        },
+        {
+          "prIds": [
+            6158,
+            5895
+          ],
+          "isConflict": false,
+          "conflictType": "none",
+          "onMoneyPath": false,
+          "moneyPathReason": "제공된 인용은 모두 PR-A 소속 LoanInterestPauseApiTest.java의 지역 변수 rename(loan→zeroInterestLoanId)과 그 사용부이며, 금액 검증 로직은 테스트 내부에 국한된다.",
+          "confidence": 0.2,
+          "changedSide": "A",
+          "reasoning": "PR-B(#5895)는 Dues-based Standing Instructions의 옵션 필드 관련 변경으로, 인용된 LoanInterestPauseApiTest.java나 loan 변수 rename과 연결되는 verbatim 근거가 전혀 없다. 인용된 rename과 사용부는 모두 PR-A 내부에서 일관되므로 pair-induced 충돌 근거가 성립하지 않는다.",
+          "keyQuote": "loan = applyAndApproveProgressiveLoan(clientId, loanProductId, \"1 September 2019\", 1200.0, 0.0, 4, null);"
+        }
+      ],
+      "stable": true,
+      "verdicts": [
+        "false/none",
+        "false/none",
+        "false/none"
+      ]
+    },
+    {
+      "prs": [
+        6021,
+        6024
+      ],
+      "titles": [
+        "FINERACT-2291: Migrate Group activate, close, assignStaff, unassignStaff endpoints to typed command framework",
+        "FINERACT-2652: Decouple SavingsAccount from injected collaborators"
+      ],
+      "category": "rollout",
+      "summary": "한 PR은 getActivationDate을 getActivatedOnDate로 바꾸지만 다른 PR은 기존 이름을 새 코드에서 참조합니다.",
+      "runs": [
+        {
+          "prIds": [
+            6021,
+            6024
+          ],
+          "isConflict": true,
+          "conflictType": "compile-level",
+          "onMoneyPath": true,
+          "moneyPathReason": "getActivationDate()는 이자 계산 시작일(startInterestCalculationLocalDate) 및 거래 처리(transactionDate)에 사용되어 금액 경로에 닿지만, 컴파일 에러는 CI가 병합 후 잡으므로 런타임 금액 손실은 보수적으로 0.",
+          "confidence": 0.55,
+          "changedSide": "unknown",
+          "reasoning": "한 PR이 getActivationDate를 getActivatedOnDate로 리네임하지만 다른 코드에서는 여전히 getActivationDate()를 호출하고 있어 존재하지 않는 메서드 호출로 컴파일 에러가 발생한다. 이는 정적 타입 단계에서 잡히는 compile-level 충돌이다.",
+          "keyQuote": "getActivationDate → getActivatedOnDate; final Object[] defaultUserArgs = Arrays.asList(transactionDate, getActivationDate()).toArray();"
+        },
+        {
+          "prIds": [
+            6021,
+            6024
+          ],
+          "isConflict": true,
+          "conflictType": "compile-level",
+          "onMoneyPath": false,
+          "moneyPathReason": "getActivationDate는 이자계산 시작일 산정 등 금액 로직에 닿지만, 메서드명 불일치는 컴파일 단계에서 CI가 잡으므로 런타임 금액 손실은 보수적으로 0",
+          "confidence": 0.5,
+          "changedSide": "unknown",
+          "reasoning": "한 PR이 SavingsAccount의 getActivationDate를 getActivatedOnDate로 rename하는데 다른 코드가 여전히 옛 이름 getActivationDate()를 호출하면 Java 정적 타입에서 존재하지 않는 메서드 호출로 컴파일 에러가 난다. 이는 병합 후 CI가 검출하는 compile-level 충돌이다.",
+          "keyQuote": "getActivationDate → getActivatedOnDate; startInterestCalculationLocalDate = getActivationDate();"
+        },
+        {
+          "prIds": [
+            6021,
+            6024
+          ],
+          "isConflict": false,
+          "conflictType": "none",
+          "onMoneyPath": false,
+          "moneyPathReason": "인용된 getActivationDate/getActivatedOnDate 관련 코드는 모두 SavingsAccount.java 한 파일 내부에 있고, PR-A는 Group activate/close/assignStaff 엔드포인트 마이그레이션으로 SavingsAccount와 무관하므로 두 PR 사이의 교차 참조가 인용으로 입증되지 않는다.",
+          "confidence": 0.4,
+          "changedSide": "B",
+          "reasoning": "제공된 verbatim 인용은 rename(getActivationDate→getActivatedOnDate)과 old name 사용이 모두 SavingsAccount.java 안에 있어 PR-B 단일 도메인 변경으로 보인다. PR-A는 Group 엔드포인트 관련으로 SavingsAccount의 해당 메서드를 참조한다는 근거가 인용에 없다. 따라서 pair-induced 교차 충돌로 판정할 근거가 부족하다.",
+          "keyQuote": "final Object[] defaultUserArgs = Arrays.asList(transactionDate, getActivationDate()).toArray();"
+        }
+      ],
+      "stable": false,
+      "verdicts": [
+        "true/compile-level",
+        "true/compile-level",
+        "false/none"
+      ]
+    }
+  ]
+}
