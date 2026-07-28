@@ -155,7 +155,7 @@ header{position:sticky;top:0;z-index:40;background:#161616f2;backdrop-filter:blu
 .scroll-hint{font-size:13px;color:var(--text-3);margin-bottom:4px}
 .scroll-hint .g{font-family:var(--mono);color:var(--text-2)}
 
-.sc-grid{display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:56px;align-items:start}
+.sc-grid{display:grid;grid-template-columns:minmax(250px,300px) minmax(0,1fr);gap:32px;align-items:start}
 .sc-steps{min-width:0}
 .sc-step{min-height:64vh;display:flex;flex-direction:column;justify-content:center;
   position:relative;padding:24px 0 24px 26px;scroll-margin-top:80px}
@@ -171,7 +171,7 @@ header{position:sticky;top:0;z-index:40;background:#161616f2;backdrop-filter:blu
 .sc-step.active p{color:var(--text-2)}
 .sc-slot{margin-top:20px}
 
-.sc-stage{position:sticky;top:84px;min-width:0}
+.sc-stage{position:sticky;top:max(72px,calc(50vh - min(32vh,240px)));min-width:0}
 .sc-frames{position:relative;height:min(64vh,480px)}
 .frame{border:1px solid var(--border);background:#0b0b0b;display:flex;flex-direction:column}
 .sc-stage .frame{position:absolute;inset:0;opacity:0;transform:translateY(16px);
@@ -183,6 +183,9 @@ header{position:sticky;top:0;z-index:40;background:#161616f2;backdrop-filter:blu
 .frame .bar .url{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-left:10px}
 .screen{background:var(--app-bg);color:var(--app-ink);font-size:12px;line-height:1.45;
   flex:1;min-height:0;overflow:hidden;position:relative}
+.product-shot{width:100%;height:100%;display:block;object-fit:contain;background:var(--app-bg)}
+.product-shot.shot-top{object-position:top center}
+.product-shot.shot-center{object-position:center}
 
 /* Narrow: dissolve the stage; JS parks each frame in its caption's slot */
 @media(max-width:920px){
@@ -323,7 +326,7 @@ footer{padding:36px 0 44px}
 <section class="hero">
   <canvas id="netbg" aria-hidden="true"></canvas>
   <div class="wrap">
-    <span class="powered rv">Powered by IBM Bob · Opus 4.8</span>
+    <span class="powered rv">Powered by IBM Bob</span>
     <h1 class="rv">Catch <b>semantic PR conflicts</b> before they <span class="break-word">break</span> your main branch.</h1>
     <p class="lede rv">MergeScope scans your open pull requests for intent-level conflicts that
       pass CI and git checks — but silently break logic when merged together.</p>
@@ -343,7 +346,7 @@ footer{padding:36px 0 44px}
       </div>
       <div class="chip">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><rect x="1" y="1" width="12" height="12" stroke="#78a9ff" stroke-width="1.4"/><path d="M4 9.5V6m3 3.5V4.5m3 5V7" stroke="#78a9ff" stroke-width="1.4"/></svg>
-        Powered by IBM Bob (Opus 4.8)
+        Powered by IBM Bob
       </div>
     </div>
   </div>
@@ -403,136 +406,37 @@ footer{padding:36px 0 44px}
 
           <!-- Screen 1 — load repo + funnel -->
           <div class="frame active" data-i="0">
-            <div class="bar"><i></i><i></i><i></i><span class="url">mergescope — cross-PR semantic conflict radar</span></div>
+            <div class="bar"><i></i><i></i><i></i><span class="url">live repository analysis</span></div>
             <div class="screen">
-              <div class="m-hd">
-                <span class="t">Cross-PR Semantic Conflict Radar</span>
-                <span class="r"> godotengine/godot · 5,151 open PRs</span>
-                <div class="m-clone">
-                  <span class="in">git clone <a href="https://urldefense.proofpoint.com/v2/url?u=https-3A__github.com_godotengine_godot.git&amp;d=DwQGaQ&amp;c=slrrB7dE8n7gBJbeO0g-IQ&amp;r=AV49iQf2bdJmrjj_aweiYw&amp;m=Ln8-1iRaoBZ30FJs3SLpAgUtjdkNfAn130nTlrPDo4g7xhmdXzXtaNnwiSEVo4T0&amp;s=TIzudyLs50OEgaPaLqR0hhPNvZYeDMdqvaeypCKMYeA&amp;e=">https://github.com/godotengine/godot.git</a></span>
-                  <span class="bt">Load repo</span>
-                </div>
-              </div>
-              <div class="m-funnel">
-                <div class="m-f"><div class="n">5,151</div><div class="l">open PRs</div></div>
-                <div class="m-f"><div class="n">2,128</div><div class="l">Step 0 pass</div></div>
-                <div class="m-f blue"><div class="n">947</div><div class="l">buckets (resources)</div></div>
-                <div class="m-f blue"><div class="n">312</div><div class="l">candidate pairs</div></div>
-                <div class="m-f hot"><div class="n">9</div><div class="l">conflict candidates</div></div>
-              </div>
-              <div class="m-row">
-                <div class="r1"><span class="m-dot" style="background:#D6453A"></span><span class="prn">#112430 ↔ #112907</span>
-                  <span class="vl" style="color:#D6453A">Conflict candidate</span><span class="m-badge silent">SILENT BREAK · merges clean</span><span class="sc">0.92</span></div>
-                <div class="r2">Both PRs own “session restore” — merged together, restore runs twice.</div>
-              </div>
-              <div class="m-row">
-                <div class="r1"><span class="m-dot" style="background:#D6453A"></span><span class="prn">#111203 ↔ #112658</span>
-                  <span class="vl" style="color:#D6453A">Conflict candidate</span><span class="m-badge silent">SILENT BREAK · merges clean</span><span class="sc">0.88</span></div>
-                <div class="r2">max_fps = 0 means “unlimited” in one PR and “invalid” in the other.</div>
-              </div>
+              <img class="product-shot shot-top" src="shots/step-1.png"
+                alt="Current product fetching open pull requests and reporting analysis progress">
             </div>
           </div>
 
           <!-- Screen 2 — work queue -->
           <div class="frame" data-i="1">
-            <div class="bar"><i></i><i></i><i></i><span class="url">work queue — ranked by severity</span></div>
-            <div class="screen" style="padding-top:10px">
-              <div class="m-row">
-                <div class="r1"><span class="m-dot" style="background:#D6453A"></span><span class="prn">#112430 ↔ #112907</span>
-                  <span class="vl" style="color:#D6453A">Conflict candidate</span><span class="m-badge silent">SILENT BREAK · merges clean</span><span class="sc">score 0.92</span></div>
-                <div class="r2">Editor session restore: EditorNode vs SceneTabs both claim ownership — restore may run twice.</div>
-              </div>
-              <div class="m-row">
-                <div class="r1"><span class="m-dot" style="background:#D6453A"></span><span class="prn">#111203 ↔ #112658</span>
-                  <span class="vl" style="color:#D6453A">Conflict candidate</span><span class="m-badge silent">SILENT BREAK · merges clean</span><span class="sc">score 0.88</span></div>
-                <div class="r2">Opposite value semantics for max_fps = 0: valid “unlimited” vs rejected as invalid.</div>
-              </div>
-              <div class="m-row">
-                <div class="r1"><span class="m-dot" style="background:#7A4FD6"></span><span class="prn">#109988 ↔ #112215</span>
-                  <span class="vl" style="color:#7A4FD6">Possible duplicate</span><span class="m-badge git">git flags this too</span><span class="sc">score 0.81</span></div>
-                <div class="r2">Two fixes for the same screen-capture bug — merging both would double-correct.</div>
-              </div>
-              <div class="m-row">
-                <div class="r1"><span class="m-dot" style="background:#DC9B00"></span><span class="prn">#110455 ↔ #113120</span>
-                  <span class="vl" style="color:#DC9B00">Uncertain</span><span class="m-badge git">merges clean</span><span class="sc">score 0.64</span></div>
-                <div class="r2">Both reorder boot init — needs a human check on settings vs audio-driver order.</div>
-              </div>
-              <div class="m-row">
-                <div class="r1"><span class="m-dot" style="background:#8E9AA4"></span><span class="prn">#106987 ↔ #113101</span>
-                  <span class="vl" style="color:#8E9AA4">Judged harmless</span><span class="sc">score 0.41</span></div>
-                <div class="r2">Same file, disjoint functions — a file-level false alarm filtered out at function level.</div>
-              </div>
+            <div class="bar"><i></i><i></i><i></i><span class="url">ranked work queue</span></div>
+            <div class="screen">
+              <img class="product-shot shot-top" src="shots/step-2.png"
+                alt="Current product work queue prioritizing conflict candidates and review pairs">
             </div>
           </div>
 
           <!-- Screen 3 — conflict graph -->
           <div class="frame" data-i="2">
-            <div class="bar"><i></i><i></i><i></i><span class="url">graph view — PRs × shared resources</span></div>
+            <div class="bar"><i></i><i></i><i></i><span class="url">repository relationship map</span></div>
             <div class="screen">
-              <div class="m-graph-hint">Click a PR (circle) or a resource (square) · red edge = conflict</div>
-              <svg viewBox="0 0 860 340" style="width:100%;height:100%;display:block" aria-label="Bipartite conflict graph mockup">
-                <g stroke="#B7C1C8" stroke-width="1.2">
-                  <line x1="180" y1="90"  x2="420" y2="150"/>
-                  <line x1="180" y1="250" x2="420" y2="150" stroke-dasharray="2 5"/>
-                  <line x1="640" y1="70"  x2="420" y2="150" stroke-dasharray="2 5"/>
-                  <line x1="700" y1="210" x2="540" y2="260"/>
-                  <line x1="300" y1="300" x2="540" y2="260"/>
-                </g>
-                <line x1="180" y1="90" x2="180" y2="250" stroke="#D6453A" stroke-width="3">
-                  <animate attributeName="stroke-opacity" values="1;.35;1" dur="2.4s" repeatCount="indefinite"/>
-                </line>
-                <line x1="640" y1="70" x2="700" y2="210" stroke="#DC9B00" stroke-width="2" stroke-dasharray="7 4"/>
-                <rect x="404" y="134" width="32" height="32" fill="#EFF3F5" stroke="#5C6B78" stroke-width="1.5"/>
-                <rect x="526" y="246" width="26" height="26" fill="#EFF3F5" stroke="#5C6B78" stroke-width="1.5"/>
-                <g font-family="IBM Plex Mono,monospace" font-size="11" fill="#5C6B78">
-                  <text x="420" y="126" text-anchor="middle">editor_node.cpp</text>
-                  <text x="539" y="240" text-anchor="middle">viewport.cpp</text>
-                  <text x="180" y="72" text-anchor="middle">#112430</text>
-                  <text x="180" y="276" text-anchor="middle">#112907</text>
-                  <text x="640" y="52" text-anchor="middle">#111982</text>
-                  <text x="700" y="196" text-anchor="middle">#113544</text>
-                  <text x="300" y="326" text-anchor="middle">#109988</text>
-                </g>
-                <g fill="#fff" stroke="#1C2733" stroke-width="1.6">
-                  <circle cx="180" cy="90"  r="13" stroke="#D6453A" stroke-width="2.4"/>
-                  <circle cx="180" cy="250" r="13" stroke="#D6453A" stroke-width="2.4"/>
-                  <circle cx="640" cy="70"  r="11"/>
-                  <circle cx="700" cy="210" r="11"/>
-                  <circle cx="300" cy="300" r="11" stroke="#7A4FD6" stroke-width="2.2"/>
-                </g>
-              </svg>
+              <img class="product-shot shot-top" src="shots/step-3.png"
+                alt="Current product relationship graph grouping pull requests into repository sectors">
             </div>
           </div>
 
           <!-- Screen 4 — judgment + suggested fix -->
           <div class="frame" data-i="3">
-            <div class="bar"><i></i><i></i><i></i><span class="url">judgment — #112430 ↔ #112907</span></div>
+            <div class="bar"><i></i><i></i><i></i><span class="url">conflict judgment and evidence</span></div>
             <div class="screen">
-              <div class="m-cards">
-                <div class="m-card">
-                  <span class="prn">#112430</span>
-                  <div class="tt">Editor: unify session (tabs &amp; layout) restore under EditorNode</div>
-                  <div class="as"><b>ownership</b> — session restore is performed by EditorNode alone</div>
-                </div>
-                <div class="m-card">
-                  <span class="prn">#112907</span>
-                  <div class="tt">Scene tabs: add self-managed session restore + lazy loading</div>
-                  <div class="as"><b>ownership</b> — tab restore is owned by SceneTabs; EditorNode only triggers</div>
-                </div>
-              </div>
-              <div class="m-rationale">Both PRs assign “session restore” to different owners. Each is correct in its own world — merged together, restore may run twice or the two paths overwrite each other’s state.</div>
-              <div class="m-diff">
-                <div class="df">editor/gui/editor_scene_tabs.cpp · suggested fix</div>
-                <div class="dl">void SceneTabs::restore_tabs() {</div>
-                <div class="dl del">	_restore_own_session();</div>
-                <div class="dl add">	// Session restore is owned by EditorNode (see #112430).</div>
-                <div class="dl add">	// SceneTabs only supplies tab state via get_tab_state().</div>
-                <div class="dl">}</div>
-              </div>
-              <div class="m-acts">
-                <span class="m-act red">Confirm conflict</span>
-                <span class="m-act gh">Post suggestion to GitHub →</span>
-              </div>
+              <img class="product-shot shot-center" src="shots/step-4.png"
+                alt="Current product detail window explaining assumptions, impact, action, and evidence">
             </div>
           </div>
 

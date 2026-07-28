@@ -2,18 +2,18 @@ const VERDICT_ORDER = { conflict: 0, coordination: 1, review: 2 };
 
 export function parseRepositoryInput(value = "") {
   let input = String(value).trim();
-  if (!input) throw new Error("GitHub 저장소 주소를 입력해 주세요.");
+  if (!input) throw new Error("Enter a GitHub repository URL.");
   input = input.replace(/^git\s+clone\s+/i, "").replace(/\s+.*$/, "");
   if (/^https?:\/\//i.test(input) && !/^https?:\/\/github\.com\//i.test(input)) {
-    throw new Error("현재 라이브 데모는 GitHub 저장소만 지원합니다.");
+    throw new Error("The live demo currently supports GitHub repositories only.");
   }
   if (/^git@/i.test(input) && !/^git@github\.com:/i.test(input)) {
-    throw new Error("현재 라이브 데모는 GitHub 저장소만 지원합니다.");
+    throw new Error("The live demo currently supports GitHub repositories only.");
   }
   input = input.replace(/^git@github\.com:/i, "").replace(/^https?:\/\/github\.com\//i, "");
   input = input.replace(/\.git\/?$/, "").replace(/^\/+|\/+$/g, "");
   const parts = input.split("/").filter(Boolean);
-  if (parts.length < 2) throw new Error("owner/repo 또는 GitHub URL 형식으로 입력해 주세요.");
+  if (parts.length < 2) throw new Error("Use owner/repo or a GitHub URL.");
   return `${parts[0]}/${parts[1]}`;
 }
 
@@ -39,6 +39,19 @@ function evidenceText(item) {
   if (typeof item === "string") return item;
   if (!item || typeof item !== "object") return "";
   return item.quote || item.text || item.explanation || item.path || item.file || JSON.stringify(item);
+}
+
+function evidenceDetail(item, index) {
+  if (typeof item === "string") return { id: `E${index + 1}`, side: "", file: "", symbol: "", line: "", text: item };
+  if (!item || typeof item !== "object") return null;
+  return {
+    id: item.id || `E${index + 1}`,
+    side: item.side || item.owner || "",
+    file: item.file || item.path || "",
+    symbol: item.symbol || item.anchor || "",
+    line: item.line || item.lineNumber || "",
+    text: evidenceText(item),
+  };
 }
 
 function findingResources(finding = {}) {
@@ -97,6 +110,7 @@ export function adaptBackendResponse(data = {}) {
       consequence: finding.consequence || finding.impact || "Impact requires reviewer confirmation.",
       recommendation: finding.recommendation || "Review both changes together before merge.",
       evidence: (finding.evidence || []).map(evidenceText).filter(Boolean),
+      evidenceDetails: (finding.evidence || []).map(evidenceDetail).filter((item) => item?.text),
       witnesses: (finding.witnesses || []).map((witness) => ({
         title: witness.title || witness.type || "Evidence",
         explanation: witness.explanation || "",
