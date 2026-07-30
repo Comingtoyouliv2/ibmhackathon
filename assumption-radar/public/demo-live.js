@@ -1,26 +1,16 @@
 import { adaptBackendResponse, parseRepositoryInput } from "./demo-data.js";
+import { verifiedCases } from "./verified-cases.js";
 
 const $ = (selector) => document.querySelector(selector);
-const state = { model: null, filter: "needs-action", graphFilter: "all", selected: null, view: "queue", loading: false, progressTimer: null, progressStartedAt: 0 };
+const state = { model: null, filter: "needs-action", graphFilter: "all", selected: null, view: "queue", activeCase: "zeppelin" };
 const verdicts = {
   conflict: { label: "Conflict candidate", color: "#D6453A", badge: "candidate" },
-  coordination: { label: "Merge coordination", color: "#7A4FD6", badge: "gittoo" },
   review: { label: "Needs review", color: "#DC9B00", badge: "stale" },
 };
+let progressTimer = null;
 
 function escapeHtml(value = "") {
   return String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
-}
-
-async function request(path, payload = {}) {
-  const response = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || `Backend request failed (${response.status})`);
-  return data;
 }
 
 function setStatus(message, tone = "") {
@@ -29,50 +19,100 @@ function setStatus(message, tone = "") {
   element.textContent = message;
 }
 
-function setLoading(active) {
-  state.loading = active;
-  $("#clone-btn").disabled = active;
-  $("#clone-btn").textContent = active ? "Analyzing…" : "Analyze repo";
+function updateProgress(percent, label, tone = "") {
+  const progress = $("#analysis-progress");
+  progress.hidden = false;
+  progress.className = `analysis-progress ${tone}`;
+  $("#progress-fill").style.width = `${percent}%`;
+  $("#progress-percent").textContent = `${percent}%`;
+  $("#progress-label").textContent = label;
 }
 
-function progressSnapshot(elapsedSeconds) {
-  if (elapsedSeconds < 4) return { value: 8 + elapsedSeconds * 3, stage: "Fetching open pull requests" };
-  if (elapsedSeconds < 12) return { value: 20 + (elapsedSeconds - 4) * 2.5, stage: "Downloading PR diffs" };
-  if (elapsedSeconds < 28) return { value: 40 + (elapsedSeconds - 12) * 1.25, stage: "Building candidate pairs" };
-  if (elapsedSeconds < 55) return { value: 60 + (elapsedSeconds - 28) * .67, stage: "Checking semantic relationships" };
-  if (elapsedSeconds < 90) return { value: 78 + (elapsedSeconds - 55) * .29, stage: "Running merge preflight and AI judgment" };
-  return { value: Math.min(94, 88 + Math.log2(1 + elapsedSeconds - 90)), stage: "Finalizing evidence and relationships" };
+function beginProgress() {
+  clearInterval(progressTimer);
+  let percent = 8;
+  updateProgress(percent, "Fetching open pull requests");
+  progressTimer = setInterval(() => {
+    percent = Math.min(88, percent + (percent < 45 ? 7 : percent < 72 ? 4 : 2));
+    const label = percent < 40
+      ? "Fetching open pull requests"
+      : percent < 72
+        ? "Building cross-PR candidates"
+        : "IBM Bob is judging candidate pairs";
+    updateProgress(percent, label);
+  }, 1_500);
 }
 
-function updateProgress(value, stage) {
-  const rounded = Math.max(0, Math.min(100, Math.round(value)));
-  $("#progress-fill").style.width = `${rounded}%`;
-  $("#progress-percent").textContent = `${rounded}%`;
-  $("#progress-stage").textContent = stage;
-  $("#progress-track").setAttribute("aria-valuenow", String(rounded));
+function finishProgress(success) {
+  clearInterval(progressTimer);
+  progressTimer = null;
+  updateProgress(100, success ? "Analysis complete" : "Analysis stopped", success ? "done" : "failed");
 }
 
-function startProgress() {
-  window.clearInterval(state.progressTimer);
-  state.progressStartedAt = Date.now();
-  const panel = $("#analysis-progress");
-  panel.hidden = false;
-  panel.className = "analysis-progress";
-  updateProgress(5, "Connecting to GitHub");
-  state.progressTimer = window.setInterval(() => {
-    const elapsed = (Date.now() - state.progressStartedAt) / 1000;
-    const snapshot = progressSnapshot(elapsed);
-    updateProgress(snapshot.value, snapshot.stage);
-  }, 350);
-}
+async function analyzeRepositoryWithBob(event) {
+  event.preventDefault();
+  const repositoryInput = $("#bob-repository");
+  const apiKeyInput = $("#bob-api-key");
+  const submit = $("#bob-analyze-submit");
+  let repository;
+  try {
+    repository = parseRepositoryInput(repositoryInput.value);
+  } catch (error) {
+    setStatus(error.message, "err");
+    repositoryInput.focus();
+    return;
+  }
+  const bobApiKey = apiKeyInput.value.trim();
+  if (!bobApiKey) {
+    setStatus("Enter an IBM Bob API key.", "err");
+    apiKeyInput.focus();
+    return;
+  }
 
-function finishProgress(success, message) {
-  window.clearInterval(state.progressTimer);
-  state.progressTimer = null;
-  const panel = $("#analysis-progress");
-  panel.classList.add(success ? "done" : "failed");
-  updateProgress(success ? 100 : Number($("#progress-track").getAttribute("aria-valuenow")), message);
-  window.setTimeout(() => { panel.hidden = true; }, success ? 850 : 2400);
+  submit.disabled = true;
+  document.querySelectorAll("[data-case]").forEach((button) => { button.disabled = true; });
+  setStatus(`Analyzing ${repository}. This can take several minutes.`, "warn");
+  beginProgress();
+  const requestBody = JSON.stringify({
+    repository,
+    limit: 20,
+    useAI: true,
+    aiProvider: "bob",
+    bobApiKey,
+    aiRepeats: 1,
+    useMergePreflight: true,
+    useVerification: false,
+  });
+  apiKeyInput.value = "";
+
+  try {
+    const response = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: requestBody,
+      credentials: "same-origin",
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || `Analysis failed with HTTP ${response.status}.`);
+    state.activeCase = "live";
+    document.querySelectorAll("[data-case]").forEach((button) => {
+      button.classList.remove("active");
+      button.setAttribute("aria-pressed", "false");
+    });
+    closeFindingModal();
+    renderModel(adaptBackendResponse(result));
+    finishProgress(true);
+    setStatus(result.aiError
+      ? `Repository analysis completed, but IBM Bob fell back to deterministic results: ${result.aiError}`
+      : `IBM Bob analysis complete for ${repository}.`,
+    result.aiError ? "warn" : "ok");
+  } catch (error) {
+    finishProgress(false);
+    setStatus(error.message || "IBM Bob analysis failed.", "err");
+  } finally {
+    submit.disabled = false;
+    document.querySelectorAll("[data-case]").forEach((button) => { button.disabled = false; });
+  }
 }
 
 function prById(id) {
@@ -85,14 +125,22 @@ function findingById(id) {
 
 function renderFunnel() {
   const { summary } = state.model;
-  const actionable = summary.conflictCount + summary.coordinationCount + summary.reviewCount;
-  const steps = [
-    [summary.prCount, "Open PRs"],
-    [summary.pairCount, "Possible pairs"],
-    [summary.candidateCount, "Candidate pairs"],
-    [summary.aiReviewedPairCount, "AI reviewed"],
-    [actionable, "Needs attention"],
-  ];
+  const actionable = summary.conflictCount + summary.reviewCount;
+  const steps = state.model.mode === "verified-case"
+    ? [
+        [summary.prCount, "Pull requests"],
+        [summary.pairCount, "Relationships"],
+        [summary.candidateCount, "Cross-checked"],
+        [summary.aiReviewedPairCount, "Evidence-backed"],
+        [actionable, "Findings"],
+      ]
+    : [
+        [summary.prCount, "Open PRs"],
+        [summary.pairCount, "Possible pairs"],
+        [summary.candidateCount, "Candidate pairs"],
+        [summary.aiReviewedPairCount, "AI reviewed"],
+        [actionable, "Needs attention"],
+      ];
   $("#funnel").innerHTML = steps.map(([number, label], index) => `
     <div class="fstep real ${index === steps.length - 1 ? "final" : ""}">
       <span class="num">${escapeHtml(number)}</span><span class="lbl">${escapeHtml(label)}</span>
@@ -109,13 +157,13 @@ function filterButton(value, label, count) {
 }
 
 function renderQueue() {
+  const isVerifiedCase = state.model.mode === "verified-case";
   const conflicts = state.model.findings.filter((item) => item.verdict === "conflict");
   const reviews = state.model.findings.filter((item) => item.verdict === "review");
-  const coordination = state.model.findings.filter((item) => item.verdict === "coordination");
-  const primary = conflicts[0] || reviews[0] || coordination[0];
+  const primary = conflicts[0] || reviews[0];
   const flaggedPrIds = new Set(state.model.findings.flatMap((finding) => finding.prIds));
   const noActionPrCount = Math.max(0, state.model.summary.prCount - flaggedPrIds.size);
-  const context = `<details class="plan"><summary>Analysis coverage <span class="n">backend result · ${escapeHtml(state.model.mode)}</span></summary>
+  const context = `<details class="plan"><summary>${isVerifiedCase ? "Case evidence" : "Analysis coverage"} <span class="n">${isVerifiedCase ? "verified example" : `backend result · ${escapeHtml(state.model.mode)}`}</span></summary>
     <div class="plan-body"><div class="plan-sec"><div class="pl">Repository</div><code>${escapeHtml(state.model.repository)}</code></div>
     <div class="plan-sec"><div class="pl">Coverage</div>${state.model.summary.pairCount} total pair(s) · ${state.model.summary.candidateCount} candidate(s) · ${state.model.summary.independentCount} independent · ${state.model.summary.insufficientCount} insufficient</div>
     ${state.model.aiError ? `<div class="plan-sec"><div class="pl">AI fallback</div>${escapeHtml(state.model.aiError)}</div>` : ""}</div></details>`;
@@ -135,7 +183,7 @@ function renderQueue() {
     const b = prById(primary.prIds[1]);
     const verdict = verdicts[primary.verdict];
     const runCount = primary.verification?.runs?.length || 0;
-    const executionLabel = runCount ? `${runCount} Base/A/B/A+B result(s) available` : "Executable verification not run";
+    const executionLabel = runCount ? `${runCount} verification check(s) available` : "Verification not attached";
     hero = `<article class="priority-hero ${primary.verdict === "review" ? "review-hero" : ""}" data-finding="${escapeHtml(primary.id)}">
       <div class="hero-top"><span class="vdot" style="background:${verdict.color}"></span><span class="eyebrow">${escapeHtml(verdict.label)} · check first</span><span class="pair">#${escapeHtml(a.num)} × #${escapeHtml(b.num)}</span><span class="spacer"></span><span class="badge ${verdict.badge}">${escapeHtml(primary.mergeTree === "clean" ? "CLEAN MERGE" : primary.mergeTree === "textual-conflict" ? "GIT TEXT CONFLICT" : "PREFLIGHT UNKNOWN")}</span></div>
       <div class="hero-body">
@@ -147,17 +195,16 @@ function renderQueue() {
           <div class="contract-card"><span class="clabel">PR #${escapeHtml(b.num)} change / assumption</span>${escapeHtml(primary.assumptionB)}</div>
         </div>
         <div class="impact-card"><b>If merged together</b>${escapeHtml(primary.consequence)}</div>
-        <div class="hero-actions"><button class="primary" data-open-finding="${escapeHtml(primary.id)}">View code evidence</button><button data-open-finding="${escapeHtml(primary.id)}">View A/B/A+B status</button><span class="verify-state">${escapeHtml(executionLabel)}</span></div>
+        <div class="hero-actions"><button class="primary" data-open-finding="${escapeHtml(primary.id)}">View code evidence</button><span class="verify-state">${escapeHtml(executionLabel)}</span></div>
       </div>
     </article>`;
   }
   const reviewRows = reviews.length
     ? `<div class="compact-list">${reviews.slice(0, 6).map(compactRow).join("")}${reviews.length > 6 ? `<details class="more-results"><summary>Show ${reviews.length - 6} more review pair(s)</summary>${reviews.slice(6).map(compactRow).join("")}</details>` : ""}</div>`
     : `<div class="qempty">No additional review pair was returned.</div>`;
-  const coordinationSection = coordination.length ? `<section class="action-section"><div class="section-hd"><h3>Merge coordination</h3><span>${coordination.length} mechanical or workflow pair(s)</span></div><div class="compact-list">${coordination.map(compactRow).join("")}</div></section>` : "";
   $("#queue-wrap").innerHTML = `
     <section class="scan-overview">
-      <div class="scan-title"><h2>Scan result</h2><p>${escapeHtml(state.model.summary.prCount)} open PRs · ${escapeHtml(state.model.summary.pairCount)} possible pairs analyzed</p></div>
+      <div class="scan-title"><h2>${isVerifiedCase ? "Verified case in repository context" : "Scan result"}</h2><p>${isVerifiedCase ? `${escapeHtml(state.model.summary.prCount)} pull requests · ${escapeHtml(state.model.summary.pairCount)} relationships scanned` : `${escapeHtml(state.model.summary.prCount)} open PRs · ${escapeHtml(state.model.summary.pairCount)} possible pairs analyzed`}</p></div>
       <div class="scan-kpis">
         <div class="scan-kpi danger"><div class="klabel"><span class="vdot" style="background:${verdicts.conflict.color}"></span>Conflict candidate</div><div class="knum">${conflicts.length}<span class="kunit">pair(s)</span></div></div>
         <div class="scan-kpi warning"><div class="klabel"><span class="vdot" style="background:${verdicts.review.color}"></span>Needs review</div><div class="knum">${reviews.length}<span class="kunit">pair(s)</span></div></div>
@@ -166,8 +213,7 @@ function renderQueue() {
     </section>
     ${hero}
     <section class="action-section"><div class="section-hd"><h3>Needs review</h3><span>${reviews.length} pair(s) requiring human judgment</span></div>${reviewRows}</section>
-    ${coordinationSection}
-    <div class="map-strip"><div class="map-copy"><b>Repository relationship map</b>See all ${escapeHtml(state.model.summary.prCount)} PRs grouped by repository sector while conflict and review candidates stay highlighted.</div><button class="map-cta" data-switch-graph>View sector map →</button></div>
+    <div class="map-strip"><div class="map-copy"><b>${isVerifiedCase ? "Change relationship map" : "Repository relationship map"}</b>See ${isVerifiedCase ? "how the two PRs connect through shared code and contracts" : `all ${escapeHtml(state.model.summary.prCount)} PRs grouped by repository sector while conflict and review candidates stay highlighted`}.</div><button class="map-cta" data-switch-graph>View relationship map →</button></div>
     ${context}`;
   $("#queue-wrap").querySelectorAll("[data-finding]").forEach((row) => row.addEventListener("click", () => select("finding", row.dataset.finding)));
   $("#queue-wrap").querySelectorAll("[data-open-finding]").forEach((button) => button.addEventListener("click", (event) => {
@@ -178,17 +224,17 @@ function renderQueue() {
 }
 
 function renderEmptyDetail() {
-  $("#side-hd").innerHTML = `<span class="title">Backend analysis</span><span class="mono">${escapeHtml(state.model.repository)}</span>`;
-  $("#side-body").innerHTML = `<div class="empty">Select a queue item, PR node, or resource to inspect the backend's evidence.<br><br>No frontend-only score or verdict is added here.</div>`;
+  $("#side-hd").innerHTML = `<span class="title">Case evidence</span><span class="mono">${escapeHtml(state.model.repository)}</span>`;
+  $("#side-body").innerHTML = `<div class="empty">Select the finding, a PR node, or a shared contract to inspect the evidence behind this verified case.</div>`;
 }
 
 function renderGraphFilterDetail(filter) {
-  const filterOrder = filter === "all" ? ["conflict", "review", "coordination"] : [filter];
+  const filterOrder = filter === "all" ? ["conflict", "review"] : [filter];
   const findings = filterOrder.flatMap((key) => state.model.findings.filter((finding) => finding.verdict === key));
   const guidance = {
     all: {
       title: "All findings",
-      text: "Start with conflict candidates, then resolve needs-review pairs and merge coordination. Select any pair to open its evidence in a separate detail window.",
+      text: "Start with the verified conflict candidate, then inspect the small needs-review queue. Select any pair to open its evidence in a separate detail window.",
     },
     conflict: {
       title: "What to check first",
@@ -197,10 +243,6 @@ function renderGraphFilterDetail(filter) {
     review: {
       title: "What needs human judgment",
       text: "Confirm whether the relationship is causal rather than simple proximity. Look for missing execution evidence, ambiguous intent, or an unsupported contract inference.",
-    },
-    coordination: {
-      title: "What to coordinate",
-      text: "Check merge order, stacked-PR ancestry, textual conflicts, and duplicate or superseded work. These are operational merge risks, not confirmed silent regressions.",
     },
   }[filter];
   const headerLabel = filter === "all" ? "All findings" : verdicts[filter].label;
@@ -237,9 +279,6 @@ function renderFindingDetail(finding) {
   const a = prById(finding.prIds[0]);
   const b = prById(finding.prIds[1]);
   const verdict = verdicts[finding.verdict];
-  const coordinationNote = finding.verdict === "coordination"
-    ? `<div class="callout"><b>Why this is not a confirmed semantic conflict</b><br>This pair needs merge-order, rebase, text-conflict resolution, or duplicate-work consolidation. Git or repository history already exposes the coordination need; the backend has not confirmed a silent pair-induced regression.</div>`
-    : "";
   const evidenceDetails = finding.evidenceDetails?.length
     ? finding.evidenceDetails
     : finding.evidence.map((text, index) => ({ id: `E${index + 1}`, side: "", file: "", symbol: "", line: "", text }));
@@ -288,6 +327,20 @@ function renderFindingDetail(finding) {
       ${primaryEvidence}
       ${remainingEvidence ? `<details class="evidence-more evidence-all"><summary>View all ${remainingEvidenceCount} remaining evidence item${remainingEvidenceCount === 1 ? "" : "s"}</summary>${remainingEvidence}</details>` : ""}`
     : `<div class="empty">No concrete evidence was returned. Treat this finding as a review hypothesis until evidence is attached.</div>`;
+  const verificationRuns = finding.verification?.runs || [];
+  const verificationSummary = verificationRuns.length
+    ? `<div class="verification-grid">${verificationRuns.map((run) => {
+        const status = String(run.status || "");
+        const isFailure = /fail|error|http 4|rejected/i.test(status);
+        return `<div class="verification-item ${isFailure ? "fail" : ""}">
+          <span class="vlabel">${escapeHtml(String(run.label || "check").replaceAll("_", " "))}</span>
+          <span class="vstatus">${escapeHtml(status)}</span>
+        </div>`;
+      }).join("")}</div>
+      <div class="verification-note">${state.activeCase === "zeppelin"
+        ? "The client and server contract was replayed at the affected endpoint. This is not a claim that the full Zeppelin integration suite was executed."
+        : "The same combined diagnostic mismatch was reproduced in both merge orders."}</div>`
+    : `<div class="empty">No executable or contract-replay status was attached to this finding.</div>`;
   $("#modal").innerHTML = `
     <div class="modal-hd">
       <span class="vbadge" style="background:${verdict.color}">${escapeHtml(verdict.label)}</span>
@@ -297,13 +350,13 @@ function renderFindingDetail(finding) {
     </div>
     <div class="modal-body">
       <div class="kv"><b>${escapeHtml(finding.title)}</b><br><span class="chip">${escapeHtml(finding.basis)}</span><span class="chip">${escapeHtml(finding.source)}</span></div>
-      ${coordinationNote}
       <div class="sec-title">Backend summary</div><div class="callout blue">${escapeHtml(finding.summary)}</div>
       <div class="sec-title">Hidden assumptions</div>
       <div class="assump" style="border-left-color:${verdict.color}"><span class="atype">PR #${escapeHtml(a.num)}</span>${escapeHtml(finding.assumptionA)}</div>
       <div class="assump" style="border-left-color:${verdict.color}"><span class="atype">PR #${escapeHtml(b.num)}</span>${escapeHtml(finding.assumptionB)}</div>
       <div class="sec-title">If merged together</div><div class="callout red">${escapeHtml(finding.consequence)}</div>
       <div class="sec-title">Recommended action</div><div class="callout blue">${escapeHtml(finding.recommendation)}</div>
+      <div class="sec-title">Verification status</div>${verificationSummary}
       <div class="sec-title">Why these changes connect</div>
       <div class="connection-explanation"><b>PR #${escapeHtml(a.num)}</b> relies on “${escapeHtml(finding.assumptionA)}” while <b>PR #${escapeHtml(b.num)}</b> introduces or relies on “${escapeHtml(finding.assumptionB)}”. The analyzer linked the pair because these expectations meet in the same code path or contract and may produce: <b>${escapeHtml(finding.consequence)}</b></div>
       <div class="sec-title">Evidence summary</div>${evidenceSummary}
@@ -341,7 +394,7 @@ function select(type, id) {
 }
 
 function renderLegend(showResources = true) {
-  $("#legend").innerHTML = `<div class="row"><b>How to read</b></div>` + Object.entries(verdicts).map(([, item]) => `<div class="row"><span class="vdot" style="background:${item.color}"></span>${item.label}</div>`).join("") + `<div class="row"><span class="vdot" style="background:#AAB4BC"></span>No action found</div><div class="row">○ PR${showResources ? " &nbsp; □ shared file / contract" : " &nbsp; — relationship"}</div>`;
+  $("#legend").innerHTML = `<div class="row"><b>How to read</b></div>` + Object.entries(verdicts).map(([, item]) => `<div class="row"><span class="vdot" style="background:${item.color}"></span>${item.label}</div>`).join("") + `<div class="row"><span class="vdot" style="background:#AAB4BC"></span>No action found</div><div class="row"><b>Blue dotted ring</b> verified case</div><div class="row">○ PR${showResources ? " &nbsp; □ shared file / contract" : " &nbsp; — relationship"}</div>`;
 }
 
 function graphFindings() {
@@ -352,12 +405,11 @@ function graphFindings() {
 function renderGraphPriority() {
   const counts = Object.fromEntries(Object.keys(verdicts).map((key) => [key, state.model.findings.filter((item) => item.verdict === key).length]));
   const hidden = Math.max(0, state.model.prs.length - new Set(graphFindings().flatMap((finding) => finding.prIds)).size);
-  const button = (filter, title, count, color, extra = "") => `<button class="graph-focus ${extra} ${state.graphFilter === filter ? "active" : ""}" data-graph-filter="${filter}" ${filter === "coordination" ? 'title="Text conflicts, stacked PRs, or duplicate work that need merge-order, rebase, or consolidation—not a confirmed silent semantic conflict."' : ""}><span class="gf-top"><span class="vdot" style="background:${color}"></span>${title}</span><span class="gf-count">${count}</span></button>`;
+  const button = (filter, title, count, color) => `<button class="graph-focus ${state.graphFilter === filter ? "active" : ""}" data-graph-filter="${filter}"><span class="gf-top"><span class="vdot" style="background:${color}"></span>${title}</span><span class="gf-count">${count}</span></button>`;
   $("#graph-priority").innerHTML = [
     button("all", "All PRs", state.model.prs.length, "#0F62FE"),
     button("conflict", "Conflict candidates", counts.conflict, verdicts.conflict.color),
     button("review", "Needs review", counts.review, verdicts.review.color),
-    button("coordination", "Merge coordination", counts.coordination, verdicts.coordination.color),
     state.graphFilter === "all" ? "" : `<span class="graph-hidden-note">${hidden} unrelated PR(s) hidden</span>`,
   ].join("");
   $("#graph-priority").querySelectorAll("[data-graph-filter]").forEach((control) => control.addEventListener("click", () => {
@@ -423,7 +475,6 @@ function renderGraph() {
   const findings = graphFindings();
   const priorityFindings = state.model.findings.filter((finding) => finding.verdict === "conflict" || finding.verdict === "review");
   const priorityPrIds = new Set(priorityFindings.flatMap((finding) => finding.prIds));
-  const coordinationPrIds = new Set(state.model.findings.filter((finding) => finding.verdict === "coordination").flatMap((finding) => finding.prIds));
   const priorityResourcePaths = new Set(priorityFindings.flatMap((finding) => finding.resources));
   const focusPrIds = new Set(findings.flatMap((finding) => finding.prIds));
   const findingResourcePaths = new Set(findings.flatMap((finding) => finding.resources));
@@ -434,8 +485,8 @@ function renderGraph() {
     return visibleUsers > 1 && findingResourcePaths.has(resource.path);
   }).slice(0, 24);
   const nodes = [
-    ...prs.map((pr) => ({ ...pr, kind: "pr", sector: dominantSector(pr.paths), priority: priorityPrIds.has(pr.id), coordination: coordinationPrIds.has(pr.id) })),
-    ...resources.map((resource) => ({ ...resource, kind: "resource", sector: sectorForPath(resource.path), priority: priorityResourcePaths.has(resource.path), coordination: false })),
+    ...prs.map((pr) => ({ ...pr, kind: "pr", sector: dominantSector(pr.paths), priority: priorityPrIds.has(pr.id) })),
+    ...resources.map((resource) => ({ ...resource, kind: "resource", sector: sectorForPath(resource.path), priority: priorityResourcePaths.has(resource.path) })),
   ];
   const links = [];
   // A focused graph intentionally hides unrelated PRs. Only create resource
@@ -490,12 +541,12 @@ function renderGraph() {
     r: Math.max(8, Math.min(leaf.x1 - leaf.x0, leaf.y1 - leaf.y0) / 2 - 3),
     count: leaf.data.items.length,
     prCount: leaf.data.items.filter((item) => item.kind === "pr").length,
-    priorityCount: leaf.data.items.filter((item) => item.kind === "pr" && (item.priority || item.coordination)).length,
+    priorityCount: leaf.data.items.filter((item) => item.kind === "pr" && item.priority).length,
     tone: sectorTone(leaf.data.name),
   }]));
   sectorGroups.forEach(([name, items]) => {
     const sector = sectorLayout.get(name);
-    const ordered = [...items].sort((a, b) => Number(b.priority || b.coordination) - Number(a.priority || a.coordination)
+    const ordered = [...items].sort((a, b) => Number(b.priority) - Number(a.priority)
       || (a.kind === "pr" ? a.num : a.id).toString().localeCompare((b.kind === "pr" ? b.num : b.id).toString(), undefined, { numeric: true }));
     const availableRadius = Math.max(10, sector.r - (24 * nodeScale + 14));
     const phase = stableUnit(name, 43) * Math.PI * 2;
@@ -514,7 +565,7 @@ function renderGraph() {
     .force("charge", window.d3.forceManyBody().strength((item) => (item.priority ? -38 : -10) * nodeScale))
     .force("sector-x", window.d3.forceX((item) => item.homeX).strength(.62))
     .force("sector-y", window.d3.forceY((item) => item.homeY).strength(.62))
-    .force("collision", window.d3.forceCollide().radius((item) => (item.kind === "pr" ? (item.priority ? 20 : item.coordination ? 15.5 : 11) : (item.priority ? 10 : 7)) * nodeScale));
+    .force("collision", window.d3.forceCollide().radius((item) => (item.kind === "pr" ? (item.priority ? 20 : 11) : (item.priority ? 10 : 7)) * nodeScale));
   const viewport = svg.append("g");
   svg.call(window.d3.zoom().scaleExtent([.4, 3]).on("zoom", (event) => viewport.attr("transform", event.transform)));
   const sectorLayer = viewport.append("g").attr("class", "sector-layer");
@@ -550,9 +601,11 @@ function renderGraph() {
   sectorCards.append("title").text(([name]) => name);
   const link = viewport.append("g").selectAll("line").data(links).join("line")
     .attr("stroke", (item) => item.kind === "finding" ? verdicts[item.finding.verdict].color : "#C8D0D5")
-    .attr("stroke-width", (item) => item.kind === "finding" ? (item.finding.verdict === "conflict" ? 2.6 : item.finding.verdict === "review" ? 2.2 : 1.6) * nodeScale : 1)
+    .attr("stroke-width", (item) => item.kind === "finding"
+      ? (item.finding.verdict === "conflict" || item.finding.verdict === "review" ? 2 : 1.5) * nodeScale
+      : 1)
     .attr("stroke-dasharray", (item) => item.kind === "resource" ? "3 4" : null)
-    .attr("opacity", (item) => item.kind === "finding" ? (item.finding.verdict === "conflict" ? .82 : item.finding.verdict === "review" ? .76 : .56) : (isAll ? .18 : .5))
+    .attr("opacity", (item) => item.kind === "finding" ? (item.finding.verified ? 1 : item.finding.verdict === "conflict" ? .72 : item.finding.verdict === "review" ? .76 : .5) : (isAll ? .18 : .5))
     .style("cursor", (item) => item.kind === "finding" ? "pointer" : "default")
     .on("click", (_, item) => { if (item.kind === "finding") select("finding", item.finding.id); });
   link.filter((item) => item.kind === "finding").append("title").text((item) => `${verdicts[item.finding.verdict].label}: ${item.finding.title}`);
@@ -561,12 +614,18 @@ function renderGraph() {
       .on("drag", (event, item) => { item.fx = event.x; item.fy = event.y; })
       .on("end", (event, item) => { if (!event.active) simulation.alphaTarget(0); item.fx = null; item.fy = null; }));
   const prVerdict = (prId) => findings.find((finding) => finding.prIds.includes(prId) && finding.verdict === "conflict")?.verdict
-    || findings.find((finding) => finding.prIds.includes(prId) && finding.verdict === "review")?.verdict
-    || findings.find((finding) => finding.prIds.includes(prId) && finding.verdict === "coordination")?.verdict;
+    || findings.find((finding) => finding.prIds.includes(prId) && finding.verdict === "review")?.verdict;
   groups.filter((item) => item.kind === "pr").append("circle")
-    .attr("r", (item) => (prVerdict(item.id) === "conflict" ? 15.5 : prVerdict(item.id) === "review" ? 13.5 : prVerdict(item.id) === "coordination" ? 10 : 5.75) * nodeScale)
+    .attr("r", (item) => (prVerdict(item.id) === "conflict" ? 15.5 : prVerdict(item.id) === "review" ? 13.5 : 5.75) * nodeScale)
     .attr("fill", (item) => verdicts[prVerdict(item.id)]?.color || "#AAB4BC")
-    .attr("stroke", "#fff").attr("stroke-width", (item) => (item.priority ? 3 : 2) * nodeScale).attr("opacity", (item) => item.priority ? 1 : item.coordination ? .85 : .62);
+    .attr("stroke", "#fff").attr("stroke-width", (item) => (item.priority ? 3 : 2) * nodeScale).attr("opacity", (item) => item.priority ? 1 : .62);
+  const verifiedPr = (prId) => findings.some((finding) => finding.verified && finding.prIds.includes(prId));
+  groups.filter((item) => item.kind === "pr" && verifiedPr(item.id)).append("circle")
+    .attr("r", 20 * nodeScale)
+    .attr("fill", "none")
+    .attr("stroke", "#0F62FE")
+    .attr("stroke-width", 2.4 * nodeScale)
+    .attr("stroke-dasharray", `${3 * nodeScale} ${2 * nodeScale}`);
   const resourceNodeSize = (item) => Math.min(14, 6 + item.total * 1.5) * nodeScale;
   groups.filter((item) => item.kind === "resource").append("rect")
     .attr("x", (item) => -resourceNodeSize(item) / 2)
@@ -599,7 +658,7 @@ function renderGraph() {
   $("#graph-hint").textContent = findings.length
     ? state.graphFilter === "all"
       ? `All ${state.model.prs.length} PRs are shown. Start with red and amber nodes: each island is a code area, colored lines connect PRs that may interact, and gray dots have no current finding.`
-      : `${findings.length} prioritized relationship(s) shown. Conflict is highest priority; merge coordination is mechanical/operational follow-up.`
+      : `${findings.length} prioritized relationship(s) shown. Conflict is highest priority, followed by needs-review candidates.`
     : "No relationship in this filter. Choose another category or All context.";
 }
 
@@ -620,43 +679,36 @@ function renderModel(model) {
   state.selected = null;
   state.graphFilter = "all";
   $("#repo-label").textContent = model.repository;
-  $("#store-note").textContent = `${model.findings.length} backend finding(s)`;
+  $("#store-note").textContent = model.mode === "verified-case"
+    ? `${model.findings.length} scanned relationship(s) · 1 verified case`
+    : `${model.findings.length} backend finding(s)`;
   renderFunnel();
   renderQueue();
   renderGraphFilterDetail("all");
   if (state.view === "graph") renderGraph();
-  try { sessionStorage.setItem("mergescope-live-result-v1", JSON.stringify(model)); } catch {}
 }
 
-async function loadRepository() {
-  if (state.loading) return;
-  try {
-    const repository = parseRepositoryInput($("#clone-input").value);
-    setLoading(true);
-    setStatus("");
-    startProgress();
-    const data = await request("/api/analyze", {
-      repository,
-      limit: 100,
-      useAI: true,
-      useMergePreflight: true,
-      useVerification: false,
-    });
-    const model = adaptBackendResponse(data);
-    finishProgress(true, "Analysis complete");
-    renderModel(model);
-    setStatus(`${repository}: ${model.summary.prCount} PRs, ${model.summary.pairCount} pairs, ${model.findings.length} actionable finding(s).`, "ok");
-  } catch (error) {
-    finishProgress(false, "Analysis stopped");
-    setStatus(error.message, "err");
-  } finally {
-    setLoading(false);
-  }
+function loadVerifiedCase(caseKey) {
+  const selectedCase = verifiedCases[caseKey];
+  if (!selectedCase) return;
+  state.activeCase = caseKey;
+  document.querySelectorAll("[data-case]").forEach((button) => {
+    const active = button.dataset.case === caseKey;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  closeFindingModal();
+  renderModel(adaptBackendResponse(selectedCase));
+  setStatus(caseKey === "zeppelin"
+    ? "Verified example: a Python client and Java server disagree on the same restart contract."
+    : "Verified example: two individually passing mypy changes produce a repeatable combined test failure.", "ok");
 }
 
-async function initialize() {
-  $("#clone-btn").addEventListener("click", loadRepository);
-  $("#clone-input").addEventListener("keydown", (event) => { if (event.key === "Enter") loadRepository(); });
+function initialize() {
+  $("#bob-analyze-form").addEventListener("submit", analyzeRepositoryWithBob);
+  document.querySelectorAll("[data-case]").forEach((button) => {
+    button.addEventListener("click", () => loadVerifiedCase(button.dataset.case));
+  });
   $("#tab-queue").addEventListener("click", () => switchView("queue"));
   $("#tab-graph").addEventListener("click", () => switchView("graph"));
   $("#overlay").addEventListener("click", (event) => { if (event.target === $("#overlay")) closeFindingModal(); });
@@ -668,25 +720,7 @@ async function initialize() {
     $("#search-note").textContent = pr ? "" : "Not found";
     if (pr) select("pr", pr.id);
   });
-  try {
-    const cached = JSON.parse(sessionStorage.getItem("mergescope-live-result-v1") || "null");
-    if (cached?.prs && cached?.findings) {
-      renderModel(cached);
-      setStatus("Restored the most recent backend result from this browser session.", "ok");
-      return;
-    }
-  } catch {}
-  try {
-    setLoading(true);
-    setStatus("Loading a synthetic sample through the real backend…", "warn");
-    const model = adaptBackendResponse(await request("/api/demo", { useAI: false }));
-    renderModel(model);
-    setStatus("Backend sample loaded. Enter a GitHub repository to run a live scan.", "ok");
-  } catch (error) {
-    setStatus(`Backend sample failed: ${error.message}`, "err");
-  } finally {
-    setLoading(false);
-  }
+  loadVerifiedCase("zeppelin");
 }
 
 initialize();

@@ -1,0 +1,14 @@
+.cache
+.git
+.github
+.idea
+benchmarks
+docs
+eval
+handoff
+reports
+test
+node_modules
+npm-debug.log*
+*.pdf
+*.zip

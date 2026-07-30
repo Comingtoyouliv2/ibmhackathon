@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "case-mining-v0.1",
+  "generatedAt": "2026-07-30T10:01:25.559Z",
+  "repository": "python/mypy",
+  "pipelineVersion": "1.0.0",
+  "mode": "heuristic",
+  "preflight": {
+    "status": "complete",
+    "cacheDir": "/Users/wchoi/Desktop/PR_Review_gpt_ver/ibmhackathon-local-run-20260728/assumption-radar/.cache/repos/python__mypy.git",
+    "fetchedPrs": 90,
+    "fetchedBases": [
+      "master"
+    ],
+    "stacks": [
+      {
+        "ancestorId": "3656424154",
+        "ancestorNumber": 21454,
+        "descendantId": "3939190644",
+        "descendantNumber": 21647,
+        "identicalHeads": false
+      }
+    ],
+    "suppressedPrNumbers": [
+      21454
+    ],
+    "basePreparedPrs": 81,
+    "baseConflictPrNumbers": [
+      18085,
+      18647,
+      19056,
+      19948,
+      20518,
+      20577,
+      21309,
+      21611,
+      21626
+    ],
+    "baseUnavailablePrNumbers": [
+      20529,
+      21166
+    ],
+    "inspectedPairs": 3151,
+    "cleanPairs": 2658,
+    "textualConflictPairs": 12,
+    "baseConflictPairs": 481,
+    "unavailablePairs": 0
+  },
+  "selection": {
+    "requestedLimit": 100,
+    "fetched": 100,
+    "analyzed": 93,
+    "excluded": 7,
+    "language": null,
+    "languageExcluded": 0,
+    "ordering": "updated-desc",
+    "codeOnly": true,
+    "inputMode": "github-open-prs",
+    "sourcePath": null,
+    "baseMetadataRefreshed": false
+  },
+  "summary": {
+    "prCount": 92,
+    "pairCount": 4186,
+    "candidateCount": 556,
+    "conflictCount": 63,
+    "coordinationCount": 12,
+    "reviewCount": 0,
+    "independentCount": 3630,
+    "insufficientCount": 481,
+    "verdict": "Conflict witness found"
+  },
+  "artifacts": {
+    "sourcePrs": "source-prs.jsonl",
+    "alerts": "alerts.jsonl",
+    "labelQueue": "label-queue.jsonl",
+    "report": "report.md"
+  }
+}
