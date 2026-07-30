@@ -57,7 +57,7 @@ async function listMergedPullRequests(repo, token, options = {}) {
 
 export function parseRepository(value) {
   const cleaned = String(value || "").trim().replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "").replace(/\/$/, "");
-  if (!/^[\w.-]+\/[\w.-]+$/.test(cleaned)) throw new Error("저장소는 owner/repo 또는 GitHub URL 형식이어야 합니다.");
+  if (!/^[\w.-]+\/[\w.-]+$/.test(cleaned)) throw new Error("Repository input must use owner/repo or a GitHub URL.");
   return cleaned;
 }
 

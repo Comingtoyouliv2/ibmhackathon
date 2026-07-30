@@ -73,7 +73,7 @@ function report(rows, inputPath) {
 }
 
 async function main() {
-  if (!args[0]) throw new Error("candidate JSONL path가 필요합니다.");
+  if (!args[0]) throw new Error("A candidate JSONL path is required.");
   const candidates = await readJsonl(input);
   const evidence = await readJsonl(evidencePath);
   if (useGitHub) {

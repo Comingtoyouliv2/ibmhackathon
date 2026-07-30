@@ -48,5 +48,5 @@ export function extractFirstJsonObject(text) {
       catch { break; }
     }
   }
-  throw new Error("모델 응답에 유효한 JSON object가 없습니다.");
+  throw new Error("The model response contains no valid JSON object.");
 }

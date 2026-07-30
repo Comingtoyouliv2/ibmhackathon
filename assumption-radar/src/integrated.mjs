@@ -115,12 +115,12 @@ function interactionReasons(a, b) {
   const literalGrowthA = [...a.addedLiterals].filter((literal) => !a.removedLiterals.has(literal));
   const literalGrowthB = [...b.addedLiterals].filter((literal) => !b.removedLiterals.has(literal));
   const reasons = [];
-  if (sameWrites.length) reasons.push({ kind: "write-write", detail: `같은 상태 쓰기: ${sameWrites.join(", ")}` });
-  if (sameGrowth.length) reasons.push({ kind: "collection-growth", detail: `같은 컬렉션 변경: ${sameGrowth.join(", ")}` });
-  if (directFlow.length) reasons.push({ kind: "write-read", detail: `한쪽 쓰기와 다른 쪽 읽기: ${directFlow.join(", ")}` });
-  if (minimumDistance(a.controls, b.controls) <= 40) reasons.push({ kind: "control-flow", detail: "인접한 제어 흐름을 동시에 수정" });
+  if (sameWrites.length) reasons.push({ kind: "write-write", detail: `Writes to the same state: ${sameWrites.join(", ")}` });
+  if (sameGrowth.length) reasons.push({ kind: "collection-growth", detail: `Changes to the same collection: ${sameGrowth.join(", ")}` });
+  if (directFlow.length) reasons.push({ kind: "write-read", detail: `One PR writes what the other reads: ${directFlow.join(", ")}` });
+  if (minimumDistance(a.controls, b.controls) <= 40) reasons.push({ kind: "control-flow", detail: "Both PRs modify adjacent control flow" });
   if (a.pureLiteralList && b.pureLiteralList && literalGrowthA.length && literalGrowthB.length) {
-    reasons.push({ kind: "literal-collection", detail: "같은 리터럴 컬렉션을 동시에 확장" });
+    reasons.push({ kind: "literal-collection", detail: "Both PRs extend the same literal collection" });
   }
   return reasons;
 }
@@ -142,8 +142,8 @@ export const patchInteractionDetector = Object.freeze({
         `patch-${strongest.kind}`,
         "semantic",
         "behavior",
-        `${leftFile.filename}의 상태·제어 흐름 상호작용`,
-        `${reasons.map((reason) => reason.detail).join("; ")}. 실제 충돌 여부는 A+B 실행 또는 문맥 판정이 필요합니다.`,
+        `State and control-flow interaction in ${leftFile.filename}`,
+        `${reasons.map((reason) => reason.detail).join("; ")}. A+B execution or contextual judgment is required to determine whether this is an actual conflict.`,
         [leftFile.filename, ...leftEffects.evidence.map((line) => `A: ${line}`), ...rightEffects.evidence.map((line) => `B: ${line}`)],
         "relevance",
       ));
@@ -381,8 +381,8 @@ export function prepareIntentPrototypeAnalysis(prs, options = {}) {
     ...comparison,
     verdict: comparison.retrievalScore > 0 ? "review" : "independent",
     basis: "intent-resource-retrieval-prototype",
-    title: comparison.retrievalScore > 0 ? "Intent/resource가 겹치는 후보" : "공유 Intent/resource 없음",
-    summary: comparison.retrievalReasons.join("; ") || "구조화된 Intent/resource 접점을 찾지 못했습니다.",
+    title: comparison.retrievalScore > 0 ? "Candidate with overlapping intent or resources" : "No shared intent or resources",
+    summary: comparison.retrievalReasons.join("; ") || "No structured intent or resource intersection was found.",
   })).sort((left, right) => left.retrievalFeatures.priority - right.retrievalFeatures.priority
     || right.retrievalScore - left.retrievalScore || stablePairOrder(left, right));
   prepared.candidates = prepared.comparisons.filter((comparison) => comparison.verdict === "review");

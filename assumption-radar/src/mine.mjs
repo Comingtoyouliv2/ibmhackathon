@@ -17,7 +17,7 @@ const positional = args.find((arg, index) => !arg.startsWith("-") && (index === 
 
 function positiveInteger(raw, fallback, maximum) {
   const parsed = Number(raw ?? fallback);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > maximum) throw new Error(`1부터 ${maximum} 사이의 정수가 필요합니다.`);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > maximum) throw new Error(`Expected an integer between 1 and ${maximum}.`);
   return parsed;
 }
 
@@ -31,7 +31,7 @@ function requestedLanguage(raw) {
   const aliases = { js: "javascript", py: "python", ts: "typescript" };
   const language = aliases[String(raw).trim().toLowerCase()] || String(raw).trim().toLowerCase();
   if (!SUPPORTED_LANGUAGES.includes(language)) {
-    throw new Error(`지원하지 않는 --language 값입니다: ${raw}. 사용 가능: ${SUPPORTED_LANGUAGES.join(", ")}`);
+    throw new Error(`Unsupported --language value: ${raw}. Available values: ${SUPPORTED_LANGUAGES.join(", ")}`);
   }
   return language;
 }
@@ -109,40 +109,40 @@ function markdownReport(run, alerts, abstentions, controls, excluded, languageEx
   const lines = [
     `# ${run.repository} open-PR case mining`,
     "",
-    "> 이 결과는 사람이 아직 검증하지 않은 label candidate입니다. conflict benchmark나 제품 정확도로 사용하지 않습니다.",
+    "> These are label candidates that have not been human-verified. Do not use them as a conflict benchmark or product-accuracy claim.",
     "",
-    `- 실행: ${run.generatedAt}`,
-    `- 수집 PR: ${run.selection.fetched}개`,
-    `- 입력 code PR: ${run.selection.analyzed}개`,
-    `- stack collapse 후 PR: ${run.summary.prCount}개`,
-    `- stack으로 접힌 PR: ${run.preflight?.suppressedPrNumbers?.length || 0}개`,
-    `- 현재 base에 정상 적용된 PR: ${run.preflight?.basePreparedPrs || 0}개`,
-    `- 현재 base와 먼저 충돌한 PR: ${run.preflight?.baseConflictPrNumbers?.length || 0}개`,
-    `- 제외된 non-code PR: ${run.selection.excluded}개`,
-    `- 언어 필터: ${run.selection.language || "없음"}`,
-    `- 언어 필터로 제외된 PR: ${run.selection.languageExcluded}개`,
-    `- 비교 pair: ${run.summary.pairCount}개`,
-    `- conflict 후보: ${run.summary.conflictCount}개`,
-    `- coordination 후보: ${run.summary.coordinationCount}개`,
-    `- review 후보: ${run.summary.reviewCount}개`,
-    `- insufficient 후보: ${run.summary.insufficientCount}개`,
-    `- 사람이 볼 queue: ${alerts.length + abstentions.length + controls.length}개`,
+    `- Generated: ${run.generatedAt}`,
+    `- Fetched PRs: ${run.selection.fetched}`,
+    `- Input code PRs: ${run.selection.analyzed}`,
+    `- PRs after stack collapse: ${run.summary.prCount}`,
+    `- PRs collapsed into stacks: ${run.preflight?.suppressedPrNumbers?.length || 0}`,
+    `- PRs cleanly applied to the current base: ${run.preflight?.basePreparedPrs || 0}`,
+    `- PRs conflicting with the current base first: ${run.preflight?.baseConflictPrNumbers?.length || 0}`,
+    `- Excluded non-code PRs: ${run.selection.excluded}`,
+    `- Language filter: ${run.selection.language || "none"}`,
+    `- PRs excluded by language filter: ${run.selection.languageExcluded}`,
+    `- Compared pairs: ${run.summary.pairCount}`,
+    `- Conflict candidates: ${run.summary.conflictCount}`,
+    `- Coordination candidates: ${run.summary.coordinationCount}`,
+    `- Review candidates: ${run.summary.reviewCount}`,
+    `- Insufficient-evidence candidates: ${run.summary.insufficientCount}`,
+    `- Human review queue: ${alerts.length + abstentions.length + controls.length}`,
     "",
     "## Radar alerts",
     "",
   ];
-  if (!alerts.length) lines.push("- 이번 배치에서는 conflict/review witness가 발견되지 않았습니다.");
+  if (!alerts.length) lines.push("- No conflict or review witness was found in this batch.");
   for (const item of alerts) {
     const prs = item.pullRequests.map((pr) => `[#${pr.number}](${pr.url})`).join(" × ");
     lines.push(`- **${item.prediction.verdict}** ${prs}: ${item.prediction.title}`);
   }
   lines.push("", "## Abstention sample", "");
-  if (!abstentions.length) lines.push("- 없음");
-  for (const item of abstentions) lines.push(`- ${item.pullRequests.map((pr) => `#${pr.number}`).join(" × ")}: 추가 context 필요`);
+  if (!abstentions.length) lines.push("- None");
+  for (const item of abstentions) lines.push(`- ${item.pullRequests.map((pr) => `#${pr.number}`).join(" × ")}: more context required`);
   lines.push("", "## Independent control sample", "");
   for (const item of controls) lines.push(`- ${item.pullRequests.map((pr) => `[#${pr.number}](${pr.url})`).join(" × ")}`);
   lines.push("", "## Excluded non-code PR", "");
-  if (!excluded.length) lines.push("- 없음");
+  if (!excluded.length) lines.push("- None");
   for (const pr of excluded) lines.push(`- [#${pr.number}](${pr.url}) ${pr.title}`);
   if (languageExcluded.length) {
     lines.push("", "## Excluded by language filter", "");
@@ -153,7 +153,7 @@ function markdownReport(run, alerts, abstentions, controls, excluded, languageEx
 }
 
 async function main() {
-  if (!positional) throw new Error("owner/repository를 입력하세요.");
+  if (!positional) throw new Error("Enter owner/repository.");
   const repository = parseRepository(positional);
   const limit = positiveInteger(value("--limit"), 20, 1_000);
   const controlCount = positiveInteger(value("--controls"), 5, 50);
@@ -179,7 +179,7 @@ async function main() {
   const codePullRequests = sourcePath ? fetched : fetched.filter(isCodePullRequest);
   const languageExcluded = codePullRequests.filter((pr) => !touchesLanguage(pr, language));
   const selected = codePullRequests.filter((pr) => touchesLanguage(pr, language));
-  if (selected.length < 2) throw new Error("분석 가능한 code PR이 2개 미만입니다.");
+  if (selected.length < 2) throw new Error("Fewer than two analyzable code PRs were found.");
 
   const pipeline = await prepareAnalysisPipeline(selected, { repository, useMergePreflight: has("--preflight") });
   const prepared = pipeline.prepared;

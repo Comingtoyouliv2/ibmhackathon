@@ -68,7 +68,7 @@ const schema = {
 function extractOutput(response) {
   if (response.output_text) return response.output_text;
   for (const item of response.output || []) for (const content of item.content || []) if (content.type === "output_text" && content.text) return content.text;
-  throw new Error("OpenAI 응답에 비교 결과가 없습니다.");
+  throw new Error("The OpenAI response contains no comparison result.");
 }
 
 export async function analyzeWithAI(prepared, options = {}) {
@@ -77,7 +77,7 @@ export async function analyzeWithAI(prepared, options = {}) {
   const model = options.model || process.env.OPENAI_MODEL || "gpt-5.6-terra";
   const reasoningEffort = options.reasoningEffort || process.env.OPENAI_REASONING_EFFORT || "medium";
   if (!["none", "low", "medium", "high", "xhigh", "max"].includes(reasoningEffort)) {
-    throw new Error(`지원하지 않는 OpenAI reasoning effort: ${reasoningEffort}`);
+    throw new Error(`Unsupported OpenAI reasoning effort: ${reasoningEffort}`);
   }
   const candidates = selectSemanticJudgeCandidates(prepared, options);
   if (!candidates.length) return [];
@@ -95,7 +95,7 @@ export async function analyzeWithAI(prepared, options = {}) {
           input: [
             { role: "system", content: SEMANTIC_JUDGE_SYSTEM_PROMPT },
             { role: "user", content: JSON.stringify({
-              instruction: "각 case를 독립적으로 판정하라. 양쪽 실제 코드가 provider 변경→consumer 의존→합성 실패를 완결하면 contract-backed-conflict를 선택하되 executable-confirmed로 표현하지 마라. contract-backed-conflict 또는 testable-hypothesis이면 양쪽 실제 quote와 실행 가능한 트리거·oracle을 반환하라.",
+              instruction: "Judge every case independently. Choose contract-backed-conflict when real code on both sides completes a provider-change to consumer-dependency to composed-failure path, but do not call it executable-confirmed. For contract-backed-conflict or testable-hypothesis, return verbatim quotes from both sides plus an executable trigger and oracle. Return all explanations in English.",
               cases,
             }) },
           ],
@@ -110,7 +110,7 @@ export async function analyzeWithAI(prepared, options = {}) {
       runs.push(cases.map((item) => ({ prIds: item.prIds, protocolError: errors.at(-1) })));
     }
   }
-  if (errors.length === repeats) throw new Error(`모든 OpenAI 반복 판정이 실패했습니다: ${errors[0]}`);
+  if (errors.length === repeats) throw new Error(`All repeated OpenAI judgments failed: ${errors[0]}`);
   return aggregateSemanticJudgmentRuns(prepared, candidates, { repeats, runs }, {
     ...options,
     source: "openai", basis: "openai-interaction-hypothesis-v0.5",

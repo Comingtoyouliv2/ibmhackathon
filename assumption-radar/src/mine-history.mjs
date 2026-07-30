@@ -14,7 +14,7 @@ const positional = args.find((arg, index) => !arg.startsWith("-") && (index === 
 
 function positiveInteger(raw, fallback, maximum) {
   const parsed = Number(raw ?? fallback);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > maximum) throw new Error(`1부터 ${maximum} 사이의 정수가 필요합니다.`);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > maximum) throw new Error(`Expected an integer between 1 and ${maximum}.`);
   return parsed;
 }
 
@@ -22,7 +22,7 @@ function requestedLanguage(raw) {
   if (!raw) return null;
   const aliases = { js: "javascript", py: "python", ts: "typescript" };
   const language = aliases[String(raw).trim().toLowerCase()] || String(raw).trim().toLowerCase();
-  if (!SUPPORTED_LANGUAGES.includes(language)) throw new Error(`지원하지 않는 --language 값입니다: ${raw}. 사용 가능: ${SUPPORTED_LANGUAGES.join(", ")}`);
+  if (!SUPPORTED_LANGUAGES.includes(language)) throw new Error(`Unsupported --language value: ${raw}. Available values: ${SUPPORTED_LANGUAGES.join(", ")}`);
   return language;
 }
 
@@ -34,34 +34,34 @@ function report(run, mined) {
   const lines = [
     `# ${run.repository} history-backed candidate mining`,
     "",
-    "> fixing PR은 positive 정답이 아니라 원인 PR 쌍을 찾기 위한 anchor다. 모든 candidate는 4-state 실행 검증 전까지 unlabeled다.",
+    "> A fixing PR is an anchor for locating a possible causal PR pair, not a positive label. Every candidate remains unlabeled until four-state execution verification.",
     "",
-    `- 실행: ${run.generatedAt}`,
+    `- Generated: ${run.generatedAt}`,
     `- pipeline: ${run.pipelineVersion}`,
-    `- merged PR 수집: ${run.selection.fetchedMerged}개`,
-    `- 언어 필터 후: ${run.selection.analyzedMerged}개`,
-    `- fix/revert anchor: ${mined.fixes.length}개`,
-    `- possible pair regression: ${mined.candidates.length}개`,
-    `- matched control: ${mined.controls.length}개`,
+    `- Fetched merged PRs: ${run.selection.fetchedMerged}`,
+    `- PRs after language filter: ${run.selection.analyzedMerged}`,
+    `- Fix or revert anchors: ${mined.fixes.length}`,
+    `- Possible pair regressions: ${mined.candidates.length}`,
+    `- Matched controls: ${mined.controls.length}`,
     "",
     "## Possible pair regressions",
     "",
   ];
-  if (!mined.candidates.length) lines.push("- 이번 범위에서는 두 prior PR과 연결되는 fixing anchor를 찾지 못했습니다.");
+  if (!mined.candidates.length) lines.push("- No fixing anchor linked to two prior PRs was found in this range.");
   for (const item of mined.candidates) {
     const causes = item.causes.map((pr) => `[#${pr.number}](${pr.url})`).join(" × ");
     const fix = `[#${item.fixingPullRequest.number}](${item.fixingPullRequest.url})`;
     lines.push(`- ${causes} → fix ${fix}: ${item.rankingSignals.join(", ") || "file proximity"}`);
   }
   lines.push("", "## Matched controls", "");
-  if (!mined.controls.length) lines.push("- 없음");
+  if (!mined.controls.length) lines.push("- None");
   for (const item of mined.controls) lines.push(`- ${item.causes.map((pr) => `[#${pr.number}](${pr.url})`).join(" × ")}: ${item.evidence.filesSharedByAAndB.join(", ")}`);
-  lines.push("", "## Required adjudication", "", "1. 공통 historical base에서 A-only/B-only/A+B를 재구성한다.", "2. A와 B가 각각 단독으로 정상인지 확인한다.", "3. A+B가 textually clean인지 확인한다.", "4. fixing PR의 회귀 테스트가 A+B에서 실패하고 fixing commit 적용 후 통과하는지 확인한다.", "5. 조건을 만족하지 않으면 positive로 세지 않는다.", "");
+  lines.push("", "## Required adjudication", "", "1. Reconstruct A-only, B-only, and A+B from a shared historical base.", "2. Verify that A and B each pass independently.", "3. Verify that A+B is textually clean.", "4. Verify that the fixing PR's regression test fails on A+B and passes after applying the fixing commit.", "5. Do not count the case as positive unless every condition is satisfied.", "");
   return lines.join("\n");
 }
 
 async function main() {
-  if (!positional) throw new Error("owner/repository를 입력하세요.");
+  if (!positional) throw new Error("Enter owner/repository.");
   const repository = parseRepository(positional);
   const language = requestedLanguage(value("--language"));
   const mergedLimit = positiveInteger(value("--merged-prs"), 300, 500);
@@ -75,7 +75,7 @@ async function main() {
 
   const fetched = await fetchMergedPullRequests(repository, process.env.GITHUB_TOKEN, { limit: mergedLimit });
   const selected = fetched.filter((pr) => touchesLanguage(pr, language));
-  if (selected.length < 3) throw new Error("언어 필터 후 merged PR이 3개 미만입니다.");
+  if (selected.length < 3) throw new Error("Fewer than three merged PRs remain after language filtering.");
   const mined = mineHistoryCandidates(repository, selected, { fixWindowDays, candidateLimit, controlCount, perFixLimit });
   const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   const run = {

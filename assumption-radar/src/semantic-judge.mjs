@@ -1,13 +1,13 @@
 import crypto from "node:crypto";
 
-export const SEMANTIC_JUDGE_SYSTEM_PROMPT = `당신은 pull request pair의 상호작용을 증거 수준별로 판정하는 소프트웨어 검증 엔지니어다.
-같은 파일·모듈·심볼을 만진다는 사실은 후보 검색 신호일 뿐 충돌의 증거가 아니다.
-contract-backed-conflict는 실행하지 않았더라도 (1) 한쪽의 실제 provider 계약 변경, (2) 다른 쪽의 실제 consumer 의존, (3) 둘을 합쳤을 때의 결정적인 실패 경로를 양쪽 코드 인용으로 증명할 수 있을 때만 선택한다.
-testable-hypothesis는 방향성 위험은 있지만 계약 연결이나 실패 결과를 입력만으로 확정할 수 없고 Base/A/B/A+B 실험을 설계할 수 있을 때 선택한다.
-no-plausible-interaction은 제공된 근거에서 두 변경을 연결할 행동 경로가 없을 때, insufficient-evidence는 필요한 구현 파일이나 저장소 문맥이 빠졌을 때 선택한다.
-coordination-required는 기계적 충돌·중복 구현처럼 조율이 필요하지만 pair-induced regression과는 다른 경우다.
-특히 한 PR이 여러 종료 경로에 새 완료·flush·commit 단계를 도입하고 다른 PR이 같은 상태를 다루는 새 종료 경로를 추가한 경우, 새 경로가 완료 단계를 우회하는지 확인하라. 이름에 finish 같은 단어가 있는지만 보지 말고, 상태 축적→종료 경로→완료 호출의 행동 연결을 양쪽 실제 코드로 증명하라.
-contract-backed-conflict는 executable-confirmed와 다르다. 최종 실행 재현 여부는 별도 runtimeVerification 필드로 관리한다.`;
+export const SEMANTIC_JUDGE_SYSTEM_PROMPT = `You are a software verification engineer who judges interactions between pull-request pairs by evidence level.
+Touching the same file, module, or symbol is only a retrieval signal; it is not evidence of a conflict.
+Choose contract-backed-conflict without execution only when code quotes from both sides prove (1) a real provider contract change, (2) a real consumer dependency in the other PR, and (3) a deterministic composed failure path.
+Choose testable-hypothesis when there is a directional risk but the input cannot establish the contract link or failure outcome, and a Base/A/B/A+B experiment can be designed.
+Choose no-plausible-interaction when the provided evidence contains no behavioral path connecting the changes. Choose insufficient-evidence when required implementation files or repository context are missing.
+Choose coordination-required for mechanical conflicts or duplicate implementations that need coordination but are not pair-induced regressions.
+In particular, when one PR introduces a new completion, flush, or commit step across existing exit paths and another PR adds a new exit path over the same state, determine whether the new path bypasses that completion step. Do not rely on names such as "finish"; prove the behavioral link from state accumulation to exit path to completion call using real code from both PRs.
+contract-backed-conflict is not executable-confirmed. Final runtime reproduction belongs in the separate runtimeVerification field. Return all user-facing explanations in English.`;
 
 const pairKey = (ids) => [...ids].sort().join(":");
 const uniq = (values) => [...new Set(values.filter(Boolean))];
@@ -282,16 +282,16 @@ export function normalizeSemanticJudgments(prepared, candidates, rawJudgments, o
         : assessment === "no-plausible-interaction" ? "no-plausible-interaction"
           : assessment,
       category: raw.category || comparison.category || "code",
-      title: raw.title || (assessment === "contract-backed-conflict" ? "코드 계약으로 뒷받침된 semantic conflict"
-        : assessment === "testable-hypothesis" ? "실행으로 검증할 상호작용 가설" : comparison.title),
+      title: raw.title || (assessment === "contract-backed-conflict" ? "Semantic conflict supported by code contracts"
+        : assessment === "testable-hypothesis" ? "Interaction hypothesis requiring execution" : comparison.title),
       summary: raw.summary || raw.explanation || comparison.summary,
       assumptionA: raw.assumptionA || (interactionHypothesis.assumptionOwner === "PR-A" ? assumption : ""),
       assumptionB: raw.assumptionB || (interactionHypothesis.assumptionOwner === "PR-B" ? assumption : ""),
       consequence: possibleActualBehavior || comparison.consequence,
       recommendation: assessment === "contract-backed-conflict"
-        ? "양쪽 코드 계약이 충돌합니다. 병합 전에 provider 또는 consumer를 같은 계약으로 맞추고, 필요하면 targeted 실행으로 최고 증거 등급까지 승격하세요."
+        ? "The code contracts conflict. Align the provider and consumer before merging, and use targeted execution to promote the finding to the highest evidence level when needed."
         : assessment === "testable-hypothesis"
-        ? `Base/A/B/A+B에서 '${testPlan.name || "제안된 상호작용 테스트"}'를 실행해 가설을 검증하세요.`
+        ? `Run '${testPlan.name || "the proposed interaction test"}' on Base, A, B, and A+B to verify the hypothesis.`
         : raw.recommendation || comparison.recommendation,
       evidence: evidenceObjects.map((item) => `${item.side} ${item.file}${item.symbol ? ` (${item.symbol})` : ""}: ${item.quote}`),
       evidenceObjects,
@@ -364,15 +364,15 @@ export function aggregateSemanticJudgmentRuns(prepared, candidates, protocolRuns
 
     const fallback = representative || comparison;
     const observed = assessments.filter((item) => item !== "missing");
-    const failureNote = completed.length < repeats ? `; ${repeats - completed.length}회 호출 실패 또는 누락` : "";
+    const failureNote = completed.length < repeats ? `; ${repeats - completed.length} call(s) failed or were missing` : "";
     return {
       ...fallback,
       id: crypto.randomUUID(),
       verdict: "review",
       relationship: "review-required",
-      title: "AI 반복 판정이 일치하지 않아 사람 검토 필요",
-      summary: `동일 입력 ${repeats}회 판정 결과가 전원 일치하지 않았습니다: ${observed.join(" / ") || "유효 판정 없음"}${failureNote}`,
-      recommendation: "자동 conflict 또는 independent로 확정하지 말고 입력 증거를 확인하거나 Base/A/B/A+B 실행으로 검증하세요.",
+      title: "AI judgments disagree and require human review",
+      summary: `The ${repeats} judgments on the same input were not unanimous: ${observed.join(" / ") || "no valid judgment"}${failureNote}`,
+      recommendation: "Do not automatically classify this pair as conflict or independent. Inspect the input evidence or verify it with Base/A/B/A+B execution.",
       confirmationStatus: "unstable-ai-candidate",
       runtimeVerification: "not-run",
       evidenceGrade: "adjudicated",

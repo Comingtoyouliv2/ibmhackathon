@@ -16,7 +16,7 @@ const requestedFixes = new Set(String(value("--fixes") || "").split(",").filter(
 const jsonl = (rows) => rows.map((row) => JSON.stringify(row)).join("\n") + (rows.length ? "\n" : "");
 
 async function main() {
-  if (!input || !repoDir) throw new Error("--input merged-prs.jsonl과 --repo-dir bare repository가 필요합니다.");
+  if (!input || !repoDir) throw new Error("--input merged-prs.jsonl and a bare repository in --repo-dir are required.");
   const rows = (await readFile(input, "utf8")).split("\n").filter(Boolean).map(JSON.parse);
   const fixes = rows.filter(isLikelyFix)
     .filter((fix) => !requestedFixes.size || requestedFixes.has(fix.number))
