@@ -1,0 +1,84 @@
+{
+  "schemaVersion": "case-mining-v0.1",
+  "generatedAt": "2026-07-30T09:58:16.222Z",
+  "repository": "apache/zeppelin",
+  "pipelineVersion": "1.0.0",
+  "mode": "heuristic",
+  "preflight": {
+    "status": "complete",
+    "cacheDir": "/Users/wchoi/Desktop/PR_Review_gpt_ver/ibmhackathon-local-run-20260728/assumption-radar/.cache/repos/apache__zeppelin.git",
+    "fetchedPrs": 53,
+    "fetchedBases": [
+      "master"
+    ],
+    "stacks": [],
+    "suppressedPrNumbers": [],
+    "basePreparedPrs": 34,
+    "baseConflictPrNumbers": [
+      4355,
+      4808,
+      4813,
+      4864,
+      4998,
+      5010,
+      5012,
+      5015,
+      5032,
+      5060,
+      5082,
+      5085,
+      5106,
+      5125,
+      5134,
+      5162,
+      5191,
+      5220,
+      5225
+    ],
+    "baseUnavailablePrNumbers": [
+      4930,
+      5008,
+      5236,
+      5238,
+      5242,
+      5247,
+      5351,
+      5356
+    ],
+    "inspectedPairs": 280,
+    "cleanPairs": 98,
+    "textualConflictPairs": 8,
+    "baseConflictPairs": 174,
+    "unavailablePairs": 0
+  },
+  "selection": {
+    "requestedLimit": 100,
+    "fetched": 63,
+    "analyzed": 61,
+    "excluded": 2,
+    "language": null,
+    "languageExcluded": 0,
+    "ordering": "updated-desc",
+    "codeOnly": true,
+    "inputMode": "github-open-prs",
+    "sourcePath": null,
+    "baseMetadataRefreshed": false
+  },
+  "summary": {
+    "prCount": 61,
+    "pairCount": 1830,
+    "candidateCount": 182,
+    "conflictCount": 0,
+    "coordinationCount": 8,
+    "reviewCount": 0,
+    "independentCount": 1648,
+    "insufficientCount": 174,
+    "verdict": "Git merge coordination required"
+  },
+  "artifacts": {
+    "sourcePrs": "source-prs.jsonl",
+    "alerts": "alerts.jsonl",
+    "labelQueue": "label-queue.jsonl",
+    "report": "report.md"
+  }
+}

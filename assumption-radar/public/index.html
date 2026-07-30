@@ -3,13 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MergeScope — Catch semantic PR conflicts before they merge</title>
-<meta name="description" content="MergeScope scans your open pull requests for intent-level conflicts that pass CI and git checks — but silently break logic when merged together.">
+<title>MergeGuard — Catch conflicts between pull requests before they merge</title>
+<meta name="description" content="MergeGuard scans your open pull requests for intent-level conflicts that pass CI and git checks — but silently break logic when merged together.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+  (function(){
+    try {
+      const saved = localStorage.getItem('mergeguard-theme');
+      const theme = saved || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.style.colorScheme = theme;
+    } catch (_) {}
+  })();
+</script>
 <style>
 /* ═══════════════════════════════════════════════════════════════
-   MergeScope landing — IBM Carbon (Gray 100 dark) visual language.
+   MergeGuard landing — IBM Carbon (Gray 100 dark) visual language.
    Tokens first; every component reads from these.
    Motion policy (per Vercel Web Interface Guidelines):
    transform/opacity only, no `transition: all`, reduced-motion honored.
@@ -30,12 +40,43 @@
   --warn:#f1c21b;
   --safe:#42be65;
   --purple:#be95ff;
+  --header-bg:#161616f2;
+  --focus:#ffffff;
+  --tertiary-text:#ffffff;
+  --tertiary-border:#8d8d8d;
+  --tertiary-hover:#ffffff14;
+  --surface-hover:#2c2c2c;
+  --frame-bg:#0b0b0b;
+  --cta-bg:linear-gradient(180deg,#161616 0%,#101821 100%);
   /* Light tokens for the in-slide app mockups (they mirror the real demo app) */
   --app-bg:#F3F6F5; --app-panel:#ffffff; --app-ink:#1C2733; --app-muted:#5C6B78;
   --app-line:#DCE3E6; --app-blue:#0F62FE; --app-red:#D6453A; --app-amber:#DC9B00;
   --mono:'IBM Plex Mono',ui-monospace,monospace;
   --sans:'IBM Plex Sans',system-ui,sans-serif;
   --container:1312px;
+}
+html[data-theme="light"]{
+  --bg:#f4f4f4;
+  --layer:#ffffff;
+  --layer-2:#e0e0e0;
+  --border:#c6c6c6;
+  --border-subtle:#e0e0e0;
+  --text:#161616;
+  --text-2:#525252;
+  --text-3:#6f6f6f;
+  --link:#0043ce;
+  --conflict:#da1e28;
+  --warn:#b28600;
+  --safe:#198038;
+  --purple:#8a3ffc;
+  --header-bg:#f4f4f4f2;
+  --focus:#161616;
+  --tertiary-text:#161616;
+  --tertiary-border:#8d8d8d;
+  --tertiary-hover:#1616160d;
+  --surface-hover:#e8e8e8;
+  --frame-bg:#ffffff;
+  --cta-bg:linear-gradient(180deg,#f4f4f4 0%,#e8f0ff 100%);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
@@ -46,7 +87,7 @@ a{color:var(--link);text-decoration:none}
 a:hover{text-decoration:underline}
 button{font-family:inherit;cursor:pointer}
 a,button{touch-action:manipulation}
-:focus-visible{outline:2px solid #ffffff;outline-offset:2px}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 img,svg{max-width:100%}
 section[id]{scroll-margin-top:72px}
 
@@ -71,8 +112,8 @@ section[id]{scroll-margin-top:72px}
 .btn:hover .glyph{transform:translateX(3px)}
 .btn-primary{background:var(--blue);color:#fff}
 .btn-primary:hover{background:var(--blue-hover)}
-.btn-tertiary{background:transparent;color:#fff;border-color:#8d8d8d}
-.btn-tertiary:hover{background:#ffffff14;border-color:#f4f4f4}
+.btn-tertiary{background:transparent;color:var(--tertiary-text);border-color:var(--tertiary-border)}
+.btn-tertiary:hover{background:var(--tertiary-hover);border-color:var(--text)}
 .btn-lg{min-height:56px;padding:0 20px;min-width:230px}
 
 /* Eyebrow labels — mono, uppercase, tracked */
@@ -98,19 +139,23 @@ section[id]{scroll-margin-top:72px}
 }
 
 /* ── Header ──────────────────────────────────────────────── */
-header{position:sticky;top:0;z-index:40;background:#161616f2;backdrop-filter:blur(8px);
+header{position:sticky;top:0;z-index:40;background:var(--header-bg);backdrop-filter:blur(8px);
   border-bottom:1px solid var(--border-subtle)}
 .nav{display:flex;align-items:center;height:56px;gap:8px}
 .brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15.5px;
   letter-spacing:-.1px;color:var(--text);text-decoration:none;margin-right:24px}
 .brand:hover{text-decoration:none}
-.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--conflict);flex:none}
-.nav-links{display:flex;gap:2px}
-.nav-links a{color:var(--text-2);font-size:14px;padding:8px 14px;text-decoration:none}
-.nav-links a:hover{color:var(--text);background:#ffffff0f}
-.nav .cta{margin-left:auto}
+.nav .cta{margin-left:auto;display:flex;align-items:center;gap:8px}
 .nav .cta .btn{min-height:40px;font-size:14px;gap:20px}
-@media(max-width:720px){.nav-links{display:none}}
+.theme-toggle{height:40px;padding:0 12px;display:inline-flex;align-items:center;justify-content:center;
+  gap:8px;border:1px solid var(--border);background:transparent;color:var(--text);
+  font-size:13px}
+.theme-toggle:hover{background:var(--tertiary-hover);border-color:var(--text)}
+.theme-toggle svg{width:16px;height:16px;flex:none}
+@media(max-width:480px){
+  .theme-toggle{width:40px;padding:0}
+  .theme-label{display:none}
+}
 
 /* ── Hero ────────────────────────────────────────────────── */
 .hero{padding:88px 0 64px;border-bottom:1px solid var(--border-subtle);position:relative;overflow:hidden}
@@ -139,6 +184,24 @@ header{position:sticky;top:0;z-index:40;background:#161616f2;backdrop-filter:blu
 .hero .chip{background:var(--layer);padding:12px 18px;font-size:13px;color:var(--text-2);
   display:flex;align-items:center;gap:9px;flex:1 1 240px}
 .hero .chip svg{flex:none}
+
+/* ── The blind spot ───────────────────────────────────────── */
+.blind-spot{padding:80px 0;border-bottom:1px solid var(--border-subtle)}
+.blind-spot h2{margin-top:16px;font-size:clamp(28px,4vw,44px);font-weight:300;
+  line-height:1.18;letter-spacing:-.02em;max-width:920px;text-wrap:balance}
+.blind-deck{margin-top:20px;max-width:780px;font-size:16px;line-height:1.7;color:var(--text-2)}
+.blind-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;
+  margin-top:36px;background:var(--border-subtle)}
+@media(max-width:760px){.blind-grid{grid-template-columns:1fr}}
+.blind-card{background:var(--layer);padding:28px;min-height:245px}
+.blind-card.missing{box-shadow:inset 0 2px 0 var(--conflict)}
+.blind-card svg{display:block;margin-bottom:22px;color:var(--text-2)}
+.blind-card h3{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.08em;
+  color:var(--text);margin-bottom:7px}
+.blind-card.missing h3{color:var(--conflict)}
+.blind-card .who{font-size:13px;color:var(--text-3);margin-bottom:18px}
+.blind-card p:last-child{font-size:15px;line-height:1.65;color:var(--text-2);max-width:530px}
+.blind-card p b{color:var(--text);font-weight:500}
 
 /* ── See it work — scroll-driven story ───────────────────────
    Scrolling the page advances the app screens: the stage (right)
@@ -173,7 +236,7 @@ header{position:sticky;top:0;z-index:40;background:#161616f2;backdrop-filter:blu
 
 .sc-stage{position:sticky;top:max(72px,calc(50vh - min(32vh,240px)));min-width:0}
 .sc-frames{position:relative;height:min(64vh,480px)}
-.frame{border:1px solid var(--border);background:#0b0b0b;display:flex;flex-direction:column}
+.frame{border:1px solid var(--border);background:var(--frame-bg);display:flex;flex-direction:column}
 .sc-stage .frame{position:absolute;inset:0;opacity:0;transform:translateY(16px);
   transition:opacity .45s ease,transform .45s ease;pointer-events:none}
 .sc-stage .frame.active{opacity:1;transform:none;pointer-events:auto}
@@ -260,34 +323,40 @@ header{position:sticky;top:0;z-index:40;background:#161616f2;backdrop-filter:blu
 @media(max-width:560px){.steps{grid-template-columns:1fr}}
 .step{background:var(--layer);padding:26px 22px 30px;display:flex;flex-direction:column;gap:12px;
   min-height:230px;position:relative;transition:background .15s;overflow:hidden}
-.step:hover{background:#2c2c2c}
+.step:hover{background:var(--surface-hover)}
 .step .num{font-family:var(--mono);font-size:12px;color:var(--link)}
 .step h3{font-size:17px;font-weight:600;line-height:1.35}
 .step p{font-size:14px;color:var(--text-2);line-height:1.6}
 .step .art{margin-top:auto;padding-top:14px}
 
-/* ── Proof band — real/cited numbers only (middle "academic-only" stat dropped per note) ── */
+/* ── Proof band — independently inspected open-PR cases ── */
 .proof{padding:64px 0;border-bottom:1px solid var(--border-subtle)}
+.proof>.wrap>.eyebrow{display:block;margin-bottom:20px}
 .proof-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border-subtle)}
 @media(max-width:700px){.proof-grid{grid-template-columns:1fr}}
-.proof-card{background:var(--layer);padding:32px 28px}
-.proof-num{font-family:var(--mono);font-size:clamp(34px,4.6vw,50px);font-weight:600;
-  color:var(--text);letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
-.proof-lbl{margin-top:12px;font-size:14px;color:var(--text-2);line-height:1.55;max-width:400px}
-.proof-src{display:block;margin-top:4px;font-size:12px;color:var(--text-3)}
+.proof-card{background:var(--layer);padding:32px 28px;display:flex;flex-direction:column;min-height:290px}
+.proof-case{font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--link)}
+.proof-repo{margin-top:20px;font-family:var(--mono);font-size:13px;color:var(--text-2)}
+.proof-card h3{margin-top:8px;font-size:clamp(21px,2.4vw,28px);font-weight:400;
+  line-height:1.25;letter-spacing:-.01em;max-width:520px}
+.proof-lbl{margin-top:16px;font-size:14px;color:var(--text-2);line-height:1.6;max-width:520px}
+.proof-links{display:flex;flex-wrap:wrap;gap:16px;margin-top:auto;padding-top:24px;
+  font-family:var(--mono);font-size:12px}
+.proof-links a{display:inline-flex;align-items:center;gap:6px}
 
 /* ── Built for ───────────────────────────────────────────── */
 .built{padding:88px 0;border-bottom:1px solid var(--border-subtle)}
 .aud{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border-subtle)}
 @media(max-width:900px){.aud{grid-template-columns:1fr}}
 .aud .card{background:var(--layer);padding:28px 24px 32px;transition:background .15s;overflow:hidden}
-.aud .card:hover{background:#2c2c2c}
+.aud .card:hover{background:var(--surface-hover)}
 .aud .glyph{font-family:var(--mono);font-size:13px;color:var(--link);display:block;margin-bottom:18px}
 .aud h3{font-size:17px;font-weight:600;margin-bottom:10px}
 .aud p{font-size:14px;color:var(--text-2);line-height:1.65}
 
 /* ── Final CTA ───────────────────────────────────────────── */
-.cta-band{padding:96px 0;text-align:left;background:linear-gradient(180deg,#161616 0%,#101821 100%);
+.cta-band{padding:96px 0;text-align:left;background:var(--cta-bg);
   border-bottom:1px solid var(--border-subtle)}
 .cta-band h2{font-size:clamp(28px,4vw,44px);font-weight:300;letter-spacing:-.015em;max-width:620px;text-wrap:balance}
 .cta-band p{margin:18px 0 36px;color:var(--text-2);font-size:16px;max-width:520px;line-height:1.6}
@@ -308,13 +377,15 @@ footer{padding:36px 0 44px}
 <!-- ═══════════ NAV ═══════════ -->
 <header>
   <div class="wrap nav">
-    <a class="brand" href="#top"><span class="dot"></span>MergeScope</a>
-    <nav class="nav-links" aria-label="Main">
-      <a href="#how">How it works</a>
-      <a href="#" title="Docs — coming soon">Docs</a>
-      <a href="#" title="TODO: add repository URL">GitHub</a>
-    </nav>
+    <a class="brand" href="#top">MergeGuard</a>
     <div class="cta">
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch to light theme" aria-pressed="false">
+        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M12.95 3.05l-1.42 1.42M4.47 11.53l-1.42 1.42" stroke="currentColor" stroke-width="1.3"/>
+        </svg>
+        <span class="theme-label">Light</span>
+      </button>
       <a class="btn btn-primary" href="demo.html">Try it free <span class="glyph">→</span></a>
     </div>
   </div>
@@ -327,8 +398,8 @@ footer{padding:36px 0 44px}
   <canvas id="netbg" aria-hidden="true"></canvas>
   <div class="wrap">
     <span class="powered rv">Powered by IBM Bob</span>
-    <h1 class="rv">Catch <b>semantic PR conflicts</b> before they <span class="break-word">break</span> your main branch.</h1>
-    <p class="lede rv">MergeScope scans your open pull requests for intent-level conflicts that
+    <h1 class="rv">Catch <b>conflicts between pull requests</b> before they <span class="break-word">break</span> your main branch.</h1>
+    <p class="lede rv">MergeGuard scans your open pull requests for intent-level conflicts that
       pass CI and git checks — but silently break logic when merged together.</p>
     <div class="actions rv">
       <a class="btn btn-primary btn-lg" href="demo.html">View live demo <span class="glyph">→</span></a>
@@ -352,6 +423,44 @@ footer{padding:36px 0 44px}
   </div>
 </section>
 
+<!-- ═══════════ THE BLIND SPOT ═══════════ -->
+<section class="blind-spot" id="blind-spot" aria-labelledby="blind-spot-title">
+  <div class="wrap">
+    <span class="eyebrow rv">Why now</span>
+    <h2 class="rv" id="blind-spot-title">AI writes code in parallel. Review systems still think one pull request at a time.</h2>
+    <p class="blind-deck rv">As coding agents generate more changes at once, each PR can be locally correct while carrying assumptions that collide with another. MergeGuard cross-checks those parallel changes before they converge on main.</p>
+
+    <div class="blind-grid rv">
+      <article class="blind-card">
+        <svg width="150" height="52" viewBox="0 0 150 52" fill="none" aria-hidden="true">
+          <line x1="20" y1="42" x2="130" y2="42" stroke="currentColor" stroke-width="1.4" opacity=".28"/>
+          <circle cx="20" cy="16" r="7" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+          <circle cx="75" cy="16" r="7" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+          <circle cx="130" cy="16" r="7" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+          <line x1="20" y1="23" x2="20" y2="42" stroke="#42be65" stroke-width="1.6"/>
+          <line x1="75" y1="23" x2="75" y2="42" stroke="#42be65" stroke-width="1.6"/>
+          <line x1="130" y1="23" x2="130" y2="42" stroke="#42be65" stroke-width="1.6"/>
+        </svg>
+        <h3>TRADITIONAL REVIEW · PR ↔ MAIN</h3>
+        <p class="who">One change at a time</p>
+        <p>CI, Git, and line review answer one familiar question: <b>Does this pull request work with the current main branch?</b></p>
+      </article>
+
+      <article class="blind-card missing">
+        <svg width="150" height="52" viewBox="0 0 150 52" fill="none" aria-hidden="true">
+          <circle cx="30" cy="26" r="8" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+          <circle cx="120" cy="26" r="8" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+          <line x1="38" y1="26" x2="112" y2="26" stroke="#fa4d56" stroke-width="2.4" stroke-dasharray="7 5"/>
+          <path d="M69 19l12 14M81 19l-12 14" stroke="#fa4d56" stroke-width="2"/>
+        </svg>
+        <h3>AI-ERA REVIEW · PR ↔ PR</h3>
+        <p class="who">Parallel changes, cross-checked</p>
+        <p>MergeGuard adds the question that parallel development requires: <b>Will these independently generated changes still work together?</b></p>
+      </article>
+    </div>
+  </div>
+</section>
+
 <!-- ═══════════ SEE IT WORK — scroll-driven story.
      Scrolling advances the screens; no clicking needed.
      Each .screen is a CSS reconstruction of the real demo UI.
@@ -360,9 +469,8 @@ footer{padding:36px 0 44px}
 <section class="show" id="see-it-work" aria-label="Product tour">
   <div class="wrap">
     <div class="head rv">
-      <span class="eyebrow">See it work</span>
-      <h2>From <span class="num cu" data-to="5151">5,151</span> open PRs to the
-        <span class="num hotn cu" data-to="9">9</span> that will break each other.</h2>
+      <span class="eyebrow">Steps</span>
+      <h2>From open-PR overload to the pairs that need to be reviewed together.</h2>
       <span class="count" id="sc-count" aria-hidden="true">1 / 4</span>
     </div>
     <p class="scroll-hint rv">Keep scrolling <span class="g">↓</span> — the demo advances with you.</p>
@@ -372,30 +480,30 @@ footer{padding:36px 0 44px}
       <div class="sc-steps" id="sc-steps">
         <div class="sc-step active" data-i="0" id="sw-1">
           <span class="n">01 / 04</span>
-          <h3>Point it at any repo</h3>
-          <p>Paste a repo URL. The pipeline funnels thousands of open PRs down to a
-            handful of conflict candidates — no install, no CI hook.</p>
+          <h3>Connect your repository</h3>
+          <p>Paste a GitHub repository URL. MergeGuard fetches its open pull requests
+            and code changes — no install or CI hook required.</p>
           <div class="sc-slot"></div>
         </div>
         <div class="sc-step" data-i="1" id="sw-2">
           <span class="n">02 / 04</span>
-          <h3>Triage a ranked queue</h3>
-          <p>A work queue ordered by severity, not a wall of PRs. “Silent break” means git
-            and CI both say the merge is clean — only intent-level analysis sees the collision.</p>
+          <h3>Identify candidate pairs</h3>
+          <p>Static and structural signals narrow the possible combinations to pull-request
+            pairs that may interact.</p>
           <div class="sc-slot"></div>
         </div>
         <div class="sc-step" data-i="2" id="sw-3">
           <span class="n">03 / 04</span>
-          <h3>See the bottleneck</h3>
-          <p>The graph maps PRs to the files and functions they share. Red edges are judged
-            conflicts — visible at a glance instead of buried in 3,000 open tabs.</p>
+          <h3>Analyze intent and evidence</h3>
+          <p>IBM Bob compares each PR’s assumptions, behavior, and supporting code evidence
+            to explain how the changes may affect one another.</p>
           <div class="sc-slot"></div>
         </div>
         <div class="sc-step" data-i="3" id="sw-4">
           <span class="n">04 / 04</span>
-          <h3>Get a judgment and a fix</h3>
-          <p>IBM Bob reasons over each candidate pair: severity, confidence, a plain-English
-            explanation — and a concrete fix you can post back to the PR in one click.</p>
+          <h3>Judge and prioritize conflicts</h3>
+          <p>Each pair is classified as a conflict candidate, needs review, merge coordination,
+            or no action, with the most urgent findings shown first.</p>
           <div class="sc-slot"></div>
         </div>
       </div>
@@ -454,44 +562,55 @@ footer{padding:36px 0 44px}
     <div class="steps rv">
       <div class="step tile-accent">
         <span class="num">Step 1</span>
-        <h3>Connect your repo</h3>
-        <p>Paste a GitHub repo URL and a read-only token. We fetch all open PRs and their diffs — nothing is installed in your CI.</p>
+        <h3>Connect your repository</h3>
+        <p>Paste a GitHub repository URL. MergeGuard fetches its open pull requests and code changes — no install or CI hook required.</p>
         <div class="art"><svg width="72" height="20" viewBox="0 0 72 20" fill="none" aria-hidden="true"><rect x="1" y="4" width="30" height="12" stroke="#6f6f6f"/><path d="M36 10h18m0 0-4-4m4 4-4 4" stroke="#78a9ff" stroke-width="1.4"/><circle cx="65" cy="10" r="5" stroke="#78a9ff" stroke-width="1.4"/></svg></div>
       </div>
       <div class="step tile-accent">
         <span class="num">Step 2</span>
-        <h3>IBM Bob extracts intent</h3>
-        <p>Each PR gets an Intent Card — what it tries to do, which functions it touches, and what it assumes about the rest of the code.</p>
+        <h3>Identify candidate pairs</h3>
+        <p>Static and structural signals narrow the possible combinations to pull-request pairs that may interact.</p>
         <div class="art"><svg width="72" height="20" viewBox="0 0 72 20" fill="none" aria-hidden="true"><rect x="1" y="1" width="26" height="18" stroke="#6f6f6f"/><path d="M5 6h14M5 10h18M5 14h10" stroke="#78a9ff" stroke-width="1.3"/></svg></div>
       </div>
       <div class="step tile-accent">
         <span class="num">Step 3</span>
-        <h3>Semantic bucketing</h3>
-        <p>PRs are clustered by functional area, cutting n² comparisons down to a few dozen candidate pairs worth judging.</p>
+        <h3>Analyze intent and evidence</h3>
+        <p>IBM Bob compares each PR’s assumptions, behavior, and supporting code evidence to explain how the changes may affect one another.</p>
         <div class="art"><svg width="72" height="20" viewBox="0 0 72 20" fill="none" aria-hidden="true"><circle cx="8" cy="10" r="4" stroke="#6f6f6f"/><circle cx="22" cy="10" r="4" stroke="#6f6f6f"/><circle cx="15" cy="10" r="9.5" stroke="#78a9ff" stroke-width="1.2" stroke-dasharray="3 3"/><circle cx="50" cy="10" r="4" stroke="#6f6f6f"/><circle cx="64" cy="10" r="4" stroke="#6f6f6f"/><circle cx="57" cy="10" r="9.5" stroke="#78a9ff" stroke-width="1.2" stroke-dasharray="3 3"/></svg></div>
       </div>
       <div class="step tile-accent">
         <span class="num">Step 4</span>
-        <h3>Conflict judgment</h3>
-        <p>IBM Bob reasons over each pair: severity, confidence, and a plain-English explanation of the conflict — plus a suggested fix.</p>
+        <h3>Judge and prioritize conflicts</h3>
+        <p>Each pair is classified as a conflict candidate, needs review, merge coordination, or no action, with the most urgent findings shown first.</p>
         <div class="art"><svg width="72" height="20" viewBox="0 0 72 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="5" stroke="#6f6f6f"/><circle cx="40" cy="10" r="5" stroke="#6f6f6f"/><path d="M15 10h20" stroke="#fa4d56" stroke-width="2"/><path d="M52 10h16" stroke="#42be65" stroke-width="1.4"/><path d="m54 10 3 3 6-6" stroke="#42be65" stroke-width="1.4" fill="none"/></svg></div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ═══════════ PROOF — only the two stats we can stand behind ═══════════ -->
-<section class="proof" aria-label="Why this matters">
+<!-- ═══════════ PROOF — verified and contract-backed open-PR cases ═══════════ -->
+<section class="proof" aria-label="Real cross-PR conflict cases">
   <div class="wrap">
+    <span class="eyebrow rv">Cases discovered</span>
     <div class="proof-grid rv">
       <div class="proof-card">
-        <div class="proof-num cu" data-to="3324">3,324</div>
-        <div class="proof-lbl">Open PRs in <b>openclaw/openclaw</b> — our live test repo, right now.</div>
+        <span class="proof-case">Case #1</span>
+        <div class="proof-repo">apache/zeppelin · #5277 × #5151</div>
+        <h3>A Python client and Java server silently disagreed on one API contract.</h3>
+        <p class="proof-lbl">The new MCP client omits <code>noteId</code> for its default restart flow, while the server change requires it. Git merges cleanly and the existing client suite stays green, but the combined default request is rejected with HTTP 400.</p>
+        <div class="proof-links">
+          <a href="https://github.com/apache/zeppelin/pull/5277" target="_blank" rel="noopener">View PR #5277 <span aria-hidden="true">↗</span></a>
+          <a href="https://github.com/apache/zeppelin/pull/5151" target="_blank" rel="noopener">View PR #5151 <span aria-hidden="true">↗</span></a>
+        </div>
       </div>
       <div class="proof-card">
-        <div class="proof-num cu" data-to="26" data-suffix="×">26×</div>
-        <div class="proof-lbl">Higher bug rate in code where a merge conflict needed manual resolution.
-          <span class="proof-src">— OSS merge-conflict study, 143 projects</span>
+        <span class="proof-case">Case #2</span>
+        <div class="proof-repo">python/mypy · #21562 × #21531</div>
+        <h3>Two PRs defined incompatible diagnostics for the same invalid usage.</h3>
+        <p class="proof-lbl">PR #21562 expects one exact error message for an invalid <code>Concatenate</code> location, while PR #21531 changes that validation path to emit a different message and an additional note. When combined, the implementation no longer satisfies the diagnostic contract encoded by the other PR’s test.</p>
+        <div class="proof-links">
+          <a href="https://github.com/python/mypy/pull/21562" target="_blank" rel="noopener">View PR #21562 <span aria-hidden="true">↗</span></a>
+          <a href="https://github.com/python/mypy/pull/21531" target="_blank" rel="noopener">View PR #21531 <span aria-hidden="true">↗</span></a>
         </div>
       </div>
     </div>
@@ -538,7 +657,7 @@ footer{padding:36px 0 44px}
 <!-- ═══════════ FOOTER ═══════════ -->
 <footer>
   <div class="wrap foot">
-    <a class="brand" href="#top"><span class="dot"></span>MergeScope</a>
+    <a class="brand" href="#top">MergeGuard</a>
     <span>IBM AI Builders Challenge 2026</span>
     <nav aria-label="Footer">
       <a href="#" title="TODO: add repository URL">GitHub</a>
@@ -549,6 +668,32 @@ footer{padding:36px 0 44px}
 </footer>
 
 <script>
+/* ── Bright / dark theme ── */
+(function(){
+  const root = document.documentElement;
+  const button = document.getElementById('theme-toggle');
+  const label = button?.querySelector('.theme-label');
+  const key = 'mergeguard-theme';
+
+  function apply(theme, persist){
+    root.dataset.theme = theme;
+    root.style.colorScheme = theme;
+    if (persist) {
+      try { localStorage.setItem(key, theme); } catch (_) {}
+    }
+    const next = theme === 'dark' ? 'light' : 'dark';
+    if (label) label.textContent = next[0].toUpperCase() + next.slice(1);
+    if (button) {
+      button.setAttribute('aria-label', 'Switch to ' + next + ' theme');
+      button.setAttribute('aria-pressed', String(theme === 'light'));
+    }
+  }
+
+  const initial = root.dataset.theme || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  apply(initial, false);
+  button?.addEventListener('click', () => apply(root.dataset.theme === 'dark' ? 'light' : 'dark', true));
+})();
+
 const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* ── Scroll-reveal ── */
@@ -657,6 +802,7 @@ document.querySelectorAll('.rv').forEach((el, i) => {
   }
   function draw(now){
     ctx.clearRect(0, 0, W, H);
+    const lightTheme = document.documentElement.dataset.theme === 'light';
     for (let i = 0; i < nodes.length; i++){
       for (let j = i + 1; j < nodes.length; j++){
         const a = nodes[i], b = nodes[j];
@@ -665,17 +811,21 @@ document.querySelectorAll('.rv').forEach((el, i) => {
         const isC = (i === conflict.a && j === conflict.b) || (i === conflict.b && j === conflict.a);
         if (isC){
           const pulse = .35 + .3 * Math.sin((now - conflict.t) / 260);
-          ctx.strokeStyle = 'rgba(250,77,86,' + pulse + ')';
+          ctx.strokeStyle = lightTheme
+            ? 'rgba(218,30,40,' + pulse + ')'
+            : 'rgba(250,77,86,' + pulse + ')';
           ctx.lineWidth = 1.6;
         } else {
-          ctx.strokeStyle = 'rgba(120,169,255,' + (.13 * (1 - d / 150)) + ')';
+          ctx.strokeStyle = lightTheme
+            ? 'rgba(15,98,254,' + (.16 * (1 - d / 150)) + ')'
+            : 'rgba(120,169,255,' + (.13 * (1 - d / 150)) + ')';
           ctx.lineWidth = 1;
         }
         ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       }
     }
     nodes.forEach(n => {
-      ctx.fillStyle = 'rgba(168,168,168,.5)';
+      ctx.fillStyle = lightTheme ? 'rgba(82,82,82,.42)' : 'rgba(168,168,168,.5)';
       ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, 6.2832); ctx.fill();
     });
   }

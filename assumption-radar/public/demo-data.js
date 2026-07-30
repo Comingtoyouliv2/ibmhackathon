@@ -96,6 +96,7 @@ export function adaptBackendResponse(data = {}) {
       ? "textual-conflict" : data.preflight?.complete ? "clean" : "unknown";
     const resources = findingResources(finding);
     const category = finding.category || "semantic-contract";
+    const runs = verificationRuns(finding);
     if (!resources.length) resources.push(`contract:${category}`);
     return {
       id: String(finding.id || finding.key || `finding-${index + 1}`),
@@ -120,7 +121,8 @@ export function adaptBackendResponse(data = {}) {
       basis,
       source: finding.source || "heuristic",
       mergeTree,
-      verification: { runs: verificationRuns(finding) },
+      verified: Boolean(finding.verified || runs.length),
+      verification: { runs },
     };
   }).filter((finding) => finding.prIds.length === 2 && finding.prIds.every((id) => byId.has(id)))
     .sort((a, b) => (VERDICT_ORDER[a.verdict] ?? 9) - (VERDICT_ORDER[b.verdict] ?? 9));

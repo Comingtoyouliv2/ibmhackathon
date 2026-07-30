@@ -30,7 +30,7 @@ function help() {
   console.log(`Assumption Radar CLI
 
 Usage:
-  npm run scan -- owner/repository [--limit 20] [--preflight] [--ai] [--ai-provider openai|anthropic|codex] [--ai-repeats 3]
+  npm run scan -- owner/repository [--limit 20] [--preflight] [--ai] [--ai-provider openai|anthropic|bob|codex] [--ai-repeats 3]
     [--verify] [--verify-limit 3] [--verification-profile profiles.json] [--verification-output cases.jsonl]
     [--json] [--fail-on conflict]
   npm run scan -- --demo [--json]
@@ -39,6 +39,8 @@ Environment:
   GITHUB_TOKEN     private repository access / higher API limits
   OPENAI_API_KEY   enables --ai
   ANTHROPIC_API_KEY enables --ai with --ai-provider anthropic
+  BOBSHELL_API_KEY enables --ai with --ai-provider bob
+  BOB_BIN          defaults to bob for --ai-provider bob
   CODEX_MODEL      defaults to gpt-5.4 for --ai-provider codex
   OPENAI_MODEL     defaults to gpt-5.6-terra
   ANTHROPIC_MODEL  defaults to claude-opus-4-8
@@ -143,6 +145,7 @@ async function main() {
           promptVersion: has("--ai") ? "interaction-hypothesis-v0.5" : null,
           model: has("--ai") ? (() => {
             const provider = semanticJudgeProvider(aiOptions);
+            if (provider === "bob") return "IBM Bob";
             if (provider === "anthropic") return process.env.ANTHROPIC_MODEL || "claude-opus-4-8";
             if (provider === "codex") return process.env.CODEX_MODEL || "gpt-5.4";
             return process.env.OPENAI_MODEL || "gpt-5.6-terra";

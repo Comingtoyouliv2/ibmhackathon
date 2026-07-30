@@ -33,6 +33,33 @@ GITHUB_TOKEN=github_pat_... OPENAI_API_KEY=sk-... npm start
 
 > 이 앱은 `.env` 파일을 자동으로 읽지 않습니다. 셸, 비밀 관리자, 배포 환경에서 환경변수로 주입하세요. 토큰은 브라우저에 노출되지 않습니다.
 
+## Vercel 배포
+
+랜딩 페이지, 검증된 사례 데모, GitHub PR 수집과 정적 분석 API는 Vercel에 바로 배포할 수 있습니다.
+
+```bash
+npm install
+npx vercel
+```
+
+Vercel Project Settings의 Environment Variables에는 최소 `GITHUB_TOKEN`을 설정하세요. OpenAI나 Anthropic 판정을 사용할 때는 해당 provider key와 `SEMANTIC_JUDGE_PROVIDER`도 서버 환경변수로 설정합니다.
+
+IBM Bob Shell은 공개 npm 패키지가 아니며 Vercel 함수의 실행환경에도 기본 설치되지 않습니다. 따라서 Bob 기반 live 분석은 Bob Shell이 설치된 별도 private runner를 사용합니다.
+
+```bash
+# Bob Shell이 설치된 private runner
+export MERGEGUARD_GATEWAY_TOKEN='a-long-random-secret'
+export GITHUB_TOKEN='github_pat_...'
+npm start
+
+# Vercel server-side environment variables
+BOB_RUNNER_URL=https://your-private-runner.example/api/bob-judge
+BOB_RUNNER_TOKEN=a-long-random-secret
+GITHUB_TOKEN=github_pat_...
+```
+
+브라우저가 입력한 Bob key는 분석 요청 동안만 Vercel에서 private runner로 HTTPS 전달되며 파일이나 응답에 저장되지 않습니다. `BOB_RUNNER_URL`에는 HTTPS를 사용해야 하고, runner는 인터넷에 직접 노출하기보다 access-controlled service 뒤에 두는 것을 권장합니다. runner를 연결하지 않은 배포에서도 검증된 Case #1/#2 데모는 정상 작동하며, Bob live 분석 요청은 설정 방법을 포함한 명시적 오류를 반환합니다.
+
 ## CLI / CI
 
 ```bash
@@ -49,6 +76,10 @@ GITHUB_TOKEN=... OPENAI_API_KEY=... \
 # Claude를 판정기로 선택
 GITHUB_TOKEN=... ANTHROPIC_API_KEY=... \
   npm run scan -- owner/repository --ai --ai-provider anthropic --fail-on conflict
+
+# IBM Bob CLI를 판정기로 선택
+GITHUB_TOKEN=... BOBSHELL_API_KEY=... \
+  npm run scan -- owner/repository --ai --ai-provider bob --ai-repeats 1 --fail-on conflict
 
 # 로그인된 Codex CLI를 판정기로 선택(API key 불필요)
 GITHUB_TOKEN=... npm run scan -- owner/repository \

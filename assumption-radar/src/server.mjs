@@ -1,4 +1,5 @@
 import http from "node:http";
+import { timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,6 +7,7 @@ import { fetchOpenPullRequests, parseRepository } from "./github.mjs";
 import { partitionEligiblePullRequests } from "./pr-eligibility.mjs";
 import { finishAnalysis } from "./analyzer.mjs";
 import { analyzeWithAI, semanticJudgeProvider } from "./ai.mjs";
+import { runBobJudgment } from "./bob.mjs";
 import { prepareAnalysisPipeline } from "./pipeline.mjs";
 import { AI_JUDGMENT_PROTOCOL_VERSION, semanticJudgeRepeatCount } from "./semantic-judge.mjs";
 import { DockerCombinedVerifier, loadVerificationProfiles } from "./docker-verifier.mjs";
@@ -25,6 +27,13 @@ const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; cha
 
 function aiRuntimeStatus() {
   const provider = semanticJudgeProvider();
+  if (provider === "bob") return {
+    provider,
+    configured: Boolean(process.env.BOBSHELL_API_KEY && (!process.env.VERCEL || process.env.BOB_RUNNER_URL)),
+    model: "IBM Bob",
+    reasoningEffort: null,
+    runner: process.env.BOB_RUNNER_URL ? "remote" : process.env.VERCEL ? "unavailable" : "local",
+  };
   if (provider === "anthropic") return {
     provider,
     configured: Boolean(process.env.ANTHROPIC_API_KEY),
@@ -45,6 +54,18 @@ function aiRuntimeStatus() {
   };
 }
 
+function aiCredentialAvailable(options = {}) {
+  const provider = semanticJudgeProvider(options);
+  if (provider === "codex") return true;
+  if (provider === "bob") {
+    const keyAvailable = Boolean(options.apiKey || process.env.BOBSHELL_API_KEY);
+    const runtimeAvailable = !process.env.VERCEL || Boolean(options.runnerUrl || process.env.BOB_RUNNER_URL);
+    return keyAvailable && runtimeAvailable;
+  }
+  if (provider === "anthropic") return Boolean(options.apiKey || process.env.ANTHROPIC_API_KEY);
+  return Boolean(options.apiKey || process.env.OPENAI_API_KEY);
+}
+
 function json(res, status, body) {
   res.writeHead(status, { "Content-Type": MIME[".json"], "Cache-Control": "no-store" });
   res.end(JSON.stringify(body));
@@ -61,6 +82,17 @@ async function body(req) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
 }
 
+function bearerToken(req) {
+  const value = String(req.headers.authorization || "");
+  return value.startsWith("Bearer ") ? value.slice(7) : "";
+}
+
+function sameSecret(left, right) {
+  const a = Buffer.from(String(left || ""));
+  const b = Buffer.from(String(right || ""));
+  return a.length > 0 && a.length === b.length && timingSafeEqual(a, b);
+}
+
 async function analyze(prs, options = {}) {
   if (!Array.isArray(prs) || prs.length < 2) throw new Error("At least two open PRs are required for analysis.");
   const preflightEngine = options.useVerification && options.repository ? new GitMergeTreePreflight(options.repository) : null;
@@ -72,7 +104,7 @@ async function analyze(prs, options = {}) {
   const prepared = pipeline.prepared;
   let aiConflicts = [];
   let aiError = null;
-  if (options.useAI && (options.aiProvider === "codex" || process.env.SEMANTIC_JUDGE_PROVIDER === "codex" || options.apiKey || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY)) {
+  if (options.useAI && aiCredentialAvailable(options)) {
     try { aiConflicts = await analyzeWithAI(prepared, options); }
     catch (error) { aiError = error.message; }
   }
@@ -108,6 +140,7 @@ async function analyze(prs, options = {}) {
           promptVersion: options.useAI ? "interaction-hypothesis-v0.5" : null,
           model: options.useAI ? (() => {
             const provider = semanticJudgeProvider(options);
+            if (provider === "bob") return "IBM Bob";
             if (provider === "anthropic") return process.env.ANTHROPIC_MODEL || "claude-opus-4-8";
             if (provider === "codex") return process.env.CODEX_MODEL || "gpt-5.4";
             return process.env.OPENAI_MODEL || "gpt-5.6-terra";
@@ -123,7 +156,7 @@ async function analyze(prs, options = {}) {
   return result;
 }
 
-async function handler(req, res) {
+export async function handler(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   try {
     if (req.method === "GET" && url.pathname === "/api/status") {
@@ -132,6 +165,7 @@ async function handler(req, res) {
         githubConfigured: Boolean(process.env.GITHUB_TOKEN),
         openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
         anthropicConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
+        bobConfigured: Boolean(process.env.BOBSHELL_API_KEY),
         mergeTreePreflight: true,
         combinedVerification: true,
         aiJudgmentProtocol: AI_JUDGMENT_PROTOCOL_VERSION,
@@ -148,13 +182,41 @@ async function handler(req, res) {
       return json(res, 200, await analyze(prs, {
         useAI: Boolean(input.useAI),
         aiProvider: input.aiProvider,
+        apiKey: input.aiProvider === "bob" ? String(input.bobApiKey || "").trim() : undefined,
         aiRepeats: input.aiRepeats ?? process.env.AI_JUDGE_REPEATS,
         useMergePreflight: false,
       }));
     }
+    if (req.method === "POST" && url.pathname === "/api/bob-judge") {
+      const gatewayToken = process.env.MERGEGUARD_GATEWAY_TOKEN;
+      if (!gatewayToken) return json(res, 404, { error: "Not found" });
+      if (!sameSecret(bearerToken(req), gatewayToken)) return json(res, 401, { error: "Unauthorized" });
+      const input = await body(req);
+      const prompt = String(input.prompt || "");
+      const apiKey = String(input.apiKey || "");
+      if (!prompt || prompt.length > 900_000) return json(res, 422, { error: "A valid Bob prompt is required." });
+      if (!apiKey || apiKey.length > 4_096) return json(res, 422, { error: "A valid IBM Bob API key is required." });
+      const judgment = await runBobJudgment({
+        prompt,
+        apiKey,
+        bobBin: process.env.BOB_BIN || "bob",
+        cwd: ROOT,
+        timeoutMs: Number(process.env.BOB_TIMEOUT_MS || 12 * 60 * 1_000),
+      });
+      return json(res, 200, { judgment });
+    }
     if (req.method === "POST" && url.pathname === "/api/analyze") {
       const input = await body(req);
       const repository = parseRepository(input.repository);
+      const aiProvider = input.aiProvider || process.env.SEMANTIC_JUDGE_PROVIDER;
+      const bobApiKey = aiProvider === "bob" ? String(input.bobApiKey || process.env.BOBSHELL_API_KEY || "").trim() : "";
+      if (aiProvider === "bob" && !bobApiKey) return json(res, 422, { error: "Enter an IBM Bob API key." });
+      if (aiProvider === "bob" && process.env.VERCEL && !process.env.BOB_RUNNER_URL) {
+        return json(res, 503, {
+          error: "IBM Bob live analysis needs a Bob runner. Set BOB_RUNNER_URL and BOB_RUNNER_TOKEN in Vercel, or use the verified demo cases.",
+        });
+      }
+      if (bobApiKey.length > 4_096) return json(res, 422, { error: "The IBM Bob API key is too long." });
       const limit = Math.max(2, Math.min(100, Number(input.limit) || 20));
       const useVerification = input.useVerification === true;
       const fetched = await fetchOpenPullRequests(repository, process.env.GITHUB_TOKEN, { limit, includeCiStatus: useVerification });
@@ -164,9 +226,16 @@ async function handler(req, res) {
       const result = await analyze(prs, {
         repository,
         useAI: input.useAI !== false,
-        aiProvider: input.aiProvider,
-        aiRepeats: input.aiRepeats ?? process.env.AI_JUDGE_REPEATS,
-        useMergePreflight: input.useMergePreflight !== false,
+        aiProvider,
+        apiKey: bobApiKey || undefined,
+        runnerUrl: process.env.BOB_RUNNER_URL,
+        runnerToken: process.env.BOB_RUNNER_TOKEN,
+        aiRepeats: input.aiRepeats ?? (aiProvider === "bob" ? 1 : process.env.AI_JUDGE_REPEATS),
+        primaryLimit: aiProvider === "bob" ? 8 : undefined,
+        secondLookLimit: aiProvider === "bob" ? 4 : undefined,
+        contractDiscoveryLimit: aiProvider === "bob" ? 2 : undefined,
+        concurrency: aiProvider === "bob" ? 1 : undefined,
+        useMergePreflight: process.env.VERCEL ? false : input.useMergePreflight !== false,
         useVerification,
         verificationLimit: input.verificationLimit,
       });

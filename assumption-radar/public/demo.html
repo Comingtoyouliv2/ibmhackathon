@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cross-PR Conflict Analyzer</title>
+<title>MergeGuard</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <style>
@@ -26,15 +26,29 @@
   .hd-top{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
   .hd-top h1{font-size:17px;font-weight:700;letter-spacing:-.2px}
   .hd-top .repo{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
-  .clone-box{margin-left:auto;display:flex;gap:6px;align-items:center}
-  .clone-box input{font-family:var(--mono);font-size:12px;border:1px solid var(--line);
-    border-radius:5px;padding:6px 10px;width:300px;background:var(--panel);color:var(--ink)}
-  .clone-box input::placeholder{color:#9AA7B0}
-  .clone-box input:focus{border-color:var(--blue);outline:none;box-shadow:0 0 0 2px var(--blue-soft)}
-  .clone-box button{border:1px solid var(--blue);background:var(--blue);color:#fff;
-    border-radius:5px;padding:6px 13px;font-weight:600;font-size:12.5px}
-  .clone-box button:hover{filter:brightness(1.08)}
-  .clone-box button:disabled{cursor:wait;opacity:.65;filter:none}
+  .case-switcher{margin-left:auto;display:flex;gap:7px;align-items:stretch}
+  .case-option{min-width:190px;border:1px solid var(--line);background:var(--panel);border-radius:7px;
+    padding:7px 10px;text-align:left;display:grid;grid-template-columns:auto 1fr;column-gap:8px;align-items:baseline}
+  .case-option:hover{border-color:#9ABAF8;background:#F8FAFF}
+  .case-option.active{border-color:var(--blue);background:var(--blue-soft);box-shadow:0 0 0 1px var(--blue)}
+  .case-option span{grid-row:1 / span 2;font-family:var(--mono);font-size:10px;font-weight:700;
+    color:var(--blue);text-transform:uppercase}
+  .case-option b{font-size:12px;color:var(--ink)}
+  .case-option small{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+  .bob-scan{width:100%;display:grid;grid-template-columns:minmax(220px,1.35fr) minmax(220px,1fr) auto;
+    gap:8px;align-items:end;margin-top:8px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+  .bob-scan-intro{grid-column:1 / -1;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .bob-scan-intro b{font-size:12.5px}
+  .bob-scan-intro span{font-size:11px;color:var(--muted)}
+  .bob-field{display:flex;flex-direction:column;gap:4px;font-family:var(--mono);font-size:9.5px;
+    font-weight:600;letter-spacing:.35px;text-transform:uppercase;color:var(--muted)}
+  .bob-field input{width:100%;height:35px;border:1px solid var(--line);border-radius:5px;background:var(--panel);
+    color:var(--ink);padding:0 10px;font-family:var(--mono);font-size:12px;text-transform:none;letter-spacing:0}
+  .bob-field input:focus{border-color:var(--blue);outline:none;box-shadow:0 0 0 2px var(--blue-soft)}
+  .bob-submit{height:35px;border:1px solid var(--blue);border-radius:5px;background:var(--blue);
+    color:#fff;padding:0 15px;font-size:12px;font-weight:600;white-space:nowrap}
+  .bob-submit:disabled{cursor:wait;opacity:.58}
+  .bob-key-note{grid-column:1 / -1;font-size:10.5px;color:var(--muted)}
   .clone-status{width:100%;text-align:right;font-size:11.5px;margin-top:4px;min-height:15px;color:var(--muted)}
   .clone-status.ok{color:#1D7A46}
   .clone-status.warn{color:var(--uncertain)}
@@ -284,6 +298,14 @@
     padding:8px 10px;background:var(--bg);border-radius:5px;white-space:pre-wrap;word-break:break-word}
   .evidence-strength{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--muted)}
   .explanation-card .evidence-quote{font-family:inherit}
+  .verification-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:7px}
+  .verification-item{border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:8px 10px}
+  .verification-item .vlabel{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;
+    letter-spacing:.35px;color:var(--muted);display:block;margin-bottom:3px}
+  .verification-item .vstatus{font-size:11.5px;font-weight:600;line-height:1.45;color:var(--ink)}
+  .verification-item.fail{border-color:#EBC7C4;background:#FDF4F3}
+  .verification-item.fail .vstatus{color:var(--conflict)}
+  .verification-note{font-size:11px;line-height:1.55;color:var(--muted);margin-top:7px}
 
   /* ── Judgment modal ─────────────────────────── */
   #overlay{position:fixed;inset:0;background:rgba(20,30,40,.45);display:none;
@@ -377,6 +399,8 @@
   @media(max-width:900px){
     aside{width:330px}.scan-kpis{grid-template-columns:1fr}.contract-flow{grid-template-columns:1fr}.flow-arrow{transform:rotate(90deg)}
     .compact-row{grid-template-columns:90px minmax(0,1fr)}.compact-row .ctype{display:none}
+    .case-switcher{width:100%;margin-left:0}.case-option{flex:1;min-width:0}
+    .bob-scan{grid-template-columns:1fr}.bob-scan-intro,.bob-key-note{grid-column:1}
   }
 </style>
 </head>
@@ -384,21 +408,37 @@
 
 <header>
   <div class="hd-top">
-    <h1>Cross-PR Conflict Analyzer</h1>
+    <h1>MergeGuard</h1>
     <span class="repo" id="repo-label">Backend sample · loading</span>
-    <div class="clone-box">
-      <input id="clone-input" type="text" spellcheck="false"
-        placeholder="git clone https://github.com/owner/repo.git"
-        aria-label="Repository to analyze">
-      <button id="clone-btn">Analyze repo</button>
+    <div class="case-switcher" role="group" aria-label="Verified conflict cases">
+      <button class="case-option active" data-case="zeppelin">
+        <span>Case #1</span><b>Apache Zeppelin</b><small>#5277 × #5151</small>
+      </button>
+      <button class="case-option" data-case="mypy">
+        <span>Case #2</span><b>mypy</b><small>#21562 × #21531</small>
+      </button>
+    </div>
+    <form class="bob-scan" id="bob-analyze-form" method="post" action="/api/analyze">
+      <div class="bob-scan-intro">
+        <b>Analyze your repository with IBM Bob</b>
+        <span>Compare live open PRs using the same MergeGuard pipeline.</span>
+      </div>
+      <label class="bob-field">GitHub repository
+        <input id="bob-repository" type="url" inputmode="url" autocomplete="url"
+          placeholder="https://github.com/owner/repository" required>
+      </label>
+      <label class="bob-field">IBM Bob API key
+        <input id="bob-api-key" type="password" autocomplete="off" spellcheck="false"
+          placeholder="Paste your Bob API key" required>
+      </label>
+      <button class="bob-submit" id="bob-analyze-submit" type="submit">Analyze with IBM Bob</button>
+      <p class="bob-key-note">Your key is used only for this analysis, is never stored, and is never returned to the browser.</p>
+    </form>
+    <div class="analysis-progress" id="analysis-progress" hidden aria-live="polite">
+      <div class="progress-meta"><b id="progress-label">Preparing analysis</b><span class="pct" id="progress-percent">0%</span></div>
+      <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
     </div>
     <div class="clone-status" id="clone-status"></div>
-    <div class="analysis-progress" id="analysis-progress" hidden>
-      <div class="progress-meta"><b id="progress-stage">Preparing analysis</b><span>estimated progress</span><span class="pct" id="progress-percent">0%</span></div>
-      <div class="progress-track" id="progress-track" role="progressbar" aria-label="Repository analysis progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-        <div class="progress-fill" id="progress-fill"></div>
-      </div>
-    </div>
   </div>
   <div class="funnel" id="funnel"></div>
 </header>
@@ -436,7 +476,7 @@
 <script type="module" src="/demo-live.js"></script>
 
 <!-- ════════════════════════════════════════════════════════════════
-     MergeScope landing-page integration and first-visit tutorial.
+     MergeGuard landing-page integration and first-visit tutorial.
      1. "← Home" link back to the landing page.
      2. First-visit tutorial coach-marks.
         localStorage keeps the tour state in this browser only.
@@ -474,14 +514,14 @@
 (function(){
   /* ── Home link in the header ── */
   document.querySelector('.hd-top h1').insertAdjacentHTML('afterend',
-    '<a class="ms-home" href="index.html">&#8592; MergeScope home</a>');
+    '<a class="ms-home" href="index.html">&#8592; MergeGuard home</a>');
 
   /* ── Replay button in the view bar ── */
   document.querySelector('.budget').insertAdjacentHTML('beforeend',
     '<button class="tut-replay" id="tut-replay">? Tutorial</button>');
 
   /* ── First-visit detection (per-browser; see block comment above) ── */
-  const TUT_KEY = 'mergescope-tutorial-seen-v1';
+  const TUT_KEY = 'mergeguard-tutorial-seen-v1';
   function seenBefore(){ try { return !!localStorage.getItem(TUT_KEY); } catch(e){ return true; } }
   function markSeen(){ try { localStorage.setItem(TUT_KEY, '1'); } catch(e){} }
 
@@ -489,11 +529,11 @@
     { sel:'#funnel', title:'Welcome to the live demo',
       text:'This funnel comes directly from the current repository analysis: open PRs, possible pairs, candidate pairs, AI-reviewed pairs, and findings that need attention.' },
     { sel:'#queue-wrap', title:'The work queue',
-      text:'Every row is a backend finding. Conflict, coordination, and review stay separate, and the frontend does not invent a confidence score.' },
+      text:'The verified conflict stays first. A bounded needs-review queue keeps unverified static signals from overwhelming the reviewer.' },
     { sel:'#tab-graph', title:'The conflict graph',
       text:'Switch views to see PRs and their shared files or semantic contracts. Colored edges represent the exact relationship returned by the backend.' },
-    { sel:'.clone-box', title:'Try your own repo',
-      text:'Paste a GitHub repo URL. MergeScope fetches its open PRs, runs the backend analyzer, then shows assumptions, impact, evidence, and any executable verification result.' },
+    { sel:'.case-switcher', title:'Compare two real cases',
+      text:'Switch between two evidence-backed cases from Apache Zeppelin and mypy. Each case shows the interacting assumptions, combined impact, source evidence, and verification status.' },
   ];
 
   const backdrop = document.getElementById('tut-backdrop');
@@ -555,9 +595,8 @@
     if (e.key === 'Escape' && step >= 0){ e.stopPropagation(); stop(); }
   }, true);
 
-  /* Auto-run once per browser; mark seen immediately so a mid-tour
-     close doesn't re-trigger it on the next visit. */
-  if (!seenBefore()) setTimeout(()=>{ markSeen(); show(0); }, 600);
+  /* Keep the case visible immediately. The tutorial remains available
+     from the replay button without interrupting the first demo view. */
 })();
 </script>
 </body>

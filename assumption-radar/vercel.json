@@ -1,0 +1,26 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "npm run vercel-build",
+  "outputDirectory": "public",
+  "functions": {
+    "api/analyze.mjs": {
+      "maxDuration": 300,
+      "memory": 2048
+    },
+    "api/demo.mjs": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "api/status.mjs": {
+      "maxDuration": 30,
+      "memory": 1024
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/index.html"
+    }
+  ]
+}
