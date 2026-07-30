@@ -3,7 +3,7 @@ import { adaptBackendResponse, parseRepositoryInput } from "./demo-data.js";
 const $ = (selector) => document.querySelector(selector);
 const state = { model: null, filter: "needs-action", graphFilter: "all", selected: null, view: "queue", loading: false, progressTimer: null, progressStartedAt: 0 };
 const verdicts = {
-  conflict: { label: "Confirmed conflict", color: "#D6453A", badge: "silent" },
+  conflict: { label: "Conflict candidate", color: "#D6453A", badge: "candidate" },
   coordination: { label: "Merge coordination", color: "#7A4FD6", badge: "gittoo" },
   review: { label: "Needs review", color: "#DC9B00", badge: "stale" },
 };
@@ -89,13 +89,13 @@ function renderFunnel() {
   const steps = [
     [summary.prCount, "Open PRs"],
     [summary.pairCount, "Possible pairs"],
-    [summary.candidateCount, "Backend candidates"],
+    [summary.candidateCount, "Candidate pairs"],
     [summary.aiReviewedPairCount, "AI reviewed"],
     [actionable, "Needs attention"],
   ];
   $("#funnel").innerHTML = steps.map(([number, label], index) => `
     <div class="fstep real ${index === steps.length - 1 ? "final" : ""}">
-      <span class="tag">BACKEND</span><span class="num">${escapeHtml(number)}</span><span class="lbl">${escapeHtml(label)}</span>
+      <span class="num">${escapeHtml(number)}</span><span class="lbl">${escapeHtml(label)}</span>
     </div>`).join("");
 }
 
@@ -159,7 +159,7 @@ function renderQueue() {
     <section class="scan-overview">
       <div class="scan-title"><h2>Scan result</h2><p>${escapeHtml(state.model.summary.prCount)} open PRs · ${escapeHtml(state.model.summary.pairCount)} possible pairs analyzed</p></div>
       <div class="scan-kpis">
-        <div class="scan-kpi danger"><div class="klabel"><span class="vdot" style="background:${verdicts.conflict.color}"></span>Confirmed conflict</div><div class="knum">${conflicts.length}<span class="kunit">pair(s)</span></div></div>
+        <div class="scan-kpi danger"><div class="klabel"><span class="vdot" style="background:${verdicts.conflict.color}"></span>Conflict candidate</div><div class="knum">${conflicts.length}<span class="kunit">pair(s)</span></div></div>
         <div class="scan-kpi warning"><div class="klabel"><span class="vdot" style="background:${verdicts.review.color}"></span>Needs review</div><div class="knum">${reviews.length}<span class="kunit">pair(s)</span></div></div>
         <div class="scan-kpi"><div class="klabel"><span class="vdot" style="background:#AAB4BC"></span>No action found</div><div class="knum">${noActionPrCount}<span class="kunit">PR(s)</span></div></div>
       </div>
@@ -167,7 +167,7 @@ function renderQueue() {
     ${hero}
     <section class="action-section"><div class="section-hd"><h3>Needs review</h3><span>${reviews.length} pair(s) requiring human judgment</span></div>${reviewRows}</section>
     ${coordinationSection}
-    <div class="map-strip"><div class="map-copy"><b>Repository relationship map</b>See all ${escapeHtml(state.model.summary.prCount)} PRs while confirmed conflicts and review candidates stay highlighted.</div><button class="map-cta" data-switch-graph>View full repository map →</button></div>
+    <div class="map-strip"><div class="map-copy"><b>Repository relationship map</b>See all ${escapeHtml(state.model.summary.prCount)} PRs grouped by repository sector while conflict and review candidates stay highlighted.</div><button class="map-cta" data-switch-graph>View sector map →</button></div>
     ${context}`;
   $("#queue-wrap").querySelectorAll("[data-finding]").forEach((row) => row.addEventListener("click", () => select("finding", row.dataset.finding)));
   $("#queue-wrap").querySelectorAll("[data-open-finding]").forEach((button) => button.addEventListener("click", (event) => {
@@ -182,9 +182,55 @@ function renderEmptyDetail() {
   $("#side-body").innerHTML = `<div class="empty">Select a queue item, PR node, or resource to inspect the backend's evidence.<br><br>No frontend-only score or verdict is added here.</div>`;
 }
 
-function runTable(runs) {
-  if (!runs?.length) return `<div class="callout"><b>Executable verification not run.</b><br>This relationship is currently based on ${escapeHtml(state.model.mode)} analysis.</div>`;
-  return `<div class="lane"><div class="lane-hd"><span class="fn">Base / A / B / A+B</span></div><div class="lane-body">${runs.map((run) => `<div><b>${escapeHtml(String(run.label || "run").toUpperCase())}</b> — ${escapeHtml(run.status || run.result || "unknown")}</div>`).join("")}</div></div>`;
+function renderGraphFilterDetail(filter) {
+  const filterOrder = filter === "all" ? ["conflict", "review", "coordination"] : [filter];
+  const findings = filterOrder.flatMap((key) => state.model.findings.filter((finding) => finding.verdict === key));
+  const guidance = {
+    all: {
+      title: "All findings",
+      text: "Start with conflict candidates, then resolve needs-review pairs and merge coordination. Select any pair to open its evidence in a separate detail window.",
+    },
+    conflict: {
+      title: "What to check first",
+      text: "Open the highest-impact pair, verify the two stated assumptions against code evidence, then check whether Base/A/B/A+B execution has confirmed a combined-only failure.",
+    },
+    review: {
+      title: "What needs human judgment",
+      text: "Confirm whether the relationship is causal rather than simple proximity. Look for missing execution evidence, ambiguous intent, or an unsupported contract inference.",
+    },
+    coordination: {
+      title: "What to coordinate",
+      text: "Check merge order, stacked-PR ancestry, textual conflicts, and duplicate or superseded work. These are operational merge risks, not confirmed silent regressions.",
+    },
+  }[filter];
+  const headerLabel = filter === "all" ? "All findings" : verdicts[filter].label;
+  const headerDot = filter === "all" ? "" : `<span class="vdot" style="background:${verdicts[filter].color}"></span>`;
+  const renderStackItem = (finding, index) => {
+    const a = prById(finding.prIds[0]);
+    const b = prById(finding.prIds[1]);
+    const verdict = verdicts[finding.verdict];
+    return `<button class="stack-item filter-stack-item" data-finding="${escapeHtml(finding.id)}">
+      <div class="top"><span class="stack-rank">${index + 1}</span><span class="vdot" style="background:${verdict.color}"></span><span class="prn">#${escapeHtml(a.num)} × #${escapeHtml(b.num)}</span><span class="vlabel" style="color:${verdict.color}">${escapeHtml(finding.mergeTree === "clean" ? "CLEAN" : finding.mergeTree === "textual-conflict" ? "GIT" : "UNKNOWN")}</span></div>
+      <div class="ttl">${escapeHtml(finding.title)}</div>
+      <div class="meta">${escapeHtml(finding.categoryLabel)} · ${escapeHtml(finding.basis)}</div>
+      <div class="human">Inspect: ${escapeHtml(finding.recommendation)}</div>
+    </button>`;
+  };
+  $("#side-hd").innerHTML = `${headerDot}<span class="title">${escapeHtml(headerLabel)}</span><span class="mono">${findings.length} pair(s)</span>`;
+  $("#side-body").innerHTML = `
+    <div class="callout blue"><b>${escapeHtml(guidance.title)}</b><br>${escapeHtml(guidance.text)}</div>
+    ${findings.length ? filterOrder.map((key) => {
+      const group = findings.filter((finding) => finding.verdict === key);
+      if (!group.length) return "";
+      return `<div class="sec-title stack-section-title"><span class="vdot" style="background:${verdicts[key].color}"></span>${escapeHtml(verdicts[key].label)} · ${group.length}</div>${group.map(renderStackItem).join("")}`;
+    }).join("") : `<div class="empty">No pair was returned in this category.</div>`}`;
+  $("#side-body").querySelectorAll("[data-finding]").forEach((button) => button.addEventListener("click", () => select("finding", button.dataset.finding)));
+}
+
+function closeFindingModal() {
+  $("#overlay").classList.remove("open");
+  $("#modal").innerHTML = "";
+  state.selected = null;
 }
 
 function renderFindingDetail(finding) {
@@ -194,20 +240,78 @@ function renderFindingDetail(finding) {
   const coordinationNote = finding.verdict === "coordination"
     ? `<div class="callout"><b>Why this is not a confirmed semantic conflict</b><br>This pair needs merge-order, rebase, text-conflict resolution, or duplicate-work consolidation. Git or repository history already exposes the coordination need; the backend has not confirmed a silent pair-induced regression.</div>`
     : "";
-  $("#side-hd").innerHTML = `<span class="vdot" style="background:${verdict.color}"></span><span class="title">${escapeHtml(verdict.label)}</span><button class="xbtn" aria-label="Close">×</button>`;
-  $("#side-body").innerHTML = `
-    <div class="kv"><b><a href="${escapeHtml(a.url || "#")}" target="_blank" rel="noreferrer">#${escapeHtml(a.num)}</a> × <a href="${escapeHtml(b.url || "#")}" target="_blank" rel="noreferrer">#${escapeHtml(b.num)}</a></b><br>${escapeHtml(finding.title)}<br><span class="chip">${escapeHtml(finding.categoryLabel)}</span><span class="chip">${escapeHtml(finding.basis)}</span><span class="chip">${escapeHtml(finding.source)}</span></div>
-    ${coordinationNote}
-    <div class="sec-title">Backend summary</div><div class="callout blue">${escapeHtml(finding.summary)}</div>
-    <div class="sec-title">Hidden assumptions</div>
-    <div class="assump" style="border-left-color:${verdict.color}"><span class="atype">PR #${escapeHtml(a.num)}</span>${escapeHtml(finding.assumptionA)}</div>
-    <div class="assump" style="border-left-color:${verdict.color}"><span class="atype">PR #${escapeHtml(b.num)}</span>${escapeHtml(finding.assumptionB)}</div>
-    <div class="sec-title">If merged together</div><div class="callout red">${escapeHtml(finding.consequence)}</div>
-    <div class="sec-title">Recommended action</div><div class="callout blue">${escapeHtml(finding.recommendation)}</div>
-    <div class="sec-title">Execution evidence</div>${runTable(finding.verification.runs)}
-    <div class="sec-title">Code evidence</div>${finding.evidence.length ? finding.evidence.map((item, index) => `<div class="lane"><div class="lane-hd"><span class="fn">E${index + 1}</span></div><div class="lane-body">${escapeHtml(item)}</div></div>`).join("") : `<div class="empty">No evidence text was returned.</div>`}
-    ${finding.witnesses.length ? `<div class="sec-title">Analyzer witnesses</div>${finding.witnesses.map((item) => `<div class="lane"><div class="lane-hd"><span class="fn">${escapeHtml(item.title)}</span>${item.strength == null ? "" : `<span class="cnt">${escapeHtml(item.strength)}</span>`}</div><div class="lane-body">${escapeHtml(item.explanation)}</div></div>`).join("")}` : ""}`;
-  $("#side-hd .xbtn").addEventListener("click", () => select("none"));
+  const evidenceDetails = finding.evidenceDetails?.length
+    ? finding.evidenceDetails
+    : finding.evidence.map((text, index) => ({ id: `E${index + 1}`, side: "", file: "", symbol: "", line: "", text }));
+  const renderEvidenceRow = (item, index) => {
+    const normalizedSide = String(item.side || "").toUpperCase();
+    const sideLabel = normalizedSide === "A" || normalizedSide.includes("PR-A")
+      ? `PR #${a.num}`
+      : normalizedSide === "B" || normalizedSide.includes("PR-B")
+        ? `PR #${b.num}`
+        : index === 0
+          ? `PR #${a.num}`
+          : index === 1
+            ? `PR #${b.num}`
+            : "Supporting";
+    const location = [item.file, item.symbol, item.line ? `line ${item.line}` : ""].filter(Boolean).join(" · ");
+    return `<details class="evidence-row">
+      <summary><span class="evidence-id">${escapeHtml(item.id)}</span><b>${escapeHtml(sideLabel)}</b>${location ? `<span class="evidence-location-inline" title="${escapeHtml(location)}">${escapeHtml(location)}</span>` : ""}<span class="evidence-expand"><span class="show-label">View</span><span class="hide-label">Hide</span></span></summary>
+      <div class="evidence-quote">${escapeHtml(item.text)}</div>
+    </details>`;
+  };
+  const renderAnalyzerRow = (item, index) => `<details class="evidence-row explanation-row">
+    <summary>
+      <span class="evidence-id analyzer-id">A${index + 1}</span>
+      <b>${escapeHtml(item.title)}</b>
+      ${item.strength == null ? "" : `<span class="evidence-location-inline">${escapeHtml(item.strength)}</span>`}
+      <span class="evidence-expand"><span class="show-label">View</span><span class="hide-label">Hide</span></span>
+    </summary>
+    <div class="evidence-quote">${escapeHtml(item.explanation)}</div>
+  </details>`;
+  const primaryEvidence = [
+    ...evidenceDetails.slice(0, 2).map(renderEvidenceRow),
+    ...finding.witnesses.slice(0, 1).map(renderAnalyzerRow),
+  ].join("");
+  const remainingEvidence = [
+    ...evidenceDetails.slice(2).map((item, index) => renderEvidenceRow(item, index + 2)),
+    ...finding.witnesses.slice(1).map((item, index) => renderAnalyzerRow(item, index + 1)),
+  ].join("");
+  const remainingEvidenceCount = Math.max(0, evidenceDetails.length - 2) + Math.max(0, finding.witnesses.length - 1);
+  const totalEvidenceCount = evidenceDetails.length + finding.witnesses.length;
+  const evidenceSummary = totalEvidenceCount
+    ? `<div class="evidence-summary-bar">
+        <span>${evidenceDetails.length} code ref${evidenceDetails.length === 1 ? "" : "s"}</span>
+        <span>${finding.witnesses.length} analyzer signal${finding.witnesses.length === 1 ? "" : "s"}</span>
+        <span class="summary-help">Click a row to expand</span>
+      </div>
+      ${primaryEvidence}
+      ${remainingEvidence ? `<details class="evidence-more evidence-all"><summary>View all ${remainingEvidenceCount} remaining evidence item${remainingEvidenceCount === 1 ? "" : "s"}</summary>${remainingEvidence}</details>` : ""}`
+    : `<div class="empty">No concrete evidence was returned. Treat this finding as a review hypothesis until evidence is attached.</div>`;
+  $("#modal").innerHTML = `
+    <div class="modal-hd">
+      <span class="vbadge" style="background:${verdict.color}">${escapeHtml(verdict.label)}</span>
+      <span class="pairname"><a href="${escapeHtml(a.url || "#")}" target="_blank" rel="noreferrer">#${escapeHtml(a.num)}</a> × <a href="${escapeHtml(b.url || "#")}" target="_blank" rel="noreferrer">#${escapeHtml(b.num)}</a></span>
+      <span class="fresh">${escapeHtml(finding.categoryLabel)} · ${escapeHtml(finding.mergeTree === "clean" ? "clean merge" : finding.mergeTree || "preflight unknown")}</span>
+      <button class="xbtn modal-close" data-close-modal aria-label="Close detail">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="kv"><b>${escapeHtml(finding.title)}</b><br><span class="chip">${escapeHtml(finding.basis)}</span><span class="chip">${escapeHtml(finding.source)}</span></div>
+      ${coordinationNote}
+      <div class="sec-title">Backend summary</div><div class="callout blue">${escapeHtml(finding.summary)}</div>
+      <div class="sec-title">Hidden assumptions</div>
+      <div class="assump" style="border-left-color:${verdict.color}"><span class="atype">PR #${escapeHtml(a.num)}</span>${escapeHtml(finding.assumptionA)}</div>
+      <div class="assump" style="border-left-color:${verdict.color}"><span class="atype">PR #${escapeHtml(b.num)}</span>${escapeHtml(finding.assumptionB)}</div>
+      <div class="sec-title">If merged together</div><div class="callout red">${escapeHtml(finding.consequence)}</div>
+      <div class="sec-title">Recommended action</div><div class="callout blue">${escapeHtml(finding.recommendation)}</div>
+      <div class="sec-title">Why these changes connect</div>
+      <div class="connection-explanation"><b>PR #${escapeHtml(a.num)}</b> relies on “${escapeHtml(finding.assumptionA)}” while <b>PR #${escapeHtml(b.num)}</b> introduces or relies on “${escapeHtml(finding.assumptionB)}”. The analyzer linked the pair because these expectations meet in the same code path or contract and may produce: <b>${escapeHtml(finding.consequence)}</b></div>
+      <div class="sec-title">Evidence summary</div>${evidenceSummary}
+    </div>
+    <div class="modal-ft"><span class="note">The findings list stays open behind this window so you can review the next pair after closing.</span><button class="act" data-close-modal>Close</button></div>`;
+  $("#overlay").classList.add("open");
+  $("#modal").querySelectorAll("[data-close-modal]").forEach((button) => button.addEventListener("click", closeFindingModal));
+  $("#modal [data-close-modal]")?.focus();
 }
 
 function renderPrDetail(pr) {
@@ -236,13 +340,12 @@ function select(type, id) {
   else renderEmptyDetail();
 }
 
-function renderLegend() {
-  $("#legend").innerHTML = `<div class="row"><b>Priority</b></div>` + Object.entries(verdicts).map(([, item]) => `<div class="row"><span class="vdot" style="background:${item.color}"></span>${item.label}</div>`).join("") + `<div class="row"><span class="vdot" style="background:#AAB4BC"></span>No action found</div><div class="row">○ PR &nbsp; □ shared file / contract</div>`;
+function renderLegend(showResources = true) {
+  $("#legend").innerHTML = `<div class="row"><b>How to read</b></div>` + Object.entries(verdicts).map(([, item]) => `<div class="row"><span class="vdot" style="background:${item.color}"></span>${item.label}</div>`).join("") + `<div class="row"><span class="vdot" style="background:#AAB4BC"></span>No action found</div><div class="row">○ PR${showResources ? " &nbsp; □ shared file / contract" : " &nbsp; — relationship"}</div>`;
 }
 
 function graphFindings() {
   if (state.graphFilter === "all") return state.model.findings;
-  if (state.graphFilter === "attention") return state.model.findings.filter((finding) => finding.verdict === "conflict" || finding.verdict === "review");
   return state.model.findings.filter((finding) => finding.verdict === state.graphFilter);
 }
 
@@ -251,17 +354,62 @@ function renderGraphPriority() {
   const hidden = Math.max(0, state.model.prs.length - new Set(graphFindings().flatMap((finding) => finding.prIds)).size);
   const button = (filter, title, count, color, extra = "") => `<button class="graph-focus ${extra} ${state.graphFilter === filter ? "active" : ""}" data-graph-filter="${filter}" ${filter === "coordination" ? 'title="Text conflicts, stacked PRs, or duplicate work that need merge-order, rebase, or consolidation—not a confirmed silent semantic conflict."' : ""}><span class="gf-top"><span class="vdot" style="background:${color}"></span>${title}</span><span class="gf-count">${count}</span></button>`;
   $("#graph-priority").innerHTML = [
-    button("conflict", "Confirmed", counts.conflict, verdicts.conflict.color),
-    button("review", "Needs review", counts.review, verdicts.review.color),
-    button("attention", "Priority only", counts.conflict + counts.review, "#fff", "start"),
     button("all", "All PRs", state.model.prs.length, "#0F62FE"),
+    button("conflict", "Conflict candidates", counts.conflict, verdicts.conflict.color),
+    button("review", "Needs review", counts.review, verdicts.review.color),
     button("coordination", "Merge coordination", counts.coordination, verdicts.coordination.color),
     state.graphFilter === "all" ? "" : `<span class="graph-hidden-note">${hidden} unrelated PR(s) hidden</span>`,
   ].join("");
   $("#graph-priority").querySelectorAll("[data-graph-filter]").forEach((control) => control.addEventListener("click", () => {
     state.graphFilter = control.dataset.graphFilter;
+    state.selected = null;
+    renderGraphFilterDetail(state.graphFilter);
     renderGraph();
   }));
+}
+
+function sectorForPath(rawPath = "") {
+  const input = String(rawPath);
+  const path = input.replace(/^(?:contract|file):/, "");
+  if (input.startsWith("contract:")) return `CONTRACT · ${(path || "SEMANTIC").toUpperCase()}`;
+  if (!path || !path.includes("/")) {
+    if (/^(?:api|data|config|auth|event|rollout|behavior|code|semantic-contract)$/i.test(path)) return `CONTRACT · ${path.toUpperCase()}`;
+    return path ? "ROOT" : "UNMAPPED";
+  }
+  const parts = path.replace(/^\.?\//, "").split("/").filter(Boolean);
+  const first = parts[0] || "root";
+  if (/^(?:test|tests|spec|specs|testing)$/i.test(first)) return "TESTS";
+  if (/^(?:doc|docs|documentation)$/i.test(first)) return "DOCS";
+  if (/^(?:\.github|ci|build|scripts|tools|config)$/i.test(first)) return first.toUpperCase();
+  if (/^(?:src|lib|packages|apps|modules|plugins|extensions)$/i.test(first) && parts[1]) {
+    return `${first}/${parts[1]}`.toUpperCase();
+  }
+  return first.toUpperCase();
+}
+
+function dominantSector(paths = []) {
+  const counts = new Map();
+  for (const path of paths) {
+    const sector = sectorForPath(path);
+    counts.set(sector, (counts.get(sector) || 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] || "UNMAPPED";
+}
+
+function sectorTone(name) {
+  const palette = [
+    ["#E8F1FF", "#78A9FF", "#0043CE"],
+    ["#E6F6F2", "#42BEA6", "#005D5D"],
+    ["#F7E8F4", "#D4A6C8", "#9F1853"],
+    ["#FFF3D6", "#F1C21B", "#8E6A00"],
+    ["#F0E9FF", "#BE95FF", "#6929C4"],
+    ["#E5F6FF", "#82CFFF", "#00539A"],
+    ["#FDE8E6", "#FF8389", "#A2191F"],
+    ["#EAF4DF", "#8DBD5F", "#3A6D0B"],
+  ];
+  let hash = 2166136261;
+  for (const char of String(name)) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  return palette[(hash >>> 0) % palette.length];
 }
 
 function renderGraph() {
@@ -281,13 +429,13 @@ function renderGraph() {
   const findingResourcePaths = new Set(findings.flatMap((finding) => finding.resources));
   const prs = state.graphFilter === "all" ? state.model.prs : state.model.prs.filter((pr) => focusPrIds.has(pr.id));
   const visiblePrIds = new Set(prs.map((pr) => pr.id));
-  const resources = state.model.resources.filter((resource) => {
+  const resources = state.graphFilter === "all" ? [] : state.model.resources.filter((resource) => {
     const visibleUsers = resource.prIds.filter((id) => visiblePrIds.has(id)).length;
-    return visibleUsers > 1 && (state.graphFilter === "all" || findingResourcePaths.has(resource.path));
-  }).slice(0, state.graphFilter === "all" ? 40 : 24);
+    return visibleUsers > 1 && findingResourcePaths.has(resource.path);
+  }).slice(0, 24);
   const nodes = [
-    ...prs.map((pr) => ({ ...pr, kind: "pr", priority: priorityPrIds.has(pr.id), coordination: coordinationPrIds.has(pr.id) })),
-    ...resources.map((resource) => ({ ...resource, kind: "resource", priority: priorityResourcePaths.has(resource.path), coordination: false })),
+    ...prs.map((pr) => ({ ...pr, kind: "pr", sector: dominantSector(pr.paths), priority: priorityPrIds.has(pr.id), coordination: coordinationPrIds.has(pr.id) })),
+    ...resources.map((resource) => ({ ...resource, kind: "resource", sector: sectorForPath(resource.path), priority: priorityResourcePaths.has(resource.path), coordination: false })),
   ];
   const links = [];
   // A focused graph intentionally hides unrelated PRs. Only create resource
@@ -298,7 +446,7 @@ function renderGraph() {
     .forEach((prId) => links.push({ source: prId, target: resource.id, kind: "resource" })));
   findings.forEach((finding) => links.push({ source: finding.prIds[0], target: finding.prIds[1], kind: "finding", finding }));
   renderGraphPriority();
-  renderLegend();
+  renderLegend(state.graphFilter !== "all");
   if (!nodes.length) {
     $("#graph-hint").textContent = "No relationship in this filter. Choose another category or All context.";
     return;
@@ -309,25 +457,102 @@ function renderGraph() {
     return (hash >>> 0) / 4294967295;
   };
   const isAll = state.graphFilter === "all";
-  nodes.forEach((item) => {
-    if (!isAll || item.priority) return;
-    item.x = 48 + stableUnit(item.id, 17) * Math.max(1, width - 96);
-    item.y = 118 + stableUnit(item.id, 71) * Math.max(1, height - 176);
+  const sectorTop = 112;
+  const sectorInset = 8;
+  // Reserve a dedicated footer for the compact legend so it never covers PR nodes.
+  const sectorBottom = 62;
+  const sectorGroups = [...window.d3.group(nodes, (item) => item.sector).entries()]
+    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+  const sectorRoot = window.d3.hierarchy({
+    children: sectorGroups.map(([name, items]) => ({ name, items, value: Math.max(2, items.length) })),
+  }).sum((item) => item.value || 0);
+  const layoutWidth = Math.max(1, width - sectorInset * 2);
+  const layoutHeight = Math.max(1, height - sectorTop - sectorBottom);
+  window.d3.treemap()
+    .size([layoutWidth, layoutHeight])
+    .paddingInner(10)
+    .paddingOuter(3)
+    .round(true)(sectorRoot);
+  const nodeScale = Math.max(.58, Math.min(1, Math.sqrt(48 / Math.max(1, nodes.length))));
+  const fitSectorText = (text, radius, offset, maxFont, minFont) => {
+    const chordWidth = Math.max(18, 2 * Math.sqrt(Math.max(0, radius ** 2 - (radius - offset) ** 2)) - 12);
+    const fontSize = Math.max(minFont, Math.min(maxFont, chordWidth / Math.max(1, text.length * .62)));
+    const maxCharacters = Math.max(3, Math.floor(chordWidth / (fontSize * .62)));
+    if (text.length <= maxCharacters) return { text, fontSize };
+    const remaining = maxCharacters - 1;
+    const start = Math.max(1, Math.ceil(remaining * .58));
+    const end = Math.max(1, remaining - start);
+    return { text: `${text.slice(0, start)}…${text.slice(-end)}`, fontSize };
+  };
+  const sectorLayout = new Map(sectorRoot.leaves().map((leaf) => [leaf.data.name, {
+    cx: (leaf.x0 + leaf.x1) / 2 + sectorInset,
+    cy: (leaf.y0 + leaf.y1) / 2 + sectorTop,
+    r: Math.max(8, Math.min(leaf.x1 - leaf.x0, leaf.y1 - leaf.y0) / 2 - 3),
+    count: leaf.data.items.length,
+    prCount: leaf.data.items.filter((item) => item.kind === "pr").length,
+    priorityCount: leaf.data.items.filter((item) => item.kind === "pr" && (item.priority || item.coordination)).length,
+    tone: sectorTone(leaf.data.name),
+  }]));
+  sectorGroups.forEach(([name, items]) => {
+    const sector = sectorLayout.get(name);
+    const ordered = [...items].sort((a, b) => Number(b.priority || b.coordination) - Number(a.priority || a.coordination)
+      || (a.kind === "pr" ? a.num : a.id).toString().localeCompare((b.kind === "pr" ? b.num : b.id).toString(), undefined, { numeric: true }));
+    const availableRadius = Math.max(10, sector.r - (24 * nodeScale + 14));
+    const phase = stableUnit(name, 43) * Math.PI * 2;
+    const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+    ordered.forEach((item, index) => {
+      const radius = index === 0 ? 0 : Math.sqrt(index / Math.max(1, ordered.length)) * availableRadius;
+      const angle = phase + index * goldenAngle;
+      item.homeX = sector.cx + Math.cos(angle) * radius;
+      item.homeY = sector.cy + 9 + Math.sin(angle) * radius;
+      item.x = item.homeX + (stableUnit(item.id, 17) - .5) * 8;
+      item.y = item.homeY + (stableUnit(item.id, 71) - .5) * 8;
+    });
   });
   const simulation = window.d3.forceSimulation(nodes)
-    .force("link", window.d3.forceLink(links).id((item) => item.id).distance((link) => link.kind === "finding" ? (link.finding.verdict === "conflict" ? 135 : 165) : 70).strength((link) => link.kind === "finding" ? .52 : .22))
-    .force("charge", window.d3.forceManyBody().strength((item) => isAll ? (item.priority ? -230 : -42) : -270))
-    .force("center", window.d3.forceCenter(width / 2, height / 2))
-    .force("priority-x", window.d3.forceX((item) => item.priority ? width * .5 : item.x).strength((item) => isAll ? (item.priority ? .24 : .018) : .08))
-    .force("priority-y", window.d3.forceY((item) => item.priority ? height * .48 : item.y).strength((item) => isAll ? (item.priority ? .24 : .018) : .08))
-    .force("collision", window.d3.forceCollide().radius((item) => item.kind === "pr" ? (item.priority ? 50 : item.coordination ? 31 : 18) : (item.priority ? 28 : 15)));
+    .force("link", window.d3.forceLink(links).id((item) => item.id).distance((link) => (link.kind === "finding" ? 110 : 48) * nodeScale).strength((link) => link.kind === "finding" ? .025 : .08))
+    .force("charge", window.d3.forceManyBody().strength((item) => (item.priority ? -38 : -10) * nodeScale))
+    .force("sector-x", window.d3.forceX((item) => item.homeX).strength(.62))
+    .force("sector-y", window.d3.forceY((item) => item.homeY).strength(.62))
+    .force("collision", window.d3.forceCollide().radius((item) => (item.kind === "pr" ? (item.priority ? 20 : item.coordination ? 15.5 : 11) : (item.priority ? 10 : 7)) * nodeScale));
   const viewport = svg.append("g");
   svg.call(window.d3.zoom().scaleExtent([.4, 3]).on("zoom", (event) => viewport.attr("transform", event.transform)));
+  const sectorLayer = viewport.append("g").attr("class", "sector-layer");
+  const sectorCards = sectorLayer.selectAll("g").data([...sectorLayout.entries()]).join("g").attr("class", "sector-card");
+  sectorCards.append("circle")
+    .attr("cx", ([, sector]) => sector.cx)
+    .attr("cy", ([, sector]) => sector.cy)
+    .attr("r", ([, sector]) => sector.r)
+    .attr("fill", ([, sector]) => sector.tone[0])
+    .attr("stroke", ([, sector]) => sector.tone[1]);
+  sectorCards.append("text")
+    .attr("class", "sector-title")
+    .attr("x", ([, sector]) => sector.cx)
+    .attr("y", ([, sector]) => sector.cy - sector.r + 20)
+    .attr("text-anchor", "middle")
+    .style("font-size", ([name, sector]) => `${fitSectorText(name, sector.r, 20, 10, 6.5).fontSize}px`)
+    .attr("fill", ([, sector]) => sector.tone[2])
+    .text(([name, sector]) => fitSectorText(name, sector.r, 20, 10, 6.5).text);
+  sectorCards.append("text")
+    .attr("class", "sector-meta")
+    .attr("x", ([, sector]) => sector.cx)
+    .attr("y", ([, sector]) => sector.cy - sector.r + 35)
+    .attr("text-anchor", "middle")
+    .style("font-size", ([, sector]) => {
+      const label = `${sector.prCount} PR${sector.prCount === 1 ? "" : "S"}${sector.priorityCount ? ` · ${sector.priorityCount} FLAGGED` : ""}`;
+      return `${fitSectorText(label, sector.r, 35, 8.5, 6).fontSize}px`;
+    })
+    .attr("fill", ([, sector]) => sector.tone[2])
+    .text(([, sector]) => {
+      const label = `${sector.prCount} PR${sector.prCount === 1 ? "" : "S"}${sector.priorityCount ? ` · ${sector.priorityCount} FLAGGED` : ""}`;
+      return fitSectorText(label, sector.r, 35, 8.5, 6).text;
+    });
+  sectorCards.append("title").text(([name]) => name);
   const link = viewport.append("g").selectAll("line").data(links).join("line")
     .attr("stroke", (item) => item.kind === "finding" ? verdicts[item.finding.verdict].color : "#C8D0D5")
-    .attr("stroke-width", (item) => item.kind === "finding" ? (item.finding.verdict === "conflict" ? 5 : 3.5) : 1)
+    .attr("stroke-width", (item) => item.kind === "finding" ? (item.finding.verdict === "conflict" ? 2.6 : item.finding.verdict === "review" ? 2.2 : 1.6) * nodeScale : 1)
     .attr("stroke-dasharray", (item) => item.kind === "resource" ? "3 4" : null)
-    .attr("opacity", (item) => item.kind === "finding" ? (item.finding.verdict === "conflict" || item.finding.verdict === "review" ? .96 : .5) : (isAll ? .18 : .5))
+    .attr("opacity", (item) => item.kind === "finding" ? (item.finding.verdict === "conflict" ? .82 : item.finding.verdict === "review" ? .76 : .56) : (isAll ? .18 : .5))
     .style("cursor", (item) => item.kind === "finding" ? "pointer" : "default")
     .on("click", (_, item) => { if (item.kind === "finding") select("finding", item.finding.id); });
   link.filter((item) => item.kind === "finding").append("title").text((item) => `${verdicts[item.finding.verdict].label}: ${item.finding.title}`);
@@ -338,23 +563,42 @@ function renderGraph() {
   const prVerdict = (prId) => findings.find((finding) => finding.prIds.includes(prId) && finding.verdict === "conflict")?.verdict
     || findings.find((finding) => finding.prIds.includes(prId) && finding.verdict === "review")?.verdict
     || findings.find((finding) => finding.prIds.includes(prId) && finding.verdict === "coordination")?.verdict;
-  groups.filter((item) => item.kind === "pr" && item.priority).append("circle")
-    .attr("r", 31).attr("fill", "none").attr("stroke", (item) => verdicts[prVerdict(item.id)]?.color || "#0F62FE").attr("stroke-width", 6).attr("opacity", .18);
   groups.filter((item) => item.kind === "pr").append("circle")
-    .attr("r", (item) => prVerdict(item.id) === "conflict" ? 24 : prVerdict(item.id) === "review" ? 21 : prVerdict(item.id) === "coordination" ? 14 : 9)
+    .attr("r", (item) => (prVerdict(item.id) === "conflict" ? 15.5 : prVerdict(item.id) === "review" ? 13.5 : prVerdict(item.id) === "coordination" ? 10 : 5.75) * nodeScale)
     .attr("fill", (item) => verdicts[prVerdict(item.id)]?.color || "#AAB4BC")
-    .attr("stroke", "#fff").attr("stroke-width", (item) => item.priority ? 3 : 2).attr("opacity", (item) => item.priority ? 1 : item.coordination ? .85 : .62);
-  groups.filter((item) => item.kind === "resource").append("rect").attr("x", (item) => -Math.min(16, 7 + item.total * 2)).attr("y", (item) => -Math.min(16, 7 + item.total * 2)).attr("width", (item) => Math.min(32, 14 + item.total * 4)).attr("height", (item) => Math.min(32, 14 + item.total * 4)).attr("rx", 3).attr("fill", "#fff").attr("stroke", (item) => item.priority ? "#5C6B78" : "#AAB4BC").attr("opacity", (item) => item.priority ? 1 : .42);
-  groups.append("text").attr("class", (item) => item.kind === "pr" ? "pr-label" : "res-label").attr("x", (item) => item.priority ? 31 : 16).attr("y", 4).attr("font-size", (item) => item.priority ? 12 : 10).attr("font-weight", (item) => item.priority ? 700 : item.kind === "pr" ? 500 : 400).attr("fill", (item) => item.priority ? "#17242B" : "#7A8790").attr("opacity", (item) => item.priority ? 1 : .58).text((item) => item.kind === "pr" ? `#${item.num} ${item.title.length > 22 ? `${item.title.slice(0, 21)}…` : item.title}` : item.path.length > 32 ? `…${item.path.slice(-31)}` : item.path);
+    .attr("stroke", "#fff").attr("stroke-width", (item) => (item.priority ? 3 : 2) * nodeScale).attr("opacity", (item) => item.priority ? 1 : item.coordination ? .85 : .62);
+  const resourceNodeSize = (item) => Math.min(14, 6 + item.total * 1.5) * nodeScale;
+  groups.filter((item) => item.kind === "resource").append("rect")
+    .attr("x", (item) => -resourceNodeSize(item) / 2)
+    .attr("y", (item) => -resourceNodeSize(item) / 2)
+    .attr("width", resourceNodeSize)
+    .attr("height", resourceNodeSize)
+    .attr("rx", 2)
+    .attr("fill", "#fff")
+    .attr("stroke", (item) => item.priority ? "#5C6B78" : "#AAB4BC")
+    .attr("stroke-width", .8)
+    .attr("opacity", (item) => item.priority ? .9 : .36);
   groups.append("title").text((item) => item.kind === "pr" ? `PR #${item.num}: ${item.title}` : item.path);
   groups.on("click", (_, item) => select(item.kind, item.id));
   simulation.on("tick", () => {
+    nodes.forEach((item) => {
+      const sector = sectorLayout.get(item.sector);
+      const margin = (item.priority ? 20 : 12) * nodeScale;
+      const dx = item.x - sector.cx;
+      const dy = item.y - sector.cy;
+      const distance = Math.hypot(dx, dy);
+      const maxDistance = Math.max(4, sector.r - margin);
+      if (distance > maxDistance) {
+        item.x = sector.cx + (dx / distance) * maxDistance;
+        item.y = sector.cy + (dy / distance) * maxDistance;
+      }
+    });
     link.attr("x1", (item) => item.source.x).attr("y1", (item) => item.source.y).attr("x2", (item) => item.target.x).attr("y2", (item) => item.target.y);
     groups.attr("transform", (item) => `translate(${item.x},${item.y})`);
   });
   $("#graph-hint").textContent = findings.length
     ? state.graphFilter === "all"
-      ? `All ${state.model.prs.length} PRs are shown. Confirmed conflicts and review candidates are enlarged and pulled to the center; muted nodes remain as repository context.`
+      ? `All ${state.model.prs.length} PRs are shown. Start with red and amber nodes: each island is a code area, colored lines connect PRs that may interact, and gray dots have no current finding.`
       : `${findings.length} prioritized relationship(s) shown. Conflict is highest priority; merge coordination is mechanical/operational follow-up.`
     : "No relationship in this filter. Choose another category or All context.";
 }
@@ -365,7 +609,10 @@ function switchView(view) {
   $("#graph-wrap").style.display = view === "graph" ? "block" : "none";
   $("#tab-queue").classList.toggle("active", view === "queue");
   $("#tab-graph").classList.toggle("active", view === "graph");
-  if (view === "graph") requestAnimationFrame(renderGraph);
+  if (view === "graph") {
+    renderGraphFilterDetail(state.graphFilter);
+    requestAnimationFrame(renderGraph);
+  }
 }
 
 function renderModel(model) {
@@ -373,11 +620,10 @@ function renderModel(model) {
   state.selected = null;
   state.graphFilter = "all";
   $("#repo-label").textContent = model.repository;
-  $("#engine-note").innerHTML = `<b>Live backend</b> — ${escapeHtml(model.mode)} · generated ${escapeHtml(new Date(model.generatedAt).toLocaleString())}`;
   $("#store-note").textContent = `${model.findings.length} backend finding(s)`;
   renderFunnel();
   renderQueue();
-  renderEmptyDetail();
+  renderGraphFilterDetail("all");
   if (state.view === "graph") renderGraph();
   try { sessionStorage.setItem("mergescope-live-result-v1", JSON.stringify(model)); } catch {}
 }
@@ -413,6 +659,8 @@ async function initialize() {
   $("#clone-input").addEventListener("keydown", (event) => { if (event.key === "Enter") loadRepository(); });
   $("#tab-queue").addEventListener("click", () => switchView("queue"));
   $("#tab-graph").addEventListener("click", () => switchView("graph"));
+  $("#overlay").addEventListener("click", (event) => { if (event.target === $("#overlay")) closeFindingModal(); });
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape" && $("#overlay").classList.contains("open")) closeFindingModal(); });
   $("#pr-search").addEventListener("input", (event) => {
     const query = event.target.value.replace(/^#/, "").trim();
     if (!query) { $("#search-note").textContent = ""; return; }
@@ -420,16 +668,6 @@ async function initialize() {
     $("#search-note").textContent = pr ? "" : "Not found";
     if (pr) select("pr", pr.id);
   });
-  try {
-    const response = await fetch("/api/status");
-    const status = await response.json();
-    $("#budget-n").textContent = status.aiConfigured
-      ? `${status.aiProvider} / ${status.model}${status.reasoningEffort ? ` / ${status.reasoningEffort}` : ""}`
-      : "heuristic only — AI not configured";
-    $("#engine-note").innerHTML = `<b>${status.aiConfigured ? "AI backend ready" : "Heuristic-only mode"}</b> — GitHub ${status.githubConfigured ? "authenticated" : "public rate limit"} · merge-tree ${status.mergeTreePreflight ? "on" : "off"}`;
-  } catch {
-    $("#budget-n").textContent = "backend unavailable";
-  }
   try {
     const cached = JSON.parse(sessionStorage.getItem("mergescope-live-result-v1") || "null");
     if (cached?.prs && cached?.findings) {

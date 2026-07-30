@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MergeScope — Live cross-PR analysis</title>
+<title>Cross-PR Conflict Analyzer</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <style>
@@ -26,9 +26,6 @@
   .hd-top{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
   .hd-top h1{font-size:17px;font-weight:700;letter-spacing:-.2px}
   .hd-top .repo{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
-  .engine-note{font-size:11.5px;color:var(--muted);background:var(--bg);
-    border:1px solid var(--line);border-radius:4px;padding:3px 8px}
-  .engine-note b{color:var(--ink);font-weight:600}
   .clone-box{margin-left:auto;display:flex;gap:6px;align-items:center}
   .clone-box input{font-family:var(--mono);font-size:12px;border:1px solid var(--line);
     border-radius:5px;padding:6px 10px;width:300px;background:var(--panel);color:var(--ink)}
@@ -64,7 +61,6 @@
   .fstep .num{font-family:var(--mono);font-size:16px;font-weight:600}
   .fstep .lbl{font-size:11px;color:var(--muted)}
   .fstep.real .num{color:var(--ink)}
-  .fstep .tag{position:absolute;top:3px;right:6px;font-size:9px;color:var(--muted);letter-spacing:.4px}
   .fstep.final{background:#FBEBEA;border-color:#EBC7C4;border-radius:0 4px 4px 0}
   .fstep.final .num{color:var(--conflict)}
 
@@ -98,13 +94,11 @@
   .graph-focus.active{box-shadow:0 0 0 2px var(--blue-soft);border-color:var(--blue)}
   .graph-focus .gf-top{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700}
   .graph-focus .gf-count{font-family:var(--mono);font-size:16px;font-weight:600;margin-top:2px}
-  .graph-focus.start{background:var(--ink);border-color:var(--ink);color:#fff}
-  .graph-focus.start .gf-top{color:#DCE3E6}
-  .graph-focus.start.active{box-shadow:0 0 0 3px rgba(15,98,254,.25)}
   .graph-hidden-note{pointer-events:none;margin-left:auto;align-self:center;background:rgba(255,255,255,.94);
     border:1px solid var(--line);border-radius:5px;padding:5px 9px;font-size:11px;color:var(--muted)}
-  .legend{position:absolute;left:14px;bottom:12px;background:rgba(255,255,255,.94);
-    border:1px solid var(--line);border-radius:6px;padding:9px 12px;font-size:11.5px;line-height:1.9;color:var(--muted)}
+  .legend{position:absolute;left:14px;right:14px;bottom:10px;background:rgba(255,255,255,.96);
+    border:1px solid var(--line);border-radius:6px;padding:8px 12px;font-size:11px;line-height:1.4;color:var(--muted);
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;z-index:4}
   .legend .row{display:flex;align-items:center;gap:8px}
   .legend svg{flex:none}
   .hint{position:absolute;top:76px;left:14px;font-size:12px;color:var(--muted);
@@ -227,15 +221,20 @@
 
   /* Stack / assumptions / lanes (side panel) */
   .stack-item{border:1px solid var(--line);border-radius:6px;padding:9px 11px;margin-bottom:8px;
-    cursor:pointer;background:var(--panel);transition:border-color .12s;width:100%;text-align:left;display:block}
+    cursor:pointer;background:var(--panel);transition:border-color .12s;width:100%;text-align:left;display:block;
+    min-width:0;overflow:hidden}
   .stack-item:hover{border-color:var(--blue)}
-  .stack-item .top{display:flex;align-items:center;gap:7px;margin-bottom:3px}
-  .stack-item .prn{font-family:var(--mono);font-size:12px;font-weight:600}
-  .stack-item .vlabel{font-size:11px;font-weight:600;margin-left:auto}
+  .stack-item .top{display:flex;align-items:center;gap:7px;margin-bottom:3px;min-width:0}
+  .stack-item .prn{font-family:var(--mono);font-size:12px;font-weight:600;min-width:0;overflow-wrap:anywhere}
+  .stack-item .vlabel{font-size:11px;font-weight:600;margin-left:auto;flex:none}
   .stack-item .score{font-family:var(--mono);font-size:11px;color:var(--muted)}
-  .stack-item .ttl{font-size:12.5px;color:var(--ink);line-height:1.45;margin-bottom:4px}
-  .stack-item .meta{font-size:11px;color:var(--muted);font-family:var(--mono)}
-  .stack-item .human{font-size:10.5px;color:var(--blue);margin-top:3px;font-weight:600}
+  .stack-item .ttl{font-size:12.5px;color:var(--ink);line-height:1.45;margin-bottom:4px;overflow-wrap:anywhere;word-break:break-word}
+  .stack-item .meta{font-size:11px;color:var(--muted);font-family:var(--mono);overflow-wrap:anywhere;word-break:break-word}
+  .stack-item .human{font-size:10.5px;color:var(--blue);margin-top:3px;font-weight:600;overflow-wrap:anywhere;word-break:break-word}
+  .filter-stack-item{width:100%;text-align:left;background:var(--panel)}
+  .stack-section-title{display:flex;align-items:center;gap:7px}
+  .stack-rank{width:19px;height:19px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+    background:var(--bg);border:1px solid var(--line);font-family:var(--mono);font-size:9.5px;color:var(--muted);flex:none}
   .assump{border-left:3px solid var(--line);padding:6px 10px;margin-bottom:8px;font-size:12.5px;line-height:1.5}
   .assump .atype{font-family:var(--mono);font-size:10.5px;color:var(--muted);display:block;margin-bottom:2px}
   .assump .anchor{font-family:var(--mono);font-size:11px;color:var(--blue);word-break:break-all}
@@ -254,6 +253,37 @@
   .callout.red{border-left-color:var(--conflict)}
   .callout.blue{border-left-color:var(--blue)}
   .callout b{color:var(--ink)}
+  .connection-explanation{border:1px solid #BCD3F7;background:#F4F8FF;border-radius:7px;
+    padding:12px 14px;font-size:12.5px;line-height:1.7;color:var(--ink)}
+  .evidence-card{border:1px solid var(--line);border-radius:7px;padding:10px 12px;margin-bottom:9px;background:var(--panel)}
+  .evidence-top{display:flex;align-items:center;gap:8px;font-size:11.5px}
+  .evidence-id{font-family:var(--mono);font-size:10px;color:var(--blue);background:var(--blue-soft);
+    border:1px solid #BCD3F7;border-radius:3px;padding:1px 5px}
+  .evidence-location{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:6px;word-break:break-all}
+  .evidence-row{border:1px solid var(--line);border-radius:6px;background:var(--panel);margin-bottom:6px}
+  .evidence-row summary{display:flex;align-items:center;gap:7px;padding:7px 9px;cursor:pointer;list-style:none;font-size:11px}
+  .evidence-row summary::-webkit-details-marker{display:none}
+  .evidence-location-inline{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .evidence-expand{margin-left:auto;color:var(--blue);font-size:10px;flex:none}
+  .evidence-row[open] .evidence-expand{color:var(--muted)}
+  .evidence-expand .hide-label{display:none}
+  .evidence-row[open] .evidence-expand .show-label{display:none}
+  .evidence-row[open] .evidence-expand .hide-label{display:inline}
+  .evidence-row .evidence-quote{margin:0 9px 9px}
+  .evidence-summary-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 8px}
+  .evidence-summary-bar>span{font-family:var(--mono);font-size:10px;color:var(--muted);background:var(--bg);
+    border:1px solid var(--line);border-radius:999px;padding:3px 7px}
+  .evidence-summary-bar .summary-help{margin-left:auto;border-color:transparent;background:transparent}
+  .analyzer-id{color:#6929C4;background:#F2ECFF;border-color:#D6C4FF}
+  .explanation-row .evidence-quote{font-family:inherit}
+  .evidence-more{margin-top:7px}
+  .evidence-more>summary{font-size:11px;color:var(--blue);cursor:pointer;padding:5px 2px}
+  .evidence-all>summary{font-weight:600}
+  .evidence-quote{font-family:var(--mono);font-size:11.5px;line-height:1.65;margin-top:7px;
+    padding:8px 10px;background:var(--bg);border-radius:5px;white-space:pre-wrap;word-break:break-word}
+  .evidence-strength{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--muted)}
+  .explanation-card .evidence-quote{font-family:inherit}
 
   /* ── Judgment modal ─────────────────────────── */
   #overlay{position:fixed;inset:0;background:rgba(20,30,40,.45);display:none;
@@ -266,6 +296,9 @@
   .modal-hd .pairname{font-family:var(--mono);font-weight:600;font-size:14px}
   .modal-hd .score{font-family:var(--mono);font-size:12px;color:var(--muted)}
   .modal-hd .fresh{font-size:11px;color:var(--muted);font-family:var(--mono)}
+  .modal-hd .modal-close{margin-left:auto}
+  .modal-hd .pairname a{color:var(--blue);text-decoration:none}
+  .modal-hd .pairname a:hover{text-decoration:underline}
   .modal-body{overflow-y:auto;padding:16px 20px}
   .cards{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .icard{border:1px solid var(--line);border-radius:8px;padding:12px 14px}
@@ -328,6 +361,12 @@
     padding:9px 12px;font-size:12px;line-height:1.6;margin-top:10px}
 
   /* Graph elements */
+  .sector-layer{pointer-events:none}
+  .sector-card circle{stroke-width:1.2;stroke-dasharray:5 4;fill-opacity:.74}
+  .sector-card text{font-family:var(--mono);font-weight:700;letter-spacing:.45px}
+  .sector-card .sector-title{font-size:10px}
+  .sector-card .sector-meta{font-size:8.5px;opacity:.72}
+  .pr-id,.detail-label{pointer-events:none}
   .res-label,.pr-label{font-family:var(--mono);pointer-events:none;fill:var(--muted)}
   .node{cursor:pointer}
   .node.context-node text{opacity:0!important;transition:opacity .12s}
@@ -345,9 +384,8 @@
 
 <header>
   <div class="hd-top">
-    <h1>Cross-PR Semantic Conflict Radar</h1>
+    <h1>Cross-PR Conflict Analyzer</h1>
     <span class="repo" id="repo-label">Backend sample · loading</span>
-    <span class="engine-note" id="engine-note"><b>Live</b> — relationships, evidence, and verdicts come from the Assumption Radar backend</span>
     <div class="clone-box">
       <input id="clone-input" type="text" spellcheck="false"
         placeholder="git clone https://github.com/owner/repo.git"
@@ -373,7 +411,6 @@
     <span class="search-note" id="search-note"></span>
   </div>
   <div class="budget">
-    <span>Analysis mode: <b id="budget-n">checking</b></span>
     <span class="store-note" id="store-note"></span>
   </div>
 </div>
@@ -383,7 +420,7 @@
   <div id="graph-wrap">
     <svg id="graph" role="img" aria-label="Bipartite graph of PRs and resources"></svg>
     <div class="graph-priority" id="graph-priority"></div>
-    <div class="hint" id="graph-hint">Start with confirmed conflicts and review candidates. Click a node or colored relationship for evidence.</div>
+    <div class="hint" id="graph-hint">PRs are grouped by repository sector. Click a node or colored cross-sector relationship for evidence.</div>
     <div class="legend" id="legend"></div>
   </div>
   <aside>
@@ -450,7 +487,7 @@
 
   const STEPS = [
     { sel:'#funnel', title:'Welcome to the live demo',
-      text:'This funnel comes directly from the current repository analysis: open PRs, possible pairs, backend candidates, AI-reviewed pairs, and findings that need attention.' },
+      text:'This funnel comes directly from the current repository analysis: open PRs, possible pairs, candidate pairs, AI-reviewed pairs, and findings that need attention.' },
     { sel:'#queue-wrap', title:'The work queue',
       text:'Every row is a backend finding. Conflict, coordination, and review stay separate, and the frontend does not invent a confidence score.' },
     { sel:'#tab-graph', title:'The conflict graph',

@@ -36,11 +36,11 @@ function setLoading(active) {
   window.clearInterval(state.loadingTimer);
   if (!active) return;
   const messages = [
-    "diff에서 계약 신호를 추출하고 있습니다…",
-    "공유 데이터와 API 경계를 연결하고 있습니다…",
-    "각 PR이 믿는 전제를 대조하고 있습니다…",
-    "선택한 PR 쌍을 격리된 환경에서 결합 검증하고 있습니다…",
-    "설명 가능한 충돌만 남기고 있습니다…",
+    "Extracting contract signals from the diffs…",
+    "Connecting shared data and API boundaries…",
+    "Comparing the assumptions made by each PR…",
+    "Verifying selected PR pairs in an isolated environment…",
+    "Keeping only conflicts supported by explainable evidence…",
   ];
   let index = 0;
   $("#loadingText").textContent = messages[index];
@@ -57,7 +57,7 @@ async function api(path, payload) {
     body: JSON.stringify(payload),
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || `요청 실패 (${response.status})`);
+  if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
   return data;
 }
 
@@ -150,7 +150,7 @@ function renderRadar() {
     const onSelect = () => {
       const first = state.data.findings.find((item) => item.prIds.includes(pr.id));
       if (first) selectConflict(first.id);
-      else showToast(`#${pr.number}과 연결된 전제 충돌은 발견되지 않았습니다.`);
+      else showToast(`No assumption conflict was found for PR #${pr.number}.`);
     };
     group.addEventListener("click", onSelect);
     group.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") onSelect(); });
@@ -191,7 +191,7 @@ function filteredConflicts() {
 }
 
 function renderFilters() {
-  const options = [["all", "전체"], ["conflict", "충돌 확인"], ["coordination", "Merge 조율"], ["review", "검토 필요"], ["event", "이벤트"], ["data", "데이터"]];
+  const options = [["all", "All"], ["conflict", "Conflict"], ["coordination", "Merge coordination"], ["review", "Needs review"], ["event", "Events"], ["data", "Data"]];
   $("#filters").innerHTML = options.map(([value, label]) => `<button class="filter ${state.filter === value ? "active" : ""}" data-filter="${value}">${label}</button>`).join("");
   $("#filters").querySelectorAll("button").forEach((button) => button.addEventListener("click", () => {
     state.filter = button.dataset.filter;
@@ -204,7 +204,7 @@ function renderConflictList() {
   const list = $("#conflictList");
   const conflicts = filteredConflicts();
   if (!conflicts.length) {
-    list.innerHTML = `<div class="empty-state">이 필터에 해당하는 충돌 신호가 없습니다.</div>`;
+    list.innerHTML = `<div class="empty-state">No conflict signals match this filter.</div>`;
     return;
   }
   list.innerHTML = conflicts.map((conflict) => {
@@ -236,24 +236,24 @@ function render(data, title) {
   state.selected = data.findings[0]?.id || null;
   state.filter = "all";
   $("#workspace").classList.remove("hidden");
-  $("#workspaceTitle").textContent = title || data.repository || "샘플 저장소의 충돌 지형";
-  $("#lastScan").textContent = new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", month: "2-digit", day: "2-digit" }).format(new Date(data.generatedAt));
+  $("#workspaceTitle").textContent = title || data.repository || "Sample repository conflict map";
+  $("#lastScan").textContent = new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", month: "short", day: "2-digit" }).format(new Date(data.generatedAt));
   $("#systemMode").textContent = data.mode === "ai+heuristic" ? "AI + SIGNAL ENGINE ACTIVE" : "SIGNAL ENGINE ACTIVE";
   renderMetrics(data.summary);
   renderFilters();
   renderConflictList();
   renderRadar();
   if (data.findings[0]) renderDetail(data.findings[0]);
-  else $("#detailCard").innerHTML = `<div class="empty-detail"><span class="crosshair">✓</span><h3>충돌 신호 없음</h3><p>현재 diff 신호에서는 교차 PR 전제 충돌을 찾지 못했습니다. 통합 테스트는 계속 실행하세요.</p></div>`;
-  if (data.aiError) showToast(`AI 분석은 실패해 규칙 기반 결과로 표시했습니다: ${data.aiError}`);
-  if (data.verificationError) showToast(`결합 실행은 완료하지 못했습니다: ${data.verificationError}`);
+  else $("#detailCard").innerHTML = `<div class="empty-detail"><span class="crosshair">✓</span><h3>No conflict signals</h3><p>No cross-PR assumption conflict was found in the current diff evidence. Continue running integration tests.</p></div>`;
+  if (data.aiError) showToast(`AI analysis failed, so rule-based results are shown: ${data.aiError}`);
+  if (data.verificationError) showToast(`Combined execution could not be completed: ${data.verificationError}`);
   $("#workspace").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 $("#repoForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const repository = $("#repository").value.trim();
-  if (!repository) return showToast("분석할 GitHub 저장소를 입력해 주세요.");
+  if (!repository) return showToast("Enter a GitHub repository to analyze.");
   setLoading(true);
   try {
     const data = await api("/api/analyze", {
@@ -274,7 +274,7 @@ $("#demoButton").addEventListener("click", async () => {
   setLoading(true);
   try {
     const data = await api("/api/demo", { useAI: $("#useAI").checked });
-    render(data, "acme/commerce · 데모");
+    render(data, "acme/commerce · demo");
   } catch (error) {
     showToast(error.message);
   } finally {
@@ -283,9 +283,9 @@ $("#demoButton").addEventListener("click", async () => {
 });
 
 fetch("/api/status").then((response) => response.json()).then((status) => {
-  const parts = [status.githubConfigured ? "GitHub token 연결됨" : "공개 저장소 모드"];
-  parts.push(status.openaiConfigured ? `${status.model} 연결됨` : "AI 키 없음 — 규칙 엔진 사용");
+  const parts = [status.githubConfigured ? "GitHub token connected" : "Public repository mode"];
+  parts.push(status.openaiConfigured ? `${status.model} connected` : "No AI key — using signal engine");
   if (status.mergeTreePreflight) parts.push("merge-tree preflight");
   if (status.combinedVerification) parts.push("A/B/A+B verifier");
   $("#configHint").textContent = parts.join(" · ");
-}).catch(() => { $("#configHint").textContent = "로컬 엔진"; });
+}).catch(() => { $("#configHint").textContent = "Local engine"; });
