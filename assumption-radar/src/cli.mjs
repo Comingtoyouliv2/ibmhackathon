@@ -42,12 +42,12 @@ Environment:
   CODEX_MODEL      defaults to gpt-5.4 for --ai-provider codex
   OPENAI_MODEL     defaults to gpt-5.6-terra
   ANTHROPIC_MODEL  defaults to claude-opus-4-8
-  AI_JUDGE_REPEATS defaults to 3; 모든 AI 후보가 전원 일치해야 stable로 인정
+  AI_JUDGE_REPEATS defaults to 3; every repeated judgment must agree before an AI candidate is stable
 
 Verification:
-  --verify는 Docker에서 Base/A/B/A+B를 실행하며 --preflight를 자동 활성화합니다.
-  실행 전 draft와 GitHub CI failure PR을 제외하며, pending/unknown은 계속 검증합니다.
-  자동 프로필은 package-lock.json, pnpm-lock.yaml, yarn.lock, Python 프로젝트를 지원합니다.`);
+  --verify runs Base/A/B/A+B in Docker and automatically enables --preflight.
+  Draft PRs and PRs with failed GitHub CI are excluded before execution; pending or unknown checks remain eligible.
+  Automatic profiles support package-lock.json, pnpm-lock.yaml, yarn.lock, and Python projects.`);
 }
 
 function printReport(result, repository) {
@@ -85,7 +85,7 @@ async function main() {
     prs = JSON.parse(await readFile(demoPath, "utf8"));
     repository = "acme/commerce (demo)";
   } else {
-    if (!positional) throw new Error("owner/repository를 입력하거나 --demo를 사용하세요.");
+    if (!positional) throw new Error("Enter owner/repository or use --demo.");
     repository = parseRepository(positional);
     const limit = Math.max(2, Math.min(100, Number(value("--limit")) || 20));
     const fetched = await fetchOpenPullRequests(repository, process.env.GITHUB_TOKEN, { limit, includeCiStatus: useVerification });
@@ -95,8 +95,8 @@ async function main() {
       prEligibility = { ...partitioned.summary, excludedPullRequests: partitioned.excluded };
     } else prs = fetched;
   }
-  if (prs.length < 2) throw new Error("분석할 open PR이 2개 이상 필요합니다.");
-  if (useVerification && has("--demo")) throw new Error("--verify는 실제 GitHub repository에서만 사용할 수 있습니다.");
+  if (prs.length < 2) throw new Error("At least two open PRs are required for analysis.");
+  if (useVerification && has("--demo")) throw new Error("--verify is available only for a real GitHub repository.");
   const preflightEngine = useVerification ? new GitMergeTreePreflight(repository) : null;
   const pipeline = await prepareAnalysisPipeline(prs, {
     repository: has("--demo") ? null : repository,
@@ -159,7 +159,7 @@ async function main() {
   else printReport(result, repository);
 
   const threshold = value("--fail-on");
-  if (threshold && !["conflict", "review"].includes(threshold)) throw new Error("--fail-on은 conflict 또는 review여야 합니다.");
+  if (threshold && !["conflict", "review"].includes(threshold)) throw new Error("--fail-on must be conflict or review.");
   if (threshold === "conflict" && result.findings.some((item) => item.verdict === "conflict")) process.exitCode = 2;
   if (threshold === "review" && result.findings.length) process.exitCode = 2;
 }

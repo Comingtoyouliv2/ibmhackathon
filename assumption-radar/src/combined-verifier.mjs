@@ -28,13 +28,13 @@ export function classifyCombinedRuns({ base, a, b, combined, confirmation = null
     return excluded(
       reasonCode,
       base.status === "failed"
-        ? "Base가 실패하므로 기존 문제이며 semantic conflict 평가에서 제외합니다."
-        : "Base 실행을 완료하지 못해 semantic conflict 평가에서 제외합니다.",
+        ? "Base fails, so this is a pre-existing issue and is excluded from semantic-conflict evaluation."
+        : "Base execution could not be completed, so this pair is excluded from semantic-conflict evaluation.",
       [["Base", base]],
     );
   }
   if (!a || !b) {
-    return excluded("independent-runs-missing", "PR A/B 독립 실행 결과가 없어 semantic conflict 평가에서 제외합니다.", [["A", a], ["B", b]]);
+    return excluded("independent-runs-missing", "Independent execution results for PR A and PR B are missing, so this pair is excluded from semantic-conflict evaluation.", [["A", a], ["B", b]]);
   }
   if (a.status !== "passed" || b.status !== "passed") {
     const failed = [["A", a], ["B", b]].filter(([, run]) => run.status === "failed").map(([label]) => label);
@@ -42,7 +42,7 @@ export function classifyCombinedRuns({ base, a, b, combined, confirmation = null
     if (incomplete.length) {
       return excluded(
         "independent-run-unverified",
-        `${incomplete.join("/")} 독립 실행을 완료하지 못해 semantic conflict 평가에서 제외합니다.`,
+        `Independent execution for ${incomplete.join("/")} could not be completed, so this pair is excluded from semantic-conflict evaluation.`,
         [["A", a], ["B", b]],
       );
     }
@@ -50,25 +50,25 @@ export function classifyCombinedRuns({ base, a, b, combined, confirmation = null
     return excluded(
       reasonCode,
       failed.length === 2
-        ? "PR A와 B가 각각 단독으로 실패하므로 pair-induced regression이 아닙니다."
-        : `PR ${failed[0]}가 단독으로 실패하므로 pair-induced regression이 아닙니다.`,
+        ? "PR A and PR B each fail independently, so this is not a pair-induced regression."
+        : `PR ${failed[0]} fails independently, so this is not a pair-induced regression.`,
       [["A", a], ["B", b]],
     );
   }
   if (!combined) {
-    return { verdict: "insufficient", reasonCode: "combined-run-missing", rationale: "A+B 실행 결과가 없어 pair-induced 원인을 판정할 수 없습니다.", evidence: ["A+B: not-run"] };
+    return { verdict: "insufficient", reasonCode: "combined-run-missing", rationale: "The A+B execution result is missing, so pair-induced causality cannot be determined.", evidence: ["A+B: not-run"] };
   }
   if (combined.status === "passed") {
-    return { verdict: "compatible", rationale: "A와 B가 각각 통과하고 A+B도 통과했습니다.", evidence: ["A: passed", "B: passed", "A+B: passed"] };
+    return { verdict: "compatible", rationale: "A and B pass independently, and A+B also passes.", evidence: ["A: passed", "B: passed", "A+B: passed"] };
   }
   if (combined.status === "failed") {
     if (!confirmation || confirmation.status !== "failed") {
-      return { verdict: "insufficient", rationale: "A+B 실패가 재현되지 않았습니다.", evidence: [`A+B: ${combined.status}`, `confirmation: ${confirmation?.status || "missing"}`] };
+      return { verdict: "insufficient", rationale: "The A+B failure was not reproduced.", evidence: [`A+B: ${combined.status}`, `confirmation: ${confirmation?.status || "missing"}`] };
     }
     const first = new Set(failureSignatures(combined.output));
     const repeated = failureSignatures(confirmation.output).filter((signature) => first.has(signature));
-    if (!repeated.length) return { verdict: "insufficient", rationale: "두 A+B 실패의 signature가 일치하지 않습니다.", evidence: ["combined failures did not share a normalized signature"] };
-    return { verdict: "conflict", rationale: "A와 B는 독립적으로 통과하지만 A+B에서 동일 실패가 재현됩니다.", evidence: repeated.slice(0, 10) };
+    if (!repeated.length) return { verdict: "insufficient", rationale: "The two A+B failures do not share a matching signature.", evidence: ["combined failures did not share a normalized signature"] };
+    return { verdict: "conflict", rationale: "A and B pass independently, but the same failure is reproduced in A+B.", evidence: repeated.slice(0, 10) };
   }
-  return { verdict: "insufficient", reasonCode: "combined-run-unverified", rationale: "실행 결과만으로 pair-induced 원인을 확정할 수 없습니다.", evidence: [`A+B: ${combined.status}`] };
+  return { verdict: "insufficient", reasonCode: "combined-run-unverified", rationale: "The execution result alone cannot establish pair-induced causality.", evidence: [`A+B: ${combined.status}`] };
 }

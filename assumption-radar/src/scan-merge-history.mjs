@@ -14,7 +14,7 @@ const number = (flag, fallback) => Math.max(1, Number(value(flag)) || fallback);
 const jsonl = (rows) => rows.map((row) => JSON.stringify(row)).join("\n") + (rows.length ? "\n" : "");
 
 async function main() {
-  if (!repoDir) throw new Error("--repo-dir bare repository가 필요합니다.");
+  if (!repoDir) throw new Error("--repo-dir must point to a bare repository.");
   const options = {
     commitLimit: number("--commit-limit", 2000),
     mergeLimit: number("--merge-limit", 200),

@@ -48,7 +48,7 @@ function executionFinding(verification, existing) {
     return {
       ...base,
       executionStatus: "no-observed-regression",
-      executionSummary: "선택한 테스트 범위에서는 pair-induced regression이 재현되지 않았습니다.",
+      executionSummary: "No pair-induced regression was reproduced within the selected test scope.",
       evidenceGrade: "executable",
       goldEvidence: "executable",
       confirmationStatus: "executable-compatible",
@@ -112,10 +112,10 @@ export function applyVerificationResults(analysis, verifications = []) {
       baselineFailureCount,
       singlePrRegressionCount,
       inconclusiveVerificationCount,
-      verdict: confirmedConflictCount ? "실행으로 pair-induced regression 확인"
-        : conflictCount ? "정적·AI 충돌 witness 확인"
-          : coordinationCount ? "Git merge 조율 필요"
-            : reviewCount ? "의미 검토 필요" : "직접 충돌 근거 없음",
+      verdict: confirmedConflictCount ? "Pair-induced regression confirmed by execution"
+        : conflictCount ? "Static or AI conflict witness found"
+          : coordinationCount ? "Git merge coordination required"
+            : reviewCount ? "Semantic review required" : "No direct conflict evidence",
     },
   };
 }

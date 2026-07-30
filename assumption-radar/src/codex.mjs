@@ -68,11 +68,11 @@ function promptFor(caseInput) {
   return [
     SEMANTIC_JUDGE_SYSTEM_PROMPT,
     "",
-    "아래에는 단 하나의 PR pair만 있다. CASE_JSON 외의 저장소·웹·gold 정보는 사용하지 마라.",
-    "양쪽 실제 코드가 provider 변경 → consumer 의존 → 합성 실패로 완결되면 contract-backed-conflict를 선택할 수 있다. 이는 실행 확정이 아니라 코드 계약 증거 등급이다.",
-    "contract-backed-conflict 또는 testable-hypothesis라면 A와 B 양쪽에서 CASE_JSON에 실제로 존재하는 quote, 트리거 순서와 oracle을 반환하라.",
-    "proximity나 일반적 위험 가능성만 있으면 insufficient-evidence, 행동 경로가 없으면 no-plausible-interaction을 선택하라.",
-    "출력은 지정된 JSON schema만 따른다.",
+    "The input contains exactly one PR pair. Do not use repository, web, gold-label, or other information outside CASE_JSON.",
+    "Choose contract-backed-conflict when real code on both sides completes a provider-change to consumer-dependency to composed-failure path. This is a code-contract evidence grade, not executable confirmation.",
+    "For contract-backed-conflict or testable-hypothesis, return quotes that actually exist in CASE_JSON for both A and B, plus a trigger sequence and oracle.",
+    "Choose insufficient-evidence for proximity or generic risk alone, and no-plausible-interaction when there is no behavioral path.",
+    "Follow only the specified JSON schema and write all explanations in English.",
     "",
     `CASE_JSON=${JSON.stringify(caseInput)}`,
   ].join("\n");
@@ -133,7 +133,7 @@ export async function analyzeWithCodex(prepared, options = {}) {
   const runner = options.runner || ((caseInput) => defaultRunner(caseInput, settings));
   const protocolRuns = await runRepeatedCaseJudgments(cases, (caseInput) => runner(caseInput, settings), options);
   if (!protocolRuns.runs.some((run) => run.some((raw) => raw && !raw.protocolError))) {
-    throw new Error("모든 Codex 반복 판정이 실패했습니다.");
+    throw new Error("All repeated Codex judgments failed.");
   }
   return aggregateSemanticJudgmentRuns(prepared, candidates, protocolRuns, {
     ...options,

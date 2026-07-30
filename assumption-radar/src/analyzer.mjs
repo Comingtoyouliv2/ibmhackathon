@@ -2,8 +2,8 @@ import crypto from "node:crypto";
 import { buildScirChangeSet } from "./adapters/registry.mjs";
 
 const CATEGORY_LABELS = {
-  api: "API 계약", data: "데이터 모델", config: "설정·플래그", auth: "인증·권한",
-  event: "이벤트·비동기", rollout: "배포·호환성", behavior: "동작 의미", code: "코드 선언",
+  api: "API contract", data: "Data model", config: "Configuration and flags", auth: "Authentication and authorization",
+  event: "Events and async flows", rollout: "Deployment and compatibility", behavior: "Behavior", code: "Code declaration",
 };
 
 const CONTROL_WORDS = new Set(["if", "for", "while", "switch", "catch", "return", "throw", "new", "super", "this", "assert", "expect", "when", "then"]);
@@ -450,17 +450,17 @@ function compareFiles(a, b, options = {}) {
     if (!right) continue;
     const label = left.filename;
     if ((left.status === "removed" && right.status !== "removed") || (right.status === "removed" && left.status !== "removed")) {
-      witnesses.push(createWitness("delete-vs-modify", "semantic", "rollout", `${label} 삭제와 수정이 경쟁함`, "한 PR은 파일을 제거하지만 다른 PR은 같은 파일이 계속 존재한다고 전제합니다. Git mergeability와 의도를 함께 확인해야 합니다.", [label]));
+      witnesses.push(createWitness("delete-vs-modify", "semantic", "rollout", `Deletion and modification compete for ${label}`, "One PR removes the file while the other assumes it still exists. Check both Git mergeability and intent.", [label]));
       continue;
     }
     if (left.status === "added" && right.status === "added") {
-      witnesses.push(createWitness("add-vs-add", "semantic", "code", `${label}을 양쪽이 추가함`, "두 PR이 같은 경로의 새 파일을 정의합니다. 이는 우선 Git의 기계적 mergeability로 확인할 대상입니다.", [label]));
+      witnesses.push(createWitness("add-vs-add", "semantic", "code", `Both PRs add ${label}`, "Both PRs define a new file at the same path. Git mergeability should be checked first.", [label]));
     }
     const sharedRemoved = intersect(left.removedLines.map(normalizeLine).filter((line) => line.length > 8), right.removedLines.map(normalizeLine).filter((line) => line.length > 8));
     const addedA = left.addedLines.map(normalizeLine).filter(Boolean);
     const addedB = right.addedLines.map(normalizeLine).filter(Boolean);
     if (sharedRemoved.length && addedA.length && addedB.length && intersect(addedA, addedB).length < Math.min(addedA.length, addedB.length)) {
-      witnesses.push(createWitness("competing-replacement", "semantic", "behavior", `${label}의 같은 기존 동작을 다르게 교체함`, "두 PR이 동일한 base 라인을 제거하고 서로 다른 구현을 넣습니다. Git이 잡는 텍스트 충돌인지 의미 충돌인지 구분해야 합니다.", [label, ...sharedRemoved.slice(0, 2)]));
+      witnesses.push(createWitness("competing-replacement", "semantic", "behavior", `Both PRs replace the same behavior in ${label} differently`, "Both PRs remove the same base line and introduce different implementations. Determine whether this is a textual Git conflict or a semantic interaction.", [label, ...sharedRemoved.slice(0, 2)]));
     }
     const removedIdentities = new Set([...left.removedDeclarations, ...right.removedDeclarations].map((item) => item.identity));
     const duplicateIdentities = new Set();
@@ -471,8 +471,8 @@ function compareFiles(a, b, options = {}) {
         duplicateIdentities.add(addedLeft.identity);
         witnesses.push(createWitness(
           "duplicate-declaration-addition", "direct", "code",
-          `${addedLeft.name} 선언이 병합 결과에 중복 추가됨`,
-          "두 PR이 base의 서로 다른 위치에 동일한 선언 identity를 새로 추가합니다. 각 변경은 단독으로 유효하지만 clean merge 결과에는 중복 선언이 남습니다.",
+          `${addedLeft.name} is added twice in the merged result`,
+          "Both PRs add the same declaration identity at different base anchors. Each change is valid alone, but a clean merge leaves duplicate declarations.",
           [label, addedLeft.signature, addedRight.signature],
         ));
       }
@@ -484,15 +484,15 @@ function compareFiles(a, b, options = {}) {
       const removedSigA = left.removedDeclarations.filter((item) => item.name === name).map((item) => item.signature);
       const removedSigB = right.removedDeclarations.filter((item) => item.name === name).map((item) => item.signature);
       if (sigA.length && sigB.length && intersect(removedSigA, removedSigB).length && !intersect(sigA, sigB).length) {
-        witnesses.push(createWitness("signature-divergence", "direct", "code", `${name} 선언이 두 방향으로 갈라짐`, "동일 선언에 대해 두 PR이 서로 다른 새 signature를 정의합니다.", [label, ...sigA, ...sigB]));
+        witnesses.push(createWitness("signature-divergence", "direct", "code", `${name} diverges into two signatures`, "Both PRs define different new signatures for the same declaration.", [label, ...sigA, ...sigB]));
       } else {
-        witnesses.push(createWitness("same-declaration", "semantic", "code", `${name}의 의미를 양쪽이 변경함`, "같은 선언을 수정하지만 텍스트만으로 두 변경의 합성 가능성을 확정할 수 없습니다.", [label, name]));
+        witnesses.push(createWitness("same-declaration", "semantic", "code", `Both PRs change the meaning of ${name}`, "Both PRs modify the same declaration, but text alone cannot establish whether the changes compose safely.", [label, name]));
       }
     }
     if (options.comparableBase && !sharedDeclarations.length && left.hunks.some((one) => right.hunks.some((two) => rangesOverlap(one, two)))) {
-      witnesses.push(createWitness("overlapping-base-region", "semantic", "behavior", `${label}의 같은 base 영역을 수정함`, "두 PR의 hunk가 같은 원본 라인 범위에 닿습니다. 실제 의도 결합을 확인해야 합니다.", [label]));
+      witnesses.push(createWitness("overlapping-base-region", "semantic", "behavior", `Both PRs modify the same base region in ${label}`, "The hunks touch the same original line range. Their combined intent requires verification.", [label]));
     } else if (!sharedDeclarations.length) {
-      witnesses.push(createWitness("same-file-only", "proximity", "code", `${label}을 함께 수정함`, "파일은 같지만 동일 선언이나 계약을 바꾼다는 근거는 없습니다.", [label]));
+      witnesses.push(createWitness("same-file-only", "proximity", "code", `Both PRs modify ${label}`, "The file is shared, but there is no evidence that both PRs change the same declaration or contract.", [label]));
     }
   }
   return witnesses;
@@ -501,8 +501,8 @@ function compareFiles(a, b, options = {}) {
 function compareContracts(a, b) {
   const witnesses = [];
   const specs = [
-    ["api", "api", "API"], ["fields", "data", "데이터 필드"],
-    ["events", "event", "이벤트"], ["env", "config", "환경변수"], ["flags", "config", "기능 플래그"],
+    ["api", "api", "API"], ["fields", "data", "Data field"],
+    ["events", "event", "Event"], ["env", "config", "Environment variable"], ["flags", "config", "Feature flag"],
   ];
   for (const [key, category, label] of specs) {
     const removedA = a.removed[key].filter((value) => !a.added[key].includes(value));
@@ -510,32 +510,32 @@ function compareContracts(a, b) {
     const removedUsedAB = intersect(removedA, b.added[key]);
     const removedUsedBA = intersect(removedB, a.added[key]);
     for (const value of [...removedUsedAB, ...removedUsedBA]) {
-      witnesses.push(createWitness("contract-removal-vs-use", "direct", category, `${label} ${value}의 제거와 사용이 충돌함`, "한 PR은 계약을 제거하지만 다른 PR은 같은 계약을 새 코드에서 사용합니다.", [`${label}: ${value}`]));
+      witnesses.push(createWitness("contract-removal-vs-use", "direct", category, `Removal and use of ${label} ${value} conflict`, "One PR removes the contract while the other uses that contract in new code.", [`${label}: ${value}`]));
     }
     for (const value of intersect(a.added[key], b.added[key])) {
       if (key === "events") continue;
-      witnesses.push(createWitness("shared-contract", "semantic", category, `${label} ${value}를 양쪽이 정의함`, "같은 계약 표면을 함께 변경합니다. 형식과 기본값이 합치되는지 확인해야 합니다.", [`${label}: ${value}`]));
+      witnesses.push(createWitness("shared-contract", "semantic", category, `Both PRs define ${label} ${value}`, "Both PRs change the same contract surface. Verify that formats and defaults remain compatible.", [`${label}: ${value}`]));
     }
   }
-  for (const table of intersect(a.structuralTables, b.added.tables)) witnesses.push(createWitness("schema-vs-access", "semantic", "data", `스키마 변경과 ${table} 접근이 상호작용함`, "한 PR은 테이블 구조를 바꾸고 다른 PR은 같은 테이블을 새 코드에서 사용합니다.", [`데이터 테이블: ${table}`]));
-  for (const table of intersect(b.structuralTables, a.added.tables)) witnesses.push(createWitness("schema-vs-access", "semantic", "data", `스키마 변경과 ${table} 접근이 상호작용함`, "한 PR은 테이블 구조를 바꾸고 다른 PR은 같은 테이블을 새 코드에서 사용합니다.", [`데이터 테이블: ${table}`]));
+  for (const table of intersect(a.structuralTables, b.added.tables)) witnesses.push(createWitness("schema-vs-access", "semantic", "data", `Schema change interacts with access to ${table}`, "One PR changes the table structure while the other uses the same table in new code.", [`Data table: ${table}`]));
+  for (const table of intersect(b.structuralTables, a.added.tables)) witnesses.push(createWitness("schema-vs-access", "semantic", "data", `Schema change interacts with access to ${table}`, "One PR changes the table structure while the other uses the same table in new code.", [`Data table: ${table}`]));
 
   for (const producer of a.eventShapes.filter((shape) => shape.role === "producer")) {
     for (const consumer of b.eventShapes.filter((shape) => shape.role === "consumer" && shape.name === producer.name)) {
       const missing = consumer.fields.filter((field) => !producer.fields.includes(field));
-      if (missing.length) witnesses.push(createWitness("event-payload-mismatch", "direct", "event", `${producer.name} payload가 consumer 요구를 충족하지 않음`, "새 producer payload에 새 consumer가 읽는 필드가 없습니다.", [producer.file, consumer.file, `누락 필드: ${missing.join(", ")}`]));
-      else witnesses.push(createWitness("event-producer-consumer", "semantic", "event", `${producer.name} producer와 consumer가 함께 변경됨`, "payload 필드는 맞지만 의미와 전달 시점의 호환성을 확인해야 합니다.", [producer.file, consumer.file]));
+      if (missing.length) witnesses.push(createWitness("event-payload-mismatch", "direct", "event", `${producer.name} payload does not satisfy the consumer`, "The new producer payload omits fields read by the new consumer.", [producer.file, consumer.file, `Missing fields: ${missing.join(", ")}`]));
+      else witnesses.push(createWitness("event-producer-consumer", "semantic", "event", `${producer.name} producer and consumer both change`, "The payload fields match, but their meaning and delivery timing still require compatibility verification.", [producer.file, consumer.file]));
     }
   }
   for (const producer of b.eventShapes.filter((shape) => shape.role === "producer")) {
     for (const consumer of a.eventShapes.filter((shape) => shape.role === "consumer" && shape.name === producer.name)) {
       const missing = consumer.fields.filter((field) => !producer.fields.includes(field));
-      if (missing.length) witnesses.push(createWitness("event-payload-mismatch", "direct", "event", `${producer.name} payload가 consumer 요구를 충족하지 않음`, "새 producer payload에 새 consumer가 읽는 필드가 없습니다.", [producer.file, consumer.file, `누락 필드: ${missing.join(", ")}`]));
-      else witnesses.push(createWitness("event-producer-consumer", "semantic", "event", `${producer.name} producer와 consumer가 함께 변경됨`, "payload 필드는 맞지만 의미와 전달 시점의 호환성을 확인해야 합니다.", [producer.file, consumer.file]));
+      if (missing.length) witnesses.push(createWitness("event-payload-mismatch", "direct", "event", `${producer.name} payload does not satisfy the consumer`, "The new producer payload omits fields read by the new consumer.", [producer.file, consumer.file, `Missing fields: ${missing.join(", ")}`]));
+      else witnesses.push(createWitness("event-producer-consumer", "semantic", "event", `${producer.name} producer and consumer both change`, "The payload fields match, but their meaning and delivery timing still require compatibility verification.", [producer.file, consumer.file]));
     }
   }
   for (const left of a.configValues) for (const right of b.configValues) {
-    if (left.name === right.name && left.value !== right.value) witnesses.push(createWitness("config-default-divergence", "direct", "config", `${left.name} 기본값이 서로 다름`, "두 PR이 같은 설정에 서로 다른 값을 정의합니다.", [`${left.name}: ${left.value} ↔ ${right.value}`]));
+    if (left.name === right.name && left.value !== right.value) witnesses.push(createWitness("config-default-divergence", "direct", "config", `${left.name} has conflicting defaults`, "Both PRs define different values for the same configuration.", [`${left.name}: ${left.value} ↔ ${right.value}`]));
   }
   const compareRenames = (renamingModel, referenceModel) => {
     const emitted = new Set();
@@ -552,8 +552,8 @@ function compareContracts(a, b) {
       emitted.add(key);
       witnesses.push(createWitness(
         "rename-vs-old-reference", rename.deterministicEligible ? "direct" : "semantic", "rollout",
-        `${rename.from} rename 뒤에도 기존 이름을 사용함`,
-        `한 PR은 ${rename.from}을 ${rename.to}로 바꾸지만 다른 PR은 기존 이름을 새 코드에서 참조합니다.`,
+        `The old name is still used after renaming ${rename.from}`,
+        `One PR renames ${rename.from} to ${rename.to}, while the other references the old name in new code.`,
         [rename.file, `${rename.from} → ${rename.to}`, ...(rename.evidence || [])],
         rename.deterministicEligible ? "contradiction" : "dependency",
       ));
@@ -587,8 +587,8 @@ function compareContracts(a, b) {
       emitted.add(key);
       witnesses.push(createWitness(
         "import-removal-vs-new-use", removedImport.metadata.deterministicEligible ? "direct" : "semantic", "api",
-        `${simpleName} binding 제거와 새 사용이 충돌함`,
-        `한 PR은 ${qualified} binding을 제거하지만 다른 PR은 같은 파일에서 ${simpleName}을 새로 사용하며 대체 binding을 제공하지 않습니다.`,
+        `Removal and new use of the ${simpleName} binding conflict`,
+        `One PR removes the ${qualified} binding, while the other adds a new use of ${simpleName} in the same file without a replacement binding.`,
         [file, `${qualified} binding`, simpleName],
         removedImport.metadata.deterministicEligible ? "contradiction" : "dependency",
       ));
@@ -606,8 +606,8 @@ function compareContracts(a, b) {
         emitted.add(key);
         witnesses.push(createWitness(
           "signature-change-vs-old-call", "direct", "api",
-          `${change.name}의 이전 ${change.before.arity}개 인자 호출이 새 signature와 충돌함`,
-          `한 PR은 ${change.name}의 인자 수를 ${change.before.arity}개에서 ${change.after.arity}개로 바꾸지만 다른 PR은 이전 형식의 호출을 새로 추가합니다.`,
+          `An old ${change.before.arity}-argument call to ${change.name} conflicts with the new signature`,
+          `One PR changes ${change.name} from ${change.before.arity} to ${change.after.arity} arguments, while the other adds a call using the old form.`,
           [change.file, call.file, change.before.signature, change.after.signature],
         ));
       }
@@ -622,8 +622,8 @@ function compareContracts(a, b) {
       if (!references.includes(declaration.name)) continue;
       witnesses.push(createWitness(
         "removed-symbol-vs-new-reference", "direct", "api",
-        `${declaration.name} 제거 뒤 다른 PR이 새 참조를 추가함`,
-        "한 PR은 코드 선언을 제거하지만 다른 PR은 그 선언이 계속 존재한다고 전제하는 새 참조를 추가합니다.",
+        `Another PR adds a new reference after ${declaration.name} is removed`,
+        "One PR removes a code declaration while the other adds a new reference that assumes the declaration still exists.",
         [declaration.file, declaration.signature, declaration.name],
       ));
     }
@@ -669,8 +669,8 @@ function compareLifecycleCompletion(a, b) {
         const exitLine = [...pathFile.addedCallableExitLines].sort((left, right) => normalizeLine(left).length - normalizeLine(right).length)[0];
         witnesses.push(createWitness(
           "lifecycle-completion-gap", "semantic", "behavior",
-          `${pathFile.filename}의 새 실행 경로가 ${completionName} 완료 단계를 우회할 수 있음`,
-          `한 PR은 같은 상태(${sharedStateReceivers.join(", ")})를 다루는 여러 기존 종료 경로에 ${completionName} 호출을 추가하지만, 다른 PR이 추가한 새 callable 종료 경로에는 그 호출이 없습니다. 실행 전에는 구성 위험이며 교차 테스트로 확인해야 합니다.`,
+          `A new execution path in ${pathFile.filename} may bypass the ${completionName} completion step`,
+          `One PR adds ${completionName} calls to several existing exit paths that operate on the same state (${sharedStateReceivers.join(", ")}), but the new callable exit path introduced by the other PR lacks that call. This is a composition risk until cross-tested.`,
           [pathFile.filename, completionName, ...sharedStateReceivers.slice(0, 3), exitLine, ...completionLines],
           "composition-risk",
         ));
@@ -708,12 +708,12 @@ function comparePair(a, b, detectors) {
   return {
     id: crypto.randomUUID(), key: pairKey([a.id, b.id]), prIds: [a.id, b.id], verdict, witnesses, causalAnalysis,
     category: primary?.category || "code",
-    title: relevanceOnly ? "관련 선언은 겹치지만 인과 충돌 증거 없음" : primary?.title || "직접 상호작용 근거 없음",
-    summary: relevanceOnly ? "같은 선언을 수정했다는 사실은 관련성 신호일 뿐입니다. 한 변경이 다른 변경의 실패 조건에 도달한다는 dependency·composition·contract 증거가 없어 review 경고로 승격하지 않습니다." : primary?.explanation || "공유 계약이나 동일 선언을 변경한다는 증거를 찾지 못했습니다.",
-    assumptionA: `${a.title} 변경이 자신의 diff 밖 계약을 깨지 않는다고 전제합니다.`,
-    assumptionB: `${b.title} 변경이 자신의 diff 밖 계약을 깨지 않는다고 전제합니다.`,
-    consequence: verdict === "conflict" ? "두 변경을 그대로 합치면 한쪽이 요구하는 계약이나 구현이 사라질 수 있습니다." : verdict === "review" ? "구성 위험이나 방향성 의존성은 확인됐지만 최종 호환 여부는 통합 검증이 필요합니다." : verdict === "insufficient" ? "patch가 없거나 생략되어 두 변경의 상호작용을 판단할 수 없습니다." : relevanceOnly ? "관련성만으로 리뷰 예산을 소모하지 않지만, 아직 호환성을 실행 증명한 것은 아닙니다." : "현재 증거로는 두 변경을 독립적으로 취급할 수 있습니다.",
-    recommendation: verdict === "conflict" ? "두 PR을 같은 integration branch에 합쳐 witness가 가리키는 계약을 먼저 통일하세요." : verdict === "review" ? "causal witness가 가리키는 경로를 대상으로 교차 테스트를 추가하고 담당자 확인을 받으세요." : verdict === "insufficient" ? "전체 diff 또는 checkout 기반 분석을 다시 실행하세요." : relevanceOnly ? "낮은 우선순위 근거로만 보존하고, dependency 또는 contract contradiction이 추가로 발견될 때 다시 승격하세요." : "별도의 merge 차단 없이 기존 테스트를 유지하세요.",
+    title: relevanceOnly ? "Related declarations overlap, but there is no causal conflict evidence" : primary?.title || "No direct interaction evidence",
+    summary: relevanceOnly ? "Modifying the same declaration is only a relevance signal. There is no dependency, composition, or contract evidence showing that one change reaches the other's failure condition, so this pair is not escalated to review." : primary?.explanation || "No evidence shows that both PRs change a shared contract or the same declaration.",
+    assumptionA: `${a.title} assumes the change does not break contracts outside its own diff.`,
+    assumptionB: `${b.title} assumes the change does not break contracts outside its own diff.`,
+    consequence: verdict === "conflict" ? "Merging both changes as-is may remove a contract or implementation required by one side." : verdict === "review" ? "A composition risk or directional dependency exists, but integration verification is required to determine compatibility." : verdict === "insufficient" ? "The patch is missing or truncated, so the interaction cannot be judged." : relevanceOnly ? "Relevance alone does not consume review budget, but compatibility has not been proven by execution." : "The current evidence supports treating the changes as independent.",
+    recommendation: verdict === "conflict" ? "Merge both PRs on an integration branch and reconcile the contract identified by the witness before merging." : verdict === "review" ? "Add a cross-PR test for the path identified by the causal witness and ask the responsible owner to review it." : verdict === "insufficient" ? "Rerun the analysis with the complete diff or a repository checkout." : relevanceOnly ? "Keep this as low-priority evidence and escalate only if a dependency or contract contradiction is later found." : "Keep existing tests and do not block either merge.",
     evidence: uniq(witnesses.flatMap((item) => item.evidence)).slice(0, 8),
     basis: direct.length ? "deterministic-witness" : supportedSemantic.length ? "causal-witness" : relevanceOnly ? "relevance-only" : "proximity-only",
     source: "framework",
@@ -723,11 +723,11 @@ function comparePair(a, b, detectors) {
 function assumptionsFor(model) {
   const assumptions = [];
   const add = (category, statement, evidence) => assumptions.push({ id: crypto.randomUUID(), category, statement, evidence, confidence: "inferred" });
-  if (model.added.api.length || model.removed.api.length) add("api", "변경한 endpoint의 요청·응답 계약이 소비자와 호환된다.", [...model.added.api, ...model.removed.api]);
-  if (model.added.tables.length || model.added.fields.length || model.renames.length) add("data", "변경한 데이터 이름과 수명주기를 다른 코드도 동일하게 해석한다.", [...model.added.tables, ...model.added.fields, ...model.renames.map((item) => `${item.from}→${item.to}`)]);
-  if (model.added.events.length || model.removed.events.length) add("event", "이벤트 이름과 payload가 producer와 consumer 사이에서 호환된다.", [...model.added.events, ...model.removed.events]);
-  if (model.added.env.length || model.added.flags.length) add("config", "설정의 존재 여부와 기본값이 배포 환경에서 일관된다.", [...model.added.env, ...model.added.flags]);
-  if (!assumptions.length) add("code", "변경한 선언의 의미가 동시에 열린 다른 PR에서 달라지지 않는다.", model.paths.slice(0, 4));
+  if (model.added.api.length || model.removed.api.length) add("api", "The changed endpoint's request and response contracts remain compatible with consumers.", [...model.added.api, ...model.removed.api]);
+  if (model.added.tables.length || model.added.fields.length || model.renames.length) add("data", "Other code interprets the changed data name and lifecycle consistently.", [...model.added.tables, ...model.added.fields, ...model.renames.map((item) => `${item.from}→${item.to}`)]);
+  if (model.added.events.length || model.removed.events.length) add("event", "The event name and payload remain compatible between producer and consumer.", [...model.added.events, ...model.removed.events]);
+  if (model.added.env.length || model.added.flags.length) add("config", "The configuration's presence and default value remain consistent in the deployment environment.", [...model.added.env, ...model.added.flags]);
+  if (!assumptions.length) add("code", "The meaning of the changed declaration is not altered by another simultaneously open PR.", model.paths.slice(0, 4));
   return assumptions;
 }
 
@@ -803,7 +803,7 @@ export function finishAnalysis(prepared, aiFindings = []) {
     summary: {
       prCount: prepared.prs.length, pairCount: prepared.comparisons.length,
       candidateCount: prepared.candidates.length, conflictCount, coordinationCount, reviewCount, independentCount, insufficientCount,
-      verdict: conflictCount ? "충돌 witness 확인" : coordinationCount ? "Git merge 조율 필요" : reviewCount ? "의미 검토 필요" : "직접 충돌 근거 없음",
+      verdict: conflictCount ? "Conflict witness found" : coordinationCount ? "Git merge coordination required" : reviewCount ? "Semantic review required" : "No direct conflict evidence",
     },
     prs: prepared.prs, findings, conflicts: findings, categories: CATEGORY_LABELS,
   };

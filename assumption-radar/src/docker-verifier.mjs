@@ -73,7 +73,7 @@ export async function loadVerificationProfiles(path) {
   if (!path) return { version: 1, repositories: {} };
   const parsed = JSON.parse(await readFile(path, "utf8"));
   if (!parsed || typeof parsed !== "object" || typeof parsed.repositories !== "object") {
-    throw new Error("verification profile은 repositories 객체를 포함해야 합니다.");
+    throw new Error("The verification profile must contain a repositories object.");
   }
   return parsed;
 }
@@ -121,7 +121,7 @@ export class DockerCombinedVerifier {
   async assertDocker() {
     const result = await this.docker(["info", "--format", "{{.ServerVersion}}"], { timeout: 20_000 });
     if (result.code !== 0 || !result.stdout.trim()) {
-      throw new Error(`Docker가 실행 중이어야 합니다: ${tail(result.stderr || result.stdout || result.error?.message, 500)}`);
+      throw new Error(`Docker must be running: ${tail(result.stderr || result.stdout || result.error?.message, 500)}`);
     }
   }
 
@@ -129,7 +129,7 @@ export class DockerCombinedVerifier {
     const existsResult = await this.docker(["image", "inspect", image], { timeout: 30_000 });
     if (existsResult.code === 0) return;
     const pull = await this.docker(["pull", image], { timeout: 600_000 });
-    if (pull.code !== 0) throw new Error(`Docker image pull 실패 (${image}): ${tail(pull.stderr || pull.stdout, 1_000)}`);
+    if (pull.code !== 0) throw new Error(`Docker image pull failed (${image}): ${tail(pull.stderr || pull.stdout, 1_000)}`);
   }
 
   async container(name, profile, workspace, cacheVolume, command, network) {
@@ -223,7 +223,7 @@ export class DockerCombinedVerifier {
     const right = prsById.get(comparison.prIds[1]);
     const inspection = inspectionOverride || await this.engine.inspectPair(comparison, prsById);
     if (inspection.status !== "clean" || !inspection.treeOid) {
-      throw new Error(`실행 검증에는 clean merge tree가 필요합니다: ${inspection.status}`);
+      throw new Error(`Executable verification requires a clean merge tree: ${inspection.status}`);
     }
     const leftHead = this.engine.virtualHeads.get(Number(left.number));
     const rightHead = this.engine.virtualHeads.get(Number(right.number));
@@ -253,10 +253,10 @@ export class DockerCombinedVerifier {
         created.push(paths[label]);
       }
       const profile = await resolveVerificationProfile(paths.base, this.repository, this.profiles);
-      if (!profile) throw new Error("지원되는 자동 실행 프로필을 찾지 못했습니다. repository verification profile을 지정하세요.");
+      if (!profile) throw new Error("No supported automatic execution profile was found. Specify a repository verification profile.");
       await this.ensureImage(profile.image);
       const volume = await this.docker(["volume", "create", cacheVolume]);
-      if (volume.code !== 0) throw new Error(`Docker cache volume 생성 실패: ${tail(volume.stderr || volume.stdout, 500)}`);
+      if (volume.code !== 0) throw new Error(`Failed to create Docker cache volume: ${tail(volume.stderr || volume.stdout, 500)}`);
       const pairId = `${left.number}-${right.number}`;
       const baseSha = (await this.git(["-C", this.engine.repoDir, "rev-parse", baseRef])).stdout.trim();
       const base = await this.executeStateCached("base", baseSha, pairId, profile, paths.base, cacheVolume);

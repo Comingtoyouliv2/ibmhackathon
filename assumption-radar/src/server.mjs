@@ -55,14 +55,14 @@ async function body(req) {
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > 1_000_000) throw new Error("요청이 너무 큽니다.");
+    if (size > 1_000_000) throw new Error("The request is too large.");
     chunks.push(chunk);
   }
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
 }
 
 async function analyze(prs, options = {}) {
-  if (!Array.isArray(prs) || prs.length < 2) throw new Error("분석하려면 open PR이 2개 이상 필요합니다.");
+  if (!Array.isArray(prs) || prs.length < 2) throw new Error("At least two open PRs are required for analysis.");
   const preflightEngine = options.useVerification && options.repository ? new GitMergeTreePreflight(options.repository) : null;
   const pipeline = await prepareAnalysisPipeline(prs, {
     ...options,
@@ -160,7 +160,7 @@ async function handler(req, res) {
       const fetched = await fetchOpenPullRequests(repository, process.env.GITHUB_TOKEN, { limit, includeCiStatus: useVerification });
       const partitioned = useVerification ? partitionEligiblePullRequests(fetched) : { eligible: fetched, excluded: [], summary: null };
       const prs = partitioned.eligible;
-      if (prs.length < 2) return json(res, 422, { error: "단독 merge eligibility를 통과한 open PR이 2개 미만입니다.", prEligibility: partitioned.summary });
+      if (prs.length < 2) return json(res, 422, { error: "Fewer than two open PRs passed individual merge eligibility.", prEligibility: partitioned.summary });
       const result = await analyze(prs, {
         repository,
         useAI: input.useAI !== false,
@@ -187,7 +187,7 @@ async function handler(req, res) {
   } catch (error) {
     if (error.code === "ENOENT") return json(res, 404, { error: "Not found" });
     console.error(error);
-    return json(res, error.status && error.status < 500 ? error.status : 500, { error: error.message || "분석 중 오류가 발생했습니다." });
+    return json(res, error.status && error.status < 500 ? error.status : 500, { error: error.message || "An error occurred during analysis." });
   }
 }
 
