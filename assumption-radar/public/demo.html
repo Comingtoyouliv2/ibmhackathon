@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MergeGuard</title>
+<title>Beef</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <style>
@@ -26,17 +26,22 @@
   .hd-top{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
   .hd-top h1{font-size:17px;font-weight:700;letter-spacing:-.2px}
   .hd-top .repo{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
-  .case-switcher{margin-left:auto;display:flex;gap:7px;align-items:stretch}
-  .case-option{min-width:190px;border:1px solid var(--line);background:var(--panel);border-radius:7px;
-    padding:7px 10px;text-align:left;display:grid;grid-template-columns:auto 1fr;column-gap:8px;align-items:baseline}
-  .case-option:hover{border-color:#9ABAF8;background:#F8FAFF}
-  .case-option.active{border-color:var(--blue);background:var(--blue-soft);box-shadow:0 0 0 1px var(--blue)}
-  .case-option span{grid-row:1 / span 2;font-family:var(--mono);font-size:10px;font-weight:700;
-    color:var(--blue);text-transform:uppercase}
-  .case-option b{font-size:12px;color:var(--ink)}
-  .case-option small{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+  .case-switcher{margin-left:auto;display:flex;align-items:center;gap:10px;min-width:min(430px,100%)}
+  .case-switcher label{display:flex;align-items:center;gap:9px;width:100%}
+  .case-switcher .case-label{font-family:var(--mono);font-size:9.5px;font-weight:700;
+    letter-spacing:.45px;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+  .case-select-wrap{position:relative;flex:1;min-width:0}
+  .case-select-wrap::after{content:"⌄";position:absolute;right:12px;top:50%;transform:translateY(-56%);
+    color:var(--blue);font-size:17px;font-weight:700;pointer-events:none}
+  .case-select{width:100%;height:42px;appearance:none;border:1px solid var(--blue);border-radius:7px;
+    background:var(--blue-soft);color:var(--ink);padding:0 38px 0 12px;font-size:12px;font-weight:600;
+    box-shadow:0 0 0 1px rgba(15,98,254,.08);cursor:pointer}
+  .case-select:hover{background:#D8E6FF}
+  .case-select:focus{outline:none;box-shadow:0 0 0 2px rgba(15,98,254,.2)}
+  .case-select:disabled{cursor:wait;opacity:.58}
   .bob-scan{width:100%;display:grid;grid-template-columns:minmax(220px,1.35fr) minmax(220px,1fr) auto;
     gap:8px;align-items:end;margin-top:8px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+  .bob-scan[hidden]{display:none}
   .bob-scan-intro{grid-column:1 / -1;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
   .bob-scan-intro b{font-size:12.5px}
   .bob-scan-intro span{font-size:11px;color:var(--muted)}
@@ -399,7 +404,7 @@
   @media(max-width:900px){
     aside{width:330px}.scan-kpis{grid-template-columns:1fr}.contract-flow{grid-template-columns:1fr}.flow-arrow{transform:rotate(90deg)}
     .compact-row{grid-template-columns:90px minmax(0,1fr)}.compact-row .ctype{display:none}
-    .case-switcher{width:100%;margin-left:0}.case-option{flex:1;min-width:0}
+    .case-switcher{width:100%;margin-left:0;min-width:0}.case-switcher label{align-items:flex-start;flex-direction:column}
     .bob-scan{grid-template-columns:1fr}.bob-scan-intro,.bob-key-note{grid-column:1}
   }
 </style>
@@ -408,20 +413,24 @@
 
 <header>
   <div class="hd-top">
-    <h1>MergeGuard</h1>
+    <h1>Beef</h1>
     <span class="repo" id="repo-label">Backend sample · loading</span>
-    <div class="case-switcher" role="group" aria-label="Verified conflict cases">
-      <button class="case-option active" data-case="zeppelin">
-        <span>Case #1</span><b>Apache Zeppelin</b><small>#5277 × #5151</small>
-      </button>
-      <button class="case-option" data-case="mypy">
-        <span>Case #2</span><b>mypy</b><small>#21562 × #21531</small>
-      </button>
+    <div class="case-switcher">
+      <label for="case-selector">
+        <span class="case-label">Choose analysis</span>
+        <span class="case-select-wrap">
+          <select class="case-select" id="case-selector" aria-label="Choose analysis source">
+            <option value="zeppelin">Case #1 · Apache Zeppelin · #5277 × #5151</option>
+            <option value="mypy">Case #2 · mypy · #21562 × #21531</option>
+            <option value="custom">Connect your repository with your own IBM Bob API key</option>
+          </select>
+        </span>
+      </label>
     </div>
-    <form class="bob-scan" id="bob-analyze-form" method="post" action="/api/analyze">
+    <form class="bob-scan" id="bob-analyze-form" method="post" action="/api/analyze" hidden>
       <div class="bob-scan-intro">
         <b>Analyze your repository with IBM Bob</b>
-        <span>Compare live open PRs using the same MergeGuard pipeline.</span>
+        <span>Compare live open PRs using the same Beef pipeline.</span>
       </div>
       <label class="bob-field">GitHub repository
         <input id="bob-repository" type="url" inputmode="url" autocomplete="url"
@@ -476,7 +485,7 @@
 <script type="module" src="/demo-live.js"></script>
 
 <!-- ════════════════════════════════════════════════════════════════
-     MergeGuard landing-page integration and first-visit tutorial.
+     Beef landing-page integration and first-visit tutorial.
      1. "← Home" link back to the landing page.
      2. First-visit tutorial coach-marks.
         localStorage keeps the tour state in this browser only.
@@ -514,7 +523,7 @@
 (function(){
   /* ── Home link in the header ── */
   document.querySelector('.hd-top h1').insertAdjacentHTML('afterend',
-    '<a class="ms-home" href="index.html">&#8592; MergeGuard home</a>');
+    '<a class="ms-home" href="index.html">&#8592; Beef home</a>');
 
   /* ── Replay button in the view bar ── */
   document.querySelector('.budget').insertAdjacentHTML('beforeend',
@@ -532,8 +541,8 @@
       text:'The verified conflict stays first. A bounded needs-review queue keeps unverified static signals from overwhelming the reviewer.' },
     { sel:'#tab-graph', title:'The conflict graph',
       text:'Switch views to see PRs and their shared files or semantic contracts. Colored edges represent the exact relationship returned by the backend.' },
-    { sel:'.case-switcher', title:'Compare two real cases',
-      text:'Switch between two evidence-backed cases from Apache Zeppelin and mypy. Each case shows the interacting assumptions, combined impact, source evidence, and verification status.' },
+    { sel:'.case-switcher', title:'Choose an analysis source',
+      text:'Use the dropdown to compare two evidence-backed cases, or connect a public repository with your own IBM Bob API key.' },
   ];
 
   const backdrop = document.getElementById('tut-backdrop');

@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MergeGuard — Catch conflicts between pull requests before they merge</title>
-<meta name="description" content="MergeGuard scans your open pull requests for intent-level conflicts that pass CI and git checks — but silently break logic when merged together.">
+<title>Beef — Catch conflicts between pull requests before they merge</title>
+<meta name="description" content="Beef scans your open pull requests for intent-level conflicts that pass CI and git checks — but silently break logic when merged together.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>
@@ -19,7 +19,7 @@
 </script>
 <style>
 /* ═══════════════════════════════════════════════════════════════
-   MergeGuard landing — IBM Carbon (Gray 100 dark) visual language.
+   Beef landing — IBM Carbon (Gray 100 dark) visual language.
    Tokens first; every component reads from these.
    Motion policy (per Vercel Web Interface Guidelines):
    transform/opacity only, no `transition: all`, reduced-motion honored.
@@ -377,7 +377,7 @@ footer{padding:36px 0 44px}
 <!-- ═══════════ NAV ═══════════ -->
 <header>
   <div class="wrap nav">
-    <a class="brand" href="#top">MergeGuard</a>
+    <a class="brand" href="#top">Beef</a>
     <div class="cta">
       <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch to light theme" aria-pressed="false">
         <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -399,7 +399,7 @@ footer{padding:36px 0 44px}
   <div class="wrap">
     <span class="powered rv">Powered by IBM Bob</span>
     <h1 class="rv">Catch <b>conflicts between pull requests</b> before they <span class="break-word">break</span> your main branch.</h1>
-    <p class="lede rv">MergeGuard scans your open pull requests for intent-level conflicts that
+    <p class="lede rv">Beef scans your open pull requests for intent-level conflicts that
       pass CI and git checks — but silently break logic when merged together.</p>
     <div class="actions rv">
       <a class="btn btn-primary btn-lg" href="demo.html">View live demo <span class="glyph">→</span></a>
@@ -428,7 +428,7 @@ footer{padding:36px 0 44px}
   <div class="wrap">
     <span class="eyebrow rv">Why now</span>
     <h2 class="rv" id="blind-spot-title">AI writes code in parallel. Review systems still think one pull request at a time.</h2>
-    <p class="blind-deck rv">As coding agents generate more changes at once, each PR can be locally correct while carrying assumptions that collide with another. MergeGuard cross-checks those parallel changes before they converge on main.</p>
+    <p class="blind-deck rv">As coding agents generate more changes at once, each PR can be locally correct while carrying assumptions that collide with another. Beef cross-checks those parallel changes before they converge on main.</p>
 
     <div class="blind-grid rv">
       <article class="blind-card">
@@ -455,7 +455,7 @@ footer{padding:36px 0 44px}
         </svg>
         <h3>AI-ERA REVIEW · PR ↔ PR</h3>
         <p class="who">Parallel changes, cross-checked</p>
-        <p>MergeGuard adds the question that parallel development requires: <b>Will these independently generated changes still work together?</b></p>
+        <p>Beef adds the question that parallel development requires: <b>Will these independently generated changes still work together?</b></p>
       </article>
     </div>
   </div>
@@ -481,7 +481,7 @@ footer{padding:36px 0 44px}
         <div class="sc-step active" data-i="0" id="sw-1">
           <span class="n">01 / 04</span>
           <h3>Connect your repository</h3>
-          <p>Paste a GitHub repository URL. MergeGuard fetches its open pull requests
+          <p>Paste a GitHub repository URL. Beef fetches its open pull requests
             and code changes — no install or CI hook required.</p>
           <div class="sc-slot"></div>
         </div>
@@ -516,7 +516,7 @@ footer{padding:36px 0 44px}
           <div class="frame active" data-i="0">
             <div class="bar"><i></i><i></i><i></i><span class="url">live repository analysis</span></div>
             <div class="screen">
-              <img class="product-shot shot-top" src="shots/step-1.png"
+              <img class="product-shot shot-top" src="shots/step-1.png?v=beef-20260731"
                 alt="Current product fetching open pull requests and reporting analysis progress">
             </div>
           </div>
@@ -525,7 +525,7 @@ footer{padding:36px 0 44px}
           <div class="frame" data-i="1">
             <div class="bar"><i></i><i></i><i></i><span class="url">ranked work queue</span></div>
             <div class="screen">
-              <img class="product-shot shot-top" src="shots/step-2.png"
+              <img class="product-shot shot-top" src="shots/step-2.png?v=beef-20260731"
                 alt="Current product work queue prioritizing conflict candidates and review pairs">
             </div>
           </div>
@@ -534,7 +534,7 @@ footer{padding:36px 0 44px}
           <div class="frame" data-i="2">
             <div class="bar"><i></i><i></i><i></i><span class="url">repository relationship map</span></div>
             <div class="screen">
-              <img class="product-shot shot-top" src="shots/step-3.png"
+              <img class="product-shot shot-top" src="shots/step-3.png?v=beef-20260731"
                 alt="Current product relationship graph grouping pull requests into repository sectors">
             </div>
           </div>
@@ -543,7 +543,7 @@ footer{padding:36px 0 44px}
           <div class="frame" data-i="3">
             <div class="bar"><i></i><i></i><i></i><span class="url">conflict judgment and evidence</span></div>
             <div class="screen">
-              <img class="product-shot shot-center" src="shots/step-4.png"
+              <img class="product-shot shot-center" src="shots/step-4.png?v=beef-20260731"
                 alt="Current product detail window explaining assumptions, impact, action, and evidence">
             </div>
           </div>
@@ -563,7 +563,7 @@ footer{padding:36px 0 44px}
       <div class="step tile-accent">
         <span class="num">Step 1</span>
         <h3>Connect your repository</h3>
-        <p>Paste a GitHub repository URL. MergeGuard fetches its open pull requests and code changes — no install or CI hook required.</p>
+        <p>Paste a GitHub repository URL. Beef fetches its open pull requests and code changes — no install or CI hook required.</p>
         <div class="art"><svg width="72" height="20" viewBox="0 0 72 20" fill="none" aria-hidden="true"><rect x="1" y="4" width="30" height="12" stroke="#6f6f6f"/><path d="M36 10h18m0 0-4-4m4 4-4 4" stroke="#78a9ff" stroke-width="1.4"/><circle cx="65" cy="10" r="5" stroke="#78a9ff" stroke-width="1.4"/></svg></div>
       </div>
       <div class="step tile-accent">
@@ -657,7 +657,7 @@ footer{padding:36px 0 44px}
 <!-- ═══════════ FOOTER ═══════════ -->
 <footer>
   <div class="wrap foot">
-    <a class="brand" href="#top">MergeGuard</a>
+    <a class="brand" href="#top">Beef</a>
     <span>IBM AI Builders Challenge 2026</span>
     <nav aria-label="Footer">
       <a href="#" title="TODO: add repository URL">GitHub</a>

@@ -70,7 +70,7 @@ async function analyzeRepositoryWithBob(event) {
   }
 
   submit.disabled = true;
-  document.querySelectorAll("[data-case]").forEach((button) => { button.disabled = true; });
+  $("#case-selector").disabled = true;
   setStatus(`Analyzing ${repository}. This can take several minutes.`, "warn");
   beginProgress();
   const requestBody = JSON.stringify({
@@ -95,10 +95,7 @@ async function analyzeRepositoryWithBob(event) {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || `Analysis failed with HTTP ${response.status}.`);
     state.activeCase = "live";
-    document.querySelectorAll("[data-case]").forEach((button) => {
-      button.classList.remove("active");
-      button.setAttribute("aria-pressed", "false");
-    });
+    $("#case-selector").value = "custom";
     closeFindingModal();
     renderModel(adaptBackendResponse(result));
     finishProgress(true);
@@ -111,7 +108,7 @@ async function analyzeRepositoryWithBob(event) {
     setStatus(error.message || "IBM Bob analysis failed.", "err");
   } finally {
     submit.disabled = false;
-    document.querySelectorAll("[data-case]").forEach((button) => { button.disabled = false; });
+    $("#case-selector").disabled = false;
   }
 }
 
@@ -692,11 +689,8 @@ function loadVerifiedCase(caseKey) {
   const selectedCase = verifiedCases[caseKey];
   if (!selectedCase) return;
   state.activeCase = caseKey;
-  document.querySelectorAll("[data-case]").forEach((button) => {
-    const active = button.dataset.case === caseKey;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-pressed", String(active));
-  });
+  $("#case-selector").value = caseKey;
+  $("#bob-analyze-form").hidden = true;
   closeFindingModal();
   renderModel(adaptBackendResponse(selectedCase));
   setStatus(caseKey === "zeppelin"
@@ -704,11 +698,20 @@ function loadVerifiedCase(caseKey) {
     : "Verified example: two individually passing mypy changes produce a repeatable combined test failure.", "ok");
 }
 
+function chooseAnalysisSource(source) {
+  if (source === "custom") {
+    $("#bob-analyze-form").hidden = false;
+    $("#analysis-progress").hidden = true;
+    setStatus("Enter a public GitHub repository and your IBM Bob API key.", "");
+    requestAnimationFrame(() => $("#bob-repository").focus());
+    return;
+  }
+  loadVerifiedCase(source);
+}
+
 function initialize() {
   $("#bob-analyze-form").addEventListener("submit", analyzeRepositoryWithBob);
-  document.querySelectorAll("[data-case]").forEach((button) => {
-    button.addEventListener("click", () => loadVerifiedCase(button.dataset.case));
-  });
+  $("#case-selector").addEventListener("change", (event) => chooseAnalysisSource(event.target.value));
   $("#tab-queue").addEventListener("click", () => switchView("queue"));
   $("#tab-graph").addEventListener("click", () => switchView("graph"));
   $("#overlay").addEventListener("click", (event) => { if (event.target === $("#overlay")) closeFindingModal(); });
