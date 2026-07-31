@@ -1,75 +1,321 @@
-# PR×PR — 열린 PR 간 의미 충돌 탐지기
+# Beef
 
-> **Workspace status:** `pipeline/`은 TypeScript 연구·수집 파이프라인이고, [`assumption-radar/`](assumption-radar/)는 통합 탐지기와 공통 평가 하네스입니다. `pipeline/data/`는 재라벨 전까지 현재 benchmark가 아닙니다.
+### Cross-PR conflict analysis for AI-era software teams
 
-> 따로 보면 멀쩡한데 합쳐지면 서로의 전제를 깨뜨리는 PR 쌍을, 병합 전에 찾아서 이유와 함께 보여준다.
+Beef finds risks that appear **between pull requests**, not only between one pull request and the main branch.
 
-## 문제
+Two pull requests can each pass review, CI, and Git merge checks while still carrying assumptions that become incompatible when the changes are combined. Beef reduces thousands of possible PR pairs to a bounded review queue, uses IBM Bob to reason about the surviving pairs, and explains the interaction with code-backed evidence.
 
-AI 코딩 에이전트가 PR을 대량 생산하면서 대형 오픈소스엔 열린 PR이 수천 개씩 쌓인다 (openclaw/openclaw: 2,813개, 2026-07 실측). 기존 도구는 전부 [PR ↔ main] 축만 검사한다 — 각자 CI 통과, git 충돌 없음이면 통과. 그런데 **두 PR이 각자는 무결한데 합쳐진 상태에서만 로직이 깨지는** semantic merge conflict는 이 검사망을 전부 통과한다. 결함이 어느 한 PR이 아니라 "조합"에만 존재하기 때문이다.
+[Live demo](https://ibmhackathon.vercel.app/) · [Open the verified cases](https://ibmhackathon.vercel.app/demo.html)
 
-실증 사례: [#101471](https://github.com/openclaw/openclaw/pull/101471)(엔진이 compaction 소유 시 overflow 감시 스킵) × [#95272](https://github.com/openclaw/openclaw/pull/95272)(에이전트 self-compaction 추가). 각자 모범적 테스트를 갖췄지만 테스트 환경이 서로소 — "엔진 있음 + 버튼 있음" 조합은 아무도 검증하지 않았다. 상세: `증거자료_충돌사례_101471x95272.md`
+![Beef relationship map](assumption-radar/public/shots/step-3.png)
 
-## 접근
+## Selected Challenge Theme
 
-핵심 설계는 **LLM 샌드위치**다. 의미 이해(비쌈)는 PR당 1회와 쌍당 1회로 제한하고, 조합 폭발 구간(수백만 쌍)은 결정적 규칙으로 커팅한다.
+**Wildcard Challenge — Build Intelligent Systems for the Future of Work**
 
-```
-open PR 2,813
-  │ Step 0  룰 기반 필터 (LLM 없음) — 문서/테스트/의존성 PR 제외
-  ▼ 2,310
-  │ Step 1  Intent Card 추출 (LLM, PR당 1회) — 의도·행동변화·공유자원·가정을 카드로
-  ▼ 카드 N장
-  │ Step 2  버킷팅 & 프루닝 (LLM 없음) — 자원 역색인 + 임베딩 유사 + 이슈참조 → 점수 상위 K쌍
-  ▼ 후보 ~50쌍
-  │ Step 3  관계 판정 (IBM Bob / Opus 4.8, 쌍당 1회) — 유형·심각도·신뢰도·이유·확인방법
-  ▼
-  시각화  PR 그래프: 노드=PR, 엣지=관계 (빨강=충돌, 노랑=불확실, 보라=중복, 회색=무해)
+AI coding agents are increasing the amount of code that teams can produce, but review capacity has not increased at the same rate. Beef turns AI from a code generator into a review collaborator: it helps engineers decide which pending changes require attention before those changes converge on the main branch.
+
+## Problem Statement
+
+Most development safeguards evaluate one axis:
+
+```text
+Pull request ↔ main branch
 ```
 
-### 단계별 설계 원칙
+CI asks whether one pull request passes its tests. Git asks whether its text can be merged. Review tools explain one diff at a time.
 
-**Step 0 — 배제는 100% 확실할 때만.** 파일 경로 glob 분류(docs/test/deps/config/assets/logic) 후 logic 파일이 1개라도 있으면 통과. 모든 판정에 `reason`을 남겨 감사 가능. git 충돌 PR은 버리지 않고 `deferred`(리베이스 후 복귀). 의존성 봇만 작성자 기준 제외 — AI 에이전트 PR은 우리의 표적 모집단이므로 통과시킨다.
+Parallel development creates a second axis:
 
-**Step 1 — 기계가 조인하는 곳만 구조화, 판단 재료는 문장으로.** 카드 = summary + behavior_changes(surface/before/after) + touched_resources(접두어 `state: config: api: schema: event: file:` — 충돌이 전파되는 통로의 종류) + assumptions(이 PR이 계속 참이라 기대하는 것 — 판정의 재료) + confidence. 스키마와 추출 프롬프트는 한 파일에서만 관리해 추출자 간 형식 불일치를 차단.
+```text
+Pull request A ↔ pull request B
+```
 
-**Step 2 — 후보 생성은 4개 신호의 합산 점수.** ① 자원 정확 일치(강, 인기 자원은 IDF 삭감) ② 자원 유사 일치(중) ③ 문장 임베딩 유사(중 — 이름 흔들림·누락의 안전망, 쌍별 LLM 호출 없이 확장 가능) ④ 도메인∩파일 겹침(약). 대형 버킷(>15)은 쌍 생성 스킵(제곱 폭발 방지). 임계값이 아닌 **예산 방식**(상위 K=50)으로 커팅. false negative는 시드 회귀 세트(확인된 진짜 쌍의 생존 검사) + 기각 쌍 샘플 재판정으로 측정.
+PR A may change a behavior, lifecycle, API, event, schema, or configuration that PR B assumes will remain stable. Neither PR must be individually incorrect. The regression can exist only in the combined state.
 
-**Step 3 — 열고 나서 조인다.** "충돌인가?"를 먼저 묻지 않는다(yes-bias 방지). ① 병합 상태의 상호작용을 자유 기술 → ② 공유 자원의 소유권/수명 규칙 대조, 가정 상호 검증(의무 체크) → ③ 관계 유형 분류: `semantic_conflict / duplicate / supersedes / depends_on / complements / unrelated` → ④ 충돌이면 심각도·신뢰도·근거 인용·**확인 방법**(사람이 볼 코드 지점 — 이것 없는 충돌 판정은 무효). 판정 불가면 정직하게 `uncertain`(그래프의 노란 엣지, Bob 코드 검사 대기열). 품질은 양성/음성 대조군과 재현성 테스트로 측정. Bob의 검사 도구로 레포 코드를 직접 열어 uncertain을 확정 판정으로 승격 — 세션 리포트 export가 제출물.
+Checking every pair directly is impractical. A repository with `n` open pull requests has `n(n−1)/2` possible pairs. A useful system must therefore solve two different problems:
 
-**시각화 — 그래프 + 판정 패널 + 깔때기.** 후보 쌍에 걸린 PR만 렌더(~70 노드). 엣지 클릭 → 두 카드 나란히, 충돌하는 가정 마주 보기, 확인 체크리스트. 데이터 계약은 Step 2/3 출력 JSONL 그대로.
+1. Find the small number of pairs that may interact.
+2. Explain whether their assumptions are actually incompatible.
 
-## 현재 상태
+## Solution Description
 
-| 단계 | 상태 |
-|---|---|
-| Step 0 | ✅ 구현 완료, openclaw 2,813개 실측 (pass 82.1%) — `pipeline/` |
-| Step 1 | 설계 확정, 구현 대기 |
-| Step 2 | 설계 확정 (`설계_Step2_버킷팅프루닝.md`), 구현 대기 |
-| Step 3 | 설계 진행 중 (관계 유형 확장 반영), Bob 파일럿 예정 |
-| 시각화 | 컨셉 목업 완료, 프론트 구현 대기 (담당: 최원재) |
+Beef adds a cross-PR review layer on top of existing CI and Git checks.
 
-## 실행 (Step 0)
+It:
+
+1. Collects open pull requests and their code changes.
+2. Removes non-comparable, stacked, and mechanically conflicting cases.
+3. Extracts directional evidence such as changed declarations, removed resources, new references, API routes, events, schemas, flags, and lifecycle behavior.
+4. Produces a bounded set of candidate pairs.
+5. Uses IBM Bob to compare the intent and assumptions of each surviving pair.
+6. Shows conflict candidates and uncertain cases in a ranked work queue and repository relationship map.
+7. When a repository supports it, runs isolated **Base / PR A / PR B / PR A+B** verification.
+
+Beef does not replace CI, compilers, static analysis, or human review. It connects those tools and adds the missing PR-to-PR decision layer.
+
+## AI Approach and Architecture
+
+The architecture deliberately separates deterministic evidence from AI judgment. Deterministic stages make the search reproducible and affordable; IBM Bob handles the semantic comparison that rules alone cannot settle.
+
+```mermaid
+flowchart TD
+    A[GitHub open pull requests] --> B[Collection and Git preflight]
+    B --> C[Directional change model]
+    C --> D[Contract and resource witnesses]
+    D --> E[Candidate-pair selection]
+    E --> F[IBM Bob semantic judgment]
+    F --> G{Evidence gate}
+    G -->|Conflict candidate| H[Ranked review queue]
+    G -->|Uncertain| I[Needs human review]
+    G -->|No causal evidence| J[No action]
+    H --> K[Optional Base / A / B / A+B replay]
+    I --> K
+    K --> L[Explanation and relationship map]
+```
+
+### 1. Collection and Git preflight
+
+Beef fetches open PR metadata and patches from GitHub. It normalizes every PR against the same target branch and uses merge-tree analysis to separate:
+
+- stacked or ancestor PRs;
+- PRs already conflicting with the current base;
+- ordinary Git text conflicts; and
+- cleanly mergeable pairs that require semantic analysis.
+
+Mechanical conflicts are not presented as silent semantic findings.
+
+### 2. Directional evidence extraction
+
+The analyzer preserves whether code was added, removed, or replaced. It builds witnesses for interactions such as:
+
+- a removed declaration and a new reference;
+- a changed function signature and a newly added old-arity call;
+- an event producer change and a new consumer;
+- an API route change and a cross-language client call;
+- competing replacements of the same behavior;
+- a changed schema, feature flag, or lifecycle assumption.
+
+Shared files and similar names create relevance, not automatic conflict verdicts.
+
+### 3. Candidate-pair selection
+
+Beef joins compatible witness roles and resource identities to reduce the quadratic pair space. Candidate selection is bounded so that cost remains predictable on repositories of different sizes. A small exploration sample of unflagged pairs is retained to measure retrieval false negatives.
+
+### 4. IBM Bob semantic judgment
+
+IBM Bob receives a standardized case rather than an unstructured repository dump. The case contains:
+
+- the two PR summaries and patches;
+- extracted contracts and directional witnesses;
+- Git preflight results;
+- the suspected assumption on each side; and
+- stable evidence identifiers.
+
+Bob describes the merged interaction first, compares the two assumptions, and then returns a structured verdict. Beef accepts an AI conflict candidate only when the response points back to evidence from **both** PRs. Missing, one-sided, or unstable evidence becomes `needs review` rather than a confident conflict.
+
+### 5. Executable replay
+
+For supported repositories, the verifier runs:
+
+```text
+Base  → must pass
+PR A  → must pass
+PR B  → must pass
+PR A+B → must repeatedly fail with the same signature
+```
+
+Only that pattern is executable evidence of a pair-induced regression. Baseline failures, single-PR failures, installation errors, and timeouts are recorded separately as inconclusive execution results.
+
+## How IBM Bob Was Used
+
+IBM Bob was used as both a development collaborator and a core runtime component.
+
+### During development
+
+The team used IBM Bob to:
+
+- inspect real PR pairs and challenge early heuristic verdicts;
+- compare independently developed detector approaches;
+- review false positives and missed retrieval cases;
+- refine the evidence contract between deterministic analysis and AI judgment;
+- test whether the same case remained understandable when the underlying model changed; and
+- review implementation changes before they entered the integrated pipeline.
+
+This feedback was converted into automated regression tests and frozen benchmark cases instead of remaining as one-off prompt changes.
+
+### Inside the product
+
+In live analysis, IBM Bob is the semantic judge for the bounded candidate set. Beef controls the surrounding workflow:
+
+- GitHub collection;
+- pair generation and pruning;
+- Git normalization;
+- evidence extraction;
+- structured prompt construction;
+- bilateral evidence validation;
+- uncertainty routing;
+- optional combined execution; and
+- visualization.
+
+Bob therefore provides the reasoning capability, while Beef standardizes what Bob sees, validates what it returns, and turns the result into a repeatable engineering workflow.
+
+The browser-provided Bob API key is used only for the active analysis request. It is not written to project files, stored by the application, or returned to the browser response.
+
+## Verified Demonstration Cases
+
+### Case #1 — Apache Zeppelin
+
+PR [#5277](https://github.com/apache/zeppelin/pull/5277) and PR [#5151](https://github.com/apache/zeppelin/pull/5151) change opposite sides of the same restart contract.
+
+- The Python MCP client treats a missing `noteId` as “restart globally.”
+- The Java server change requires `noteId` on the original route and moves global restart behavior to another route.
+
+The pair illustrates a cross-language producer/consumer contract disagreement that Git cannot identify from textual overlap alone.
+
+### Case #2 — mypy
+
+PR [#21562](https://github.com/python/mypy/pull/21562) and PR [#21531](https://github.com/python/mypy/pull/21531) independently pass their relevant checks but disagree about the diagnostic produced for the same invalid input.
+
+In the captured replay:
+
+- Base passed;
+- PR A passed;
+- PR B passed;
+- A+B failed;
+- the same failure was reproduced; and
+- the failure remained when the merge order was reversed.
+
+![Combined regression evidence](assumption-radar/public/shots/step-4.png)
+
+These cases are demonstrations of the workflow, not a claim that Beef can detect every class of semantic conflict in every language.
+
+## What a Reviewer Sees
+
+- A ranked queue containing only conflict candidates and bounded review cases.
+- A repository map that groups PRs by the code area they affect.
+- The hidden assumption carried by each PR.
+- The change that violates the other PR's assumption.
+- The likely combined impact.
+- The exact code evidence used by the analyzer.
+- A recommended next action.
+- Execution evidence when Base/A/B/A+B replay is available.
+
+## Technical Execution and Trust Controls
+
+- Deterministic findings cannot be erased by an AI response.
+- AI output must reference evidence from both PRs.
+- Uncertainty is an explicit result, not silently converted into conflict.
+- Git text conflicts and stacked PRs are separated from semantic findings.
+- Base and single-PR failures are excluded from pair-induced regression claims.
+- Repeated AI judgments must agree before they are marked stable.
+- Frozen benchmark inputs cannot be modified by the improvement agent.
+- API keys are server-side request inputs and are not committed or persisted.
+- Docker verification does not receive host credentials or the Docker socket.
+
+## Run Locally
+
+Requirements:
+
+- Node.js 20 or later
+- Git
+- A GitHub token for higher API limits
+- IBM Bob credentials for live semantic judgment
+- Docker only when executable replay is requested
 
 ```bash
-cd pipeline
-cp .env.example .env   # GITHUB_TOKEN 설정
+git clone https://github.com/Comingtoyouliv2/ibmhackathon.git
+cd ibmhackathon/assumption-radar
 npm install
-npm run fetch          # open PR 수집 (중단해도 이어받기 됨)
-npm run step0          # 분류 + 리포트 → data/report.md, data/step0.csv
+npm start
 ```
 
-상세: `pipeline/README.md`
+Open [http://127.0.0.1:4317](http://127.0.0.1:4317).
 
-## 저장소 구조
+The two verified demo cases work without credentials. In the demo selector, choose **Connect your repository with your own IBM Bob API key** to analyze another public repository.
 
+### CLI examples
+
+```bash
+# Deterministic scan
+GITHUB_TOKEN=... npm run scan -- owner/repository
+
+# IBM Bob semantic judgment
+GITHUB_TOKEN=... BOBSHELL_API_KEY=... \
+  npm run scan -- owner/repository \
+  --ai --ai-provider bob --ai-repeats 1
+
+# Verify the top three candidates with Base/A/B/A+B replay
+GITHUB_TOKEN=... BOBSHELL_API_KEY=... \
+  npm run scan -- owner/repository \
+  --preflight --ai --ai-provider bob \
+  --verify --verify-limit 3
 ```
-pipeline/               Step 0 구현 (TypeScript)
-팀공유_핵심정리.md        팀 온보딩용 개념 정리
-증거자료_충돌사례_*.md    실제 충돌 후보 쌍 정밀 분석
-설계_Step2_*.md          Step 2 설계 문서
+
+## Deployment
+
+The static application and API routes are configured for Vercel:
+
+```bash
+cd assumption-radar
+npm install
+npx vercel
 ```
 
-## 일정 (2026-07-07 → 07-30)
+At minimum, configure `GITHUB_TOKEN` in the deployment environment.
 
-1주차 Step 0~1 + 카드 품질 검증 · 2주차 Step 2~3 + Bob 파일럿 + 시각화 구현 · 3주차 실레포 end-to-end + 백/프론트 통합 · 7/25~ 데모 영상.
+IBM Bob Shell is not bundled in the Vercel runtime. Live Bob analysis uses an access-controlled runner where Bob Shell is installed:
+
+```text
+Browser
+  → Vercel /api/analyze
+  → authenticated HTTPS Bob runner
+  → IBM Bob
+```
+
+Set these server-side variables:
+
+```bash
+BOB_RUNNER_URL=https://your-private-runner.example/api/bob-judge
+BOB_RUNNER_TOKEN=replace-with-a-long-random-secret
+GITHUB_TOKEN=github_pat_...
+```
+
+The verified cases remain available even when a live Bob runner is not configured.
+
+## Validation
+
+```bash
+cd assumption-radar
+npm run check
+npm test
+npm run vercel-build
+```
+
+Current local validation:
+
+- 130 automated tests passing;
+- syntax checks for the analyzer, API, AI adapters, verifier, evaluator, and frontend;
+- frozen semantic benchmark coverage for clean positives and hard negatives; and
+- separate evaluation of triage quality, blocker quality, evidence quality, abstention, and end-to-end pair retrieval.
+
+Benchmark scores are used as regression indicators, not as proof of universal cross-language generalization.
+
+## Repository Structure
+
+| Path | Purpose |
+|---|---|
+| `assumption-radar/src/` | GitHub collection, deterministic analyzer, AI adapters, preflight, CLI, and verification |
+| `assumption-radar/public/` | Landing page, live demo, relationship map, and evidence UI |
+| `assumption-radar/api/` | Vercel API routes |
+| `assumption-radar/test/` | Automated regression tests and fixtures |
+| `assumption-radar/eval/` | Pair-judgment and end-to-end radar evaluation |
+| `assumption-radar/benchmarks/` | Frozen, adjudicated, live, and historical evaluation assets |
+| `assumption-radar/docs/` | Framework, evaluation rubric, and integration documentation |
+
+## Feasibility and Real-World Impact
+
+Beef is designed to fit beside existing review systems rather than replace them. Teams can begin with candidate ranking and evidence-backed explanations, then enable executable replay only for repositories with known build profiles.
+
+The immediate value is reviewer time: instead of manually reasoning about every possible pair, maintainers receive a small, ordered list of changes that may interact and an explanation of why. As AI coding increases parallel change volume, this cross-PR decision layer becomes a practical way to preserve review quality without requiring review teams to grow at the same rate.
