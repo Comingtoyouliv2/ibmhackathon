@@ -1,0 +1,1298 @@
+{
+  "generatedAt": "2026-07-05T06:14:26.937168Z",
+  "dataset": {
+    "coin": "BTC",
+    "start": "2023-05-21",
+    "end": "2026-06-29",
+    "days": 1136,
+    "nativeInterval": "1d",
+    "sourceFiles": [
+      "hl_daily.csv"
+    ]
+  },
+  "baseline": {
+    "upDayProb": 0.503,
+    "avgDailyRetPct": 0.099,
+    "dailyVolPct": 2.44
+  },
+  "hypotheses": [
+    {
+      "id": "fed-cut-pump",
+      "question": "FED가 금리를 인하하면 비트코인은 올랐을까?",
+      "questionEn": "Does BTC pump when the Fed cuts rates?",
+      "category": "macro",
+      "method": "FOMC 발표일 00:00 UTC 종가 → 익일 00:00 UTC 종가 (발표 당일 일봉 수익률). 발표는 당일 18~19시 UTC.",
+      "stats": {
+        "n": 6,
+        "hits": 2,
+        "hitRate": 0.333,
+        "baselineRate": 0.503,
+        "avgReturnPct": -1.02,
+        "medianReturnPct": -0.49,
+        "pValue": 0.8935,
+        "verdict": "rejected"
+      },
+      "cases": [
+        {
+          "date": "2024-09-18",
+          "label": "-50bp → 4.75-5.00%",
+          "returnPct": 2.53,
+          "priceBefore": 60283.0,
+          "priceAfter": 61807.0,
+          "hit": true
+        },
+        {
+          "date": "2024-11-07",
+          "label": "-25bp → 4.50-4.75%",
+          "returnPct": 0.38,
+          "priceBefore": 75637.0,
+          "priceAfter": 75924.0,
+          "hit": true
+        },
+        {
+          "date": "2024-12-18",
+          "label": "-25bp → 4.25-4.50%",
+          "returnPct": -5.56,
+          "priceBefore": 106158.0,
+          "priceAfter": 100259.0,
+          "hit": false
+        },
+        {
+          "date": "2025-09-17",
+          "label": "-25bp → 4.00-4.25%",
+          "returnPct": -0.26,
+          "priceBefore": 116758.0,
+          "priceAfter": 116458.0,
+          "hit": false
+        },
+        {
+          "date": "2025-10-29",
+          "label": "-25bp → 3.75-4.00%",
+          "returnPct": -2.46,
+          "priceBefore": 112867.0,
+          "priceAfter": 110096.0,
+          "hit": false
+        },
+        {
+          "date": "2025-12-10",
+          "label": "-25bp → 3.50-3.75%",
+          "returnPct": -0.73,
+          "priceBefore": 92643.0,
+          "priceAfter": 91971.0,
+          "hit": false
+        }
+      ],
+      "chart": {
+        "type": "eventBars"
+      },
+      "ai": {
+        "claude": {
+          "verdict": "rejected",
+          "confidence": "medium",
+          "commentary_ko": "연준 금리 인하 당일 비트코인이 상승했다는 가설은 기각되었습니다. 6번의 금리 인하 중 2번만 상승했고(33%), 평균 수익률은 -1.02%로 오히려 하락했으며, 통계적 유의성도 없습니다(p=0.89). 다만 샘플이 6개로 매우 적고, 2024년 초반 인하는 상승했으나 후반으로 갈수록 하락 패턴을 보여 시장 국면에 따라 반응이 다를 수 있습니다.",
+          "model": "claude-sonnet-4-5"
+        },
+        "openai": {
+          "verdict": "rejected",
+          "confidence": "low",
+          "commentary_ko": "샘플 크기가 작아 통계적 유의미성을 확보하기 어렵습니다. 6개의 사례 중 2개만이 비트코인 가격 상승을 보였으며, 평균 수익률도 음수입니다. 따라서 FED 금리 인하가 비트코인 가격 상승을 유발한다고 결론 내리기 어렵습니다. 시장의 다른 요인들도 고려해야 합니다.",
+          "model": "gpt-4o"
+        },
+        "agreement": "agree"
+      }
+    },
+    {
+      "id": "fed-hike-dump",
+      "question": "FED가 금리를 인상하면 비트코인은 떨어졌을까?",
+      "questionEn": "Does BTC dump when the Fed hikes rates?",
+      "category": "macro",
+      "method": "FOMC 발표일 00:00 UTC 종가 → 익일 00:00 UTC 종가 (발표 당일 일봉 수익률). 발표는 당일 18~19시 UTC.",
+      "stats": {
+        "n": 1,
+        "hits": 0,
+        "hitRate": 0.0,
+        "baselineRate": 0.497,
+        "avgReturnPct": 0.42,
+        "medianReturnPct": 0.42,
+        "pValue": 1.0,
+        "verdict": "inconclusive"
+      },
+      "cases": [
+        {
+          "date": "2023-07-26",
+          "label": "+25bp → 5.25-5.50%",
+          "returnPct": 0.42,
+          "priceBefore": 29218.6,
+          "priceAfter": 29340.6,
+          "hit": false
+        }
+      ],
+      "chart": {
+        "type": "eventBars"
+      },
+      "ai": {
+        "claude": {
+          "verdict": "inconclusive",
+          "confidence": "low",
+          "commentary_ko": "3년간 Hyperliquid 데이터에서 금리 인상 사례가 단 1건(2023년 7월)만 포착되었고, 해당일 BTC는 오히려 0.42% 상승했습니다. 샘플이 1건에 불과해 통계적으로 의미 있는 결론을 내릴 수 없으며(p-value=1.0), 금리 인상과 BTC 하락의 연관성을 판단하기에는 데이터가 극도로 부족합니다. 더 긴 기간과 많은 FOMC 이벤트 데이터가 필요합니다.",
+          "model": "claude-sonnet-4-5"
+        },
+        "openai": {
+          "verdict": "inconclusive",
+          "confidence": "low",
+          "commentary_ko": "이 통계는 단 하나의 사례(n=1)만을 포함하고 있어, 금리 인상 시 비트코인 가격이 하락하는지를 판단하기에는 충분하지 않습니다. 샘플 크기가 너무 작아 신뢰할 수 있는 결론을 내리기 어렵습니다. 추가적인 데이터와 분석이 필요합니다.",
+          "model": "gpt-4o"
+        },
+        "agreement": "agree"
+      }
+    },
+    {
+      "id": "fomc-volatility",
+      "question": "FOMC 발표일엔 비트코인 변동성이 평소보다 클까?",
+      "questionEn": "Is BTC more volatile on FOMC days?",
+      "category": "macro",
+      "method": "일간 수익률 절대값(%)을 FOMC일 vs 비FOMC일로 비교, 부트스트랩 20,000회 p-value.",
+      "stats": {
+        "n": 25,
+        "hits": 8,
+        "hitRate": 0.32,
+        "baselineRate": null,
+        "avgReturnPct": 1.99,
+        "medianReturnPct": 1.7,
+        "pValue": 0.192,
+        "verdict": "rejected",
+        "extra": {
+          "fomcAvgRangePct": 1.99,
+          "normalAvgRangePct": 1.7
+        }
+      },
+      "cases": [
+        {
+          "date": "2023-06-14",
+          "label": "FOMC",
+          "returnPct": 0.11,
+          "hit": false
+        },
+        {
+          "date": "2023-07-26",
+          "label": "FOMC",
+          "returnPct": 0.18,
+          "hit": false
+        },
+        {
+          "date": "2023-09-20",
+          "label": "FOMC",
+          "returnPct": 1.69,
+          "hit": false
+        },
+        {
+          "date": "2023-11-01",
+          "label": "FOMC",
+          "returnPct": 0.49,
+          "hit": false
+        },
+        {
+          "date": "2023-12-13",
+          "label": "FOMC",
+          "returnPct": 0.59,
+          "hit": false
+        },
+        {
+          "date": "2024-01-31",
+          "label": "FOMC",
+          "returnPct": 0.77,
+          "hit": false
+        },
+        {
+          "date": "2024-03-20",
+          "label": "FOMC",
+          "returnPct": 8.32,
+          "hit": true
+        },
+        {
+          "date": "2024-05-01",
+          "label": "FOMC",
+          "returnPct": 4.97,
+          "hit": true
+        },
+        {
+          "date": "2024-06-12",
+          "label": "FOMC",
+          "returnPct": 3.19,
+          "hit": true
+        },
+        {
+          "date": "2024-07-31",
+          "label": "FOMC",
+          "returnPct": 0.86,
+          "hit": false
+        },
+        {
+          "date": "2024-09-18",
+          "label": "FOMC",
+          "returnPct": 3.54,
+          "hit": true
+        },
+        {
+          "date": "2024-11-07",
+          "label": "FOMC",
+          "returnPct": 8.97,
+          "hit": true
+        },
+        {
+          "date": "2024-12-18",
+          "label": "FOMC",
+          "returnPct": 0.0,
+          "hit": false
+        },
+        {
+          "date": "2025-01-29",
+          "label": "FOMC",
+          "returnPct": 0.8,
+          "hit": false
+        },
+        {
+          "date": "2025-03-19",
+          "label": "FOMC",
+          "returnPct": 1.49,
+          "hit": false
+        },
+        {
+          "date": "2025-05-07",
+          "label": "FOMC",
+          "returnPct": 2.23,
+          "hit": true
+        },
+        {
+          "date": "2025-06-18",
+          "label": "FOMC",
+          "returnPct": 2.16,
+          "hit": true
+        },
+        {
+          "date": "2025-07-30",
+          "label": "FOMC",
+          "returnPct": 0.1,
+          "hit": false
+        },
+        {
+          "date": "2025-09-17",
+          "label": "FOMC",
+          "returnPct": 1.21,
+          "hit": false
+        },
+        {
+          "date": "2025-10-29",
+          "label": "FOMC",
+          "returnPct": 1.09,
+          "hit": false
+        },
+        {
+          "date": "2025-12-10",
+          "label": "FOMC",
+          "returnPct": 2.26,
+          "hit": true
+        },
+        {
+          "date": "2026-01-28",
+          "label": "FOMC",
+          "returnPct": 1.04,
+          "hit": false
+        },
+        {
+          "date": "2026-03-18",
+          "label": "FOMC",
+          "returnPct": 1.32,
+          "hit": false
+        },
+        {
+          "date": "2026-04-29",
+          "label": "FOMC",
+          "returnPct": 1.33,
+          "hit": false
+        },
+        {
+          "date": "2026-06-17",
+          "label": "FOMC",
+          "returnPct": 0.98,
+          "hit": false
+        }
+      ],
+      "chart": {
+        "type": "eventBars",
+        "unit": "range%"
+      },
+      "ai": {
+        "claude": {
+          "verdict": "rejected",
+          "confidence": "medium",
+          "commentary_ko": "3년간 25개 FOMC 발표일 데이터 분석 결과, FOMC일 평균 변동성(1.99%)이 평소(1.7%)보다 약간 높지만 통계적으로 유의미하지 않습니다(p=0.192). 샘플 수가 25개로 제한적이고, 일부 극단적 변동(8.32%, 8.97%)이 평균을 왜곡했을 가능성이 있어 FOMC일이 항상 변동성이 크다고 단정하기 어렵습니다. 개별 이벤트마다 시장 상황에 따라 반응이 다를 수 있으니 주의가 필요합니다.",
+          "model": "claude-sonnet-4-5"
+        },
+        "openai": {
+          "verdict": "rejected",
+          "confidence": "medium",
+          "commentary_ko": "FOMC 발표일에 비트코인의 변동성이 더 크다는 가설은 기각되었습니다. 샘플 크기(n=25)가 작아 통계적 유의미성을 확보하기 어렵고, p-value가 0.192로 유의수준 0.05보다 높아 가설을 지지할 증거가 부족합니다. 시장의 다른 요인들도 변동성에 영향을 줄 수 있으므로 주의가 필요합니다.",
+          "model": "gpt-4o"
+        },
+        "agreement": "agree"
+      }
+    },
+    {
+      "id": "crash-bounce",
+      "question": "하루 -5% 급락하면 다음날 반등할까?",
+      "questionEn": "Does BTC bounce the day after a -5% crash?",
+      "category": "price",
+      "method": "UTC 일봉 기준 당일 수익률이 -5% 이하인 날 탐지 → 다음날 수익률 측정. 이항검정 vs 무조건부 상승확률.",
+      "stats": {
+        "n": 25,
+        "hits": 12,
+        "hitRate": 0.48,
+        "baselineRate": 0.503,
+        "avgReturnPct": 0.83,
+        "medianReturnPct": -0.46,
+        "pValue": 0.6664,
+        "verdict": "rejected"
+      },
+      "cases": [
+        {
+          "date": "2023-06-06",
+          "label": "당일 -5.1%",
+          "returnPct": 5.86,
+          "hit": true
+        },
+        {
+          "date": "2023-08-18",
+          "label": "당일 -7.4%",
+          "returnPct": -2.12,
+          "hit": false
+        },
+        {
+          "date": "2023-12-12",
+          "label": "당일 -5.8%",
+          "returnPct": 0.59,
+          "hit": true
+        },
+        {
+          "date": "2024-01-13",
+          "label": "당일 -7.7%",
+          "returnPct": 0.3,
+          "hit": true
+        },
+        {
+          "date": "2024-03-06",
+          "label": "당일 -6.5%",
+          "returnPct": 3.54,
+          "hit": true
+        },
+        {
+          "date": "2024-03-17",
+          "label": "당일 -6.0%",
+          "returnPct": 4.74,
+          "hit": true
+        },
+        {
+          "date": "2024-03-20",
+          "label": "당일 -8.3%",
+          "returnPct": 9.46,
+          "hit": true
+        },
+        {
+          "date": "2024-04-03",
+          "label": "당일 -6.1%",
+          "returnPct": 0.78,
+          "hit": true
+        },
+        {
+          "date": "2024-07-05",
+          "label": "당일 -5.2%",
+          "returnPct": -0.76,
+          "hit": false
+        },
+        {
+          "date": "2024-08-03",
+          "label": "당일 -5.9%",
+          "returnPct": -1.3,
+          "hit": false
+        },
+        {
+          "date": "2024-08-06",
+          "label": "당일 -7.2%",
+          "returnPct": 3.76,
+          "hit": true
+        },
+        {
+          "date": "2024-08-28",
+          "label": "당일 -5.4%",
+          "returnPct": -0.7,
+          "hit": false
+        },
+        {
+          "date": "2024-11-26",
+          "label": "당일 -5.0%",
+          "returnPct": -1.15,
+          "hit": false
+        },
+        {
+          "date": "2024-12-19",
+          "label": "당일 -5.6%",
+          "returnPct": -2.8,
+          "hit": false
+        },
+        {
+          "date": "2025-01-08",
+          "label": "당일 -5.1%",
+          "returnPct": -1.93,
+          "hit": false
+        },
+        {
+          "date": "2025-03-04",
+          "label": "당일 -8.5%",
+          "returnPct": 1.24,
+          "hit": true
+        },
+        {
+          "date": "2025-03-10",
+          "label": "당일 -6.4%",
+          "returnPct": -2.63,
+          "hit": false
+        },
+        {
+          "date": "2025-04-07",
+          "label": "당일 -6.1%",
+          "returnPct": 1.03,
+          "hit": true
+        },
+        {
+          "date": "2025-10-11",
+          "label": "당일 -7.3%",
+          "returnPct": -1.91,
+          "hit": false
+        },
+        {
+          "date": "2025-11-15",
+          "label": "당일 -5.1%",
+          "returnPct": 1.01,
+          "hit": true
+        },
+        {
+          "date": "2025-11-21",
+          "label": "당일 -5.4%",
+          "returnPct": -1.77,
+          "hit": false
+        },
+        {
+          "date": "2026-01-30",
+          "label": "당일 -5.2%",
+          "returnPct": -0.46,
+          "hit": false
+        },
+        {
+          "date": "2026-02-01",
+          "label": "당일 -6.5%",
+          "returnPct": -2.28,
+          "hit": false
+        },
+        {
+          "date": "2026-02-06",
+          "label": "당일 -14.0%",
+          "returnPct": 12.12,
+          "hit": true
+        },
+        {
+          "date": "2026-06-03",
+          "label": "당일 -6.6%",
+          "returnPct": -3.91,
+          "hit": false
+        }
+      ],
+      "chart": {
+        "type": "eventBars"
+      },
+      "ai": {
+        "claude": {
+          "verdict": "rejected",
+          "confidence": "high",
+          "commentary_ko": "25건의 -5% 급락 후 다음날 상승 확률은 48%로, 평소 상승률 50.3%보다 오히려 낮았습니다(p=0.67). 평균 수익률 0.83%는 중앙값 -0.46%와 괴리가 크며, 이는 소수의 큰 반등(3월 20일 +9.46% 등)이 평균을 왜곡했기 때문입니다. 급락 후 자동 반등을 기대하는 전략은 통계적 근거가 없습니다.",
+          "model": "claude-sonnet-4-5"
+        },
+        "openai": {
+          "verdict": "rejected",
+          "confidence": "medium",
+          "commentary_ko": "이 가설은 기각되었습니다. 표본 크기(n=25)가 작아 신뢰도가 낮으며, p-값이 0.6664로 통계적으로 유의미하지 않습니다. 또한, 평균 수익률은 양수이지만 중앙값은 음수로, 일관된 반등 패턴을 보이지 않습니다. 시장 상황에 따라 결과가 달라질 수 있으므로 주의가 필요합니다.",
+          "model": "gpt-4o"
+        },
+        "agreement": "agree"
+      }
+    },
+    {
+      "id": "negative-funding",
+      "question": "펀딩비가 마이너스면(숏 과밀) 다음날 반등할까?",
+      "questionEn": "Does negative funding (crowded shorts) precede a bounce?",
+      "category": "price",
+      "method": "Hyperliquid BTC 펀딩비가 음수인 날(숏이 롱에게 지불 = 숏 과밀) 탐지 → 다음날 수익률. 이항검정 vs 무조건부 상승확률.",
+      "stats": {
+        "n": 205,
+        "hits": 113,
+        "hitRate": 0.551,
+        "baselineRate": 0.503,
+        "avgReturnPct": 0.23,
+        "medianReturnPct": 0.17,
+        "pValue": 0.0953,
+        "verdict": "weak"
+      },
+      "cases": [
+        {
+          "date": "2026-03-16",
+          "label": "펀딩 -0.0003%",
+          "returnPct": 2.85,
+          "hit": true
+        },
+        {
+          "date": "2026-03-18",
+          "label": "펀딩 -0.0010%",
+          "returnPct": -3.59,
+          "hit": false
+        },
+        {
+          "date": "2026-03-21",
+          "label": "펀딩 -0.0001%",
+          "returnPct": -2.27,
+          "hit": false
+        },
+        {
+          "date": "2026-03-22",
+          "label": "펀딩 -0.0025%",
+          "returnPct": -1.51,
+          "hit": false
+        },
+        {
+          "date": "2026-03-23",
+          "label": "펀딩 -0.0007%",
+          "returnPct": 4.48,
+          "hit": true
+        },
+        {
+          "date": "2026-03-24",
+          "label": "펀딩 -0.0011%",
+          "returnPct": -0.48,
+          "hit": false
+        },
+        {
+          "date": "2026-04-01",
+          "label": "펀딩 -0.0011%",
+          "returnPct": -0.23,
+          "hit": false
+        },
+        {
+          "date": "2026-04-03",
+          "label": "펀딩 -0.0003%",
+          "returnPct": 0.08,
+          "hit": true
+        },
+        {
+          "date": "2026-04-05",
+          "label": "펀딩 -0.0006%",
+          "returnPct": 2.56,
+          "hit": true
+        },
+        {
+          "date": "2026-04-06",
+          "label": "펀딩 -0.0005%",
+          "returnPct": -0.24,
+          "hit": false
+        },
+        {
+          "date": "2026-04-07",
+          "label": "펀딩 -0.0003%",
+          "returnPct": 4.5,
+          "hit": true
+        },
+        {
+          "date": "2026-04-10",
+          "label": "펀딩 -0.0009%",
+          "returnPct": 1.61,
+          "hit": true
+        },
+        {
+          "date": "2026-04-15",
+          "label": "펀딩 -0.0015%",
+          "returnPct": 0.9,
+          "hit": true
+        },
+        {
+          "date": "2026-04-18",
+          "label": "펀딩 -0.0019%",
+          "returnPct": -1.79,
+          "hit": false
+        },
+        {
+          "date": "2026-04-19",
+          "label": "펀딩 -0.0022%",
+          "returnPct": -2.5,
+          "hit": false
+        },
+        {
+          "date": "2026-04-20",
+          "label": "펀딩 -0.0005%",
+          "returnPct": 2.79,
+          "hit": true
+        },
+        {
+          "date": "2026-04-21",
+          "label": "펀딩 -0.0000%",
+          "returnPct": 0.64,
+          "hit": true
+        },
+        {
+          "date": "2026-04-23",
+          "label": "펀딩 -0.0008%",
+          "returnPct": 0.11,
+          "hit": true
+        },
+        {
+          "date": "2026-04-26",
+          "label": "펀딩 -0.0004%",
+          "returnPct": 1.32,
+          "hit": true
+        },
+        {
+          "date": "2026-04-28",
+          "label": "펀딩 -0.0020%",
+          "returnPct": -1.33,
+          "hit": false
+        },
+        {
+          "date": "2026-04-29",
+          "label": "펀딩 -0.0010%",
+          "returnPct": -0.74,
+          "hit": false
+        },
+        {
+          "date": "2026-04-30",
+          "label": "펀딩 -0.0026%",
+          "returnPct": 0.74,
+          "hit": true
+        },
+        {
+          "date": "2026-05-01",
+          "label": "펀딩 -0.0006%",
+          "returnPct": 2.48,
+          "hit": true
+        },
+        {
+          "date": "2026-05-02",
+          "label": "펀딩 -0.0005%",
+          "returnPct": 0.59,
+          "hit": true
+        },
+        {
+          "date": "2026-05-05",
+          "label": "펀딩 -0.0017%",
+          "returnPct": 1.33,
+          "hit": true
+        },
+        {
+          "date": "2026-05-06",
+          "label": "펀딩 -0.0012%",
+          "returnPct": 0.67,
+          "hit": true
+        },
+        {
+          "date": "2026-05-07",
+          "label": "펀딩 -0.0000%",
+          "returnPct": -1.73,
+          "hit": false
+        },
+        {
+          "date": "2026-05-09",
+          "label": "펀딩 -0.0005%",
+          "returnPct": 0.59,
+          "hit": true
+        },
+        {
+          "date": "2026-05-10",
+          "label": "펀딩 -0.0024%",
+          "returnPct": 1.91,
+          "hit": true
+        },
+        {
+          "date": "2026-05-11",
+          "label": "펀딩 -0.0006%",
+          "returnPct": -0.57,
+          "hit": false
+        },
+        {
+          "date": "2026-05-13",
+          "label": "펀딩 -0.0004%",
+          "returnPct": -1.46,
+          "hit": false
+        },
+        {
+          "date": "2026-05-15",
+          "label": "펀딩 -0.0008%",
+          "returnPct": -2.44,
+          "hit": false
+        },
+        {
+          "date": "2026-05-16",
+          "label": "펀딩 -0.0017%",
+          "returnPct": -1.22,
+          "hit": false
+        },
+        {
+          "date": "2026-05-24",
+          "label": "펀딩 -0.0003%",
+          "returnPct": 0.39,
+          "hit": true
+        },
+        {
+          "date": "2026-05-26",
+          "label": "펀딩 -0.0009%",
+          "returnPct": -1.8,
+          "hit": false
+        },
+        {
+          "date": "2026-06-10",
+          "label": "펀딩 -0.0006%",
+          "returnPct": -0.35,
+          "hit": false
+        },
+        {
+          "date": "2026-06-17",
+          "label": "펀딩 -0.0012%",
+          "returnPct": -1.78,
+          "hit": false
+        },
+        {
+          "date": "2026-06-18",
+          "label": "펀딩 -0.0015%",
+          "returnPct": -2.39,
+          "hit": false
+        },
+        {
+          "date": "2026-06-26",
+          "label": "펀딩 -0.0001%",
+          "returnPct": 0.53,
+          "hit": true
+        },
+        {
+          "date": "2026-06-28",
+          "label": "펀딩 -0.0006%",
+          "returnPct": -0.74,
+          "hit": false
+        }
+      ],
+      "chart": {
+        "type": "eventBars",
+        "note": "최근 40건 표시"
+      },
+      "ai": {
+        "claude": {
+          "verdict": "weak",
+          "confidence": "medium",
+          "commentary_ko": "205일 샘플에서 음수 펀딩 다음날 상승확률 55.1%로 기준선(50.3%)보다 4.8%p 높지만, p값 0.095로 통계적 유의성이 경계선입니다. 평균 수익률 +0.23%는 미미하며, 샘플 케이스를 보면 큰 손실(-3.59%, -2.5%)도 자주 발생해 실전 활용 시 리스크 관리가 필수적입니다. 더 긴 기간의 데이터로 재검증이 필요합니다.",
+          "model": "claude-sonnet-4-5"
+        },
+        "openai": {
+          "verdict": "weak",
+          "confidence": "medium",
+          "commentary_ko": "이 백테스트는 펀딩비가 마이너스일 때 다음날 반등할 가능성을 조사했습니다. 205개의 샘플 중 113번의 반등이 있었으며, 이는 55.1%의 성공률을 나타냅니다. 그러나 p-value가 0.0953으로 통계적으로 유의미하지 않으며, 샘플 크기가 제한적이기 때문에 결과의 신뢰도가 낮을 수 있습니다. 시장의 다른 요인들도 고려해야 합니다.",
+          "model": "gpt-4o"
+        },
+        "agreement": "agree"
+      }
+    },
+    {
+      "id": "green-streak",
+      "question": "3일 연속 오르면 다음날도 오를까? (모멘텀 지속)",
+      "questionEn": "After 3 green days, does day 4 continue up?",
+      "category": "price",
+      "method": "UTC 일봉 3연속 양봉 다음날 수익률. 이항검정 vs 무조건부 상승확률.",
+      "stats": {
+        "n": 135,
+        "hits": 65,
+        "hitRate": 0.481,
+        "baselineRate": 0.503,
+        "avgReturnPct": 0.46,
+        "medianReturnPct": -0.04,
+        "pValue": 0.7217,
+        "verdict": "rejected"
+      },
+      "cases": [
+        {
+          "date": "2025-06-26",
+          "label": "3연속 상승",
+          "returnPct": -0.39,
+          "hit": false
+        },
+        {
+          "date": "2025-06-30",
+          "label": "3연속 상승",
+          "returnPct": -1.11,
+          "hit": false
+        },
+        {
+          "date": "2025-07-11",
+          "label": "3연속 상승",
+          "returnPct": 1.34,
+          "hit": true
+        },
+        {
+          "date": "2025-07-12",
+          "label": "3연속 상승",
+          "returnPct": -0.1,
+          "hit": false
+        },
+        {
+          "date": "2025-09-04",
+          "label": "3연속 상승",
+          "returnPct": -0.84,
+          "hit": false
+        },
+        {
+          "date": "2025-09-13",
+          "label": "3연속 상승",
+          "returnPct": -0.1,
+          "hit": false
+        },
+        {
+          "date": "2025-10-04",
+          "label": "3연속 상승",
+          "returnPct": 0.15,
+          "hit": true
+        },
+        {
+          "date": "2025-10-05",
+          "label": "3연속 상승",
+          "returnPct": 0.91,
+          "hit": true
+        },
+        {
+          "date": "2025-10-06",
+          "label": "3연속 상승",
+          "returnPct": 0.91,
+          "hit": true
+        },
+        {
+          "date": "2025-10-07",
+          "label": "3연속 상승",
+          "returnPct": -2.64,
+          "hit": false
+        },
+        {
+          "date": "2025-10-21",
+          "label": "3연속 상승",
+          "returnPct": -2.01,
+          "hit": false
+        },
+        {
+          "date": "2025-10-26",
+          "label": "3연속 상승",
+          "returnPct": 2.62,
+          "hit": true
+        },
+        {
+          "date": "2025-10-27",
+          "label": "3연속 상승",
+          "returnPct": -0.43,
+          "hit": false
+        },
+        {
+          "date": "2025-11-03",
+          "label": "3연속 상승",
+          "returnPct": -3.62,
+          "hit": false
+        },
+        {
+          "date": "2025-12-10",
+          "label": "3연속 상승",
+          "returnPct": -0.73,
+          "hit": false
+        },
+        {
+          "date": "2025-12-22",
+          "label": "3연속 상승",
+          "returnPct": -0.06,
+          "hit": false
+        },
+        {
+          "date": "2025-12-29",
+          "label": "3연속 상승",
+          "returnPct": -0.79,
+          "hit": false
+        },
+        {
+          "date": "2026-01-04",
+          "label": "3연속 상승",
+          "returnPct": 1.0,
+          "hit": true
+        },
+        {
+          "date": "2026-01-05",
+          "label": "3연속 상승",
+          "returnPct": 2.54,
+          "hit": true
+        },
+        {
+          "date": "2026-01-06",
+          "label": "3연속 상승",
+          "returnPct": -0.04,
+          "hit": false
+        },
+        {
+          "date": "2026-01-14",
+          "label": "3연속 상승",
+          "returnPct": 1.62,
+          "hit": true
+        },
+        {
+          "date": "2026-01-15",
+          "label": "3연속 상승",
+          "returnPct": -1.37,
+          "hit": false
+        },
+        {
+          "date": "2026-01-24",
+          "label": "3연속 상승",
+          "returnPct": -0.43,
+          "hit": false
+        },
+        {
+          "date": "2026-01-29",
+          "label": "3연속 상승",
+          "returnPct": -5.2,
+          "hit": false
+        },
+        {
+          "date": "2026-03-12",
+          "label": "3연속 상승",
+          "returnPct": 0.51,
+          "hit": true
+        },
+        {
+          "date": "2026-03-13",
+          "label": "3연속 상승",
+          "returnPct": 0.57,
+          "hit": true
+        },
+        {
+          "date": "2026-03-14",
+          "label": "3연속 상승",
+          "returnPct": 0.4,
+          "hit": true
+        },
+        {
+          "date": "2026-03-15",
+          "label": "3연속 상승",
+          "returnPct": 2.25,
+          "hit": true
+        },
+        {
+          "date": "2026-03-16",
+          "label": "3연속 상승",
+          "returnPct": 2.85,
+          "hit": true
+        },
+        {
+          "date": "2026-03-17",
+          "label": "3연속 상승",
+          "returnPct": -1.32,
+          "hit": false
+        },
+        {
+          "date": "2026-04-06",
+          "label": "3연속 상승",
+          "returnPct": -0.24,
+          "hit": false
+        },
+        {
+          "date": "2026-04-12",
+          "label": "3연속 상승",
+          "returnPct": -3.16,
+          "hit": false
+        },
+        {
+          "date": "2026-04-18",
+          "label": "3연속 상승",
+          "returnPct": -1.79,
+          "hit": false
+        },
+        {
+          "date": "2026-04-23",
+          "label": "3연속 상승",
+          "returnPct": 0.11,
+          "hit": true
+        },
+        {
+          "date": "2026-04-24",
+          "label": "3연속 상승",
+          "returnPct": -1.05,
+          "hit": false
+        },
+        {
+          "date": "2026-05-03",
+          "label": "3연속 상승",
+          "returnPct": -0.15,
+          "hit": false
+        },
+        {
+          "date": "2026-05-07",
+          "label": "3연속 상승",
+          "returnPct": -1.73,
+          "hit": false
+        },
+        {
+          "date": "2026-05-11",
+          "label": "3연속 상승",
+          "returnPct": -0.57,
+          "hit": false
+        },
+        {
+          "date": "2026-05-26",
+          "label": "3연속 상승",
+          "returnPct": -1.8,
+          "hit": false
+        },
+        {
+          "date": "2026-06-16",
+          "label": "3연속 상승",
+          "returnPct": -0.98,
+          "hit": false
+        }
+      ],
+      "chart": {
+        "type": "eventBars",
+        "note": "최근 40건 표시"
+      },
+      "ai": {
+        "claude": {
+          "verdict": "rejected",
+          "confidence": "high",
+          "commentary_ko": "3일 연속 상승 후 4일째도 상승할 확률은 48.1%로 기준 확률(50.3%)보다 오히려 낮으며, p-value 0.72로 통계적 유의성이 없습니다. 평균 수익률은 0.46%이지만 중앙값은 -0.04%로 음수이며, 135건의 충분한 샘플에서 모멘텀 지속 가설은 기각됩니다. 비트코인에서 단기 연속 상승은 추가 상승을 예측하는 신뢰할 만한 신호가 아닙니다.",
+          "model": "claude-sonnet-4-5"
+        },
+        "openai": {
+          "verdict": "rejected",
+          "confidence": "high",
+          "commentary_ko": "이 가설은 3일 연속 상승 후 다음 날도 상승할 가능성이 있다는 가설은 통계적으로 유의미하지 않습니다. 샘플 크기(n=135)가 충분히 크지만, 히트율(0.481)이 기준 상승 확률(0.503)보다 낮고, p-값(0.7217)이 높아 가설을 기각합니다. 시장의 다른 요인들이 결과에 영향을 미칠 수 있습니다.",
+          "model": "gpt-4o"
+        },
+        "agreement": "agree"
+      }
+    },
+    {
+      "id": "weekend-effect",
+      "question": "주말엔 비트코인이 약할까? (주말 효과)",
+      "questionEn": "Is BTC weaker on weekends?",
+      "category": "seasonality",
+      "method": "UTC 일봉 요일별 평균 수익률. 주말(토·일) 평균이 평일 대비 낮은지 부트스트랩 검정.",
+      "stats": {
+        "n": 324,
+        "hits": 153,
+        "hitRate": 0.472,
+        "baselineRate": 0.506,
+        "avgReturnPct": 0.051,
+        "medianReturnPct": 0.118,
+        "pValue": 0.3208,
+        "verdict": "rejected",
+        "extra": {
+          "weekendAvgPct": 0.051,
+          "weekdayAvgPct": 0.118
+        }
+      },
+      "cases": [],
+      "chart": {
+        "type": "categoryBars",
+        "data": [
+          {
+            "label": "Mon",
+            "avgReturnPct": 0.139,
+            "n": 163,
+            "upRate": 0.521
+          },
+          {
+            "label": "Tue",
+            "avgReturnPct": 0.485,
+            "n": 162,
+            "upRate": 0.562
+          },
+          {
+            "label": "Wed",
+            "avgReturnPct": -0.085,
+            "n": 162,
+            "upRate": 0.444
+          },
+          {
+            "label": "Thu",
+            "avgReturnPct": 0.407,
+            "n": 162,
+            "upRate": 0.5
+          },
+          {
+            "label": "Fri",
+            "avgReturnPct": -0.356,
+            "n": 162,
+            "upRate": 0.444
+          },
+          {
+            "label": "Sat",
+            "avgReturnPct": 0.114,
+            "n": 162,
+            "upRate": 0.525
+          },
+          {
+            "label": "Sun",
+            "avgReturnPct": -0.011,
+            "n": 162,
+            "upRate": 0.521
+          }
+        ]
+      },
+      "ai": {
+        "claude": {
+          "verdict": "rejected",
+          "confidence": "medium",
+          "commentary_ko": "3년간 324일의 데이터로 검증한 결과, 주말 평균 수익률(0.051%)이 평일(0.118%)보다 낮긴 하지만 통계적으로 유의미하지 않습니다(p=0.32). 승률도 47.2%로 기준치보다 낮아 주말 효과를 신뢰하기 어렵습니다. 샘플 수가 충분하지만 시장 국면에 따라 달라질 수 있으니 주의하세요.",
+          "model": "claude-sonnet-4-5"
+        },
+        "openai": {
+          "verdict": "rejected",
+          "confidence": "medium",
+          "commentary_ko": "주어진 데이터에 따르면, 주말의 평균 수익률은 평일보다 낮지만, p-값이 0.3208로 통계적으로 유의미하지 않습니다. 샘플 크기(n=324)가 충분하지 않을 수 있으며, 시장의 다른 요인들이 결과에 영향을 미쳤을 가능성도 있습니다. 따라서 주말 효과를 확신하기에는 부족합니다.",
+          "model": "gpt-4o"
+        },
+        "agreement": "agree"
+      }
+    },
+    {
+      "id": "uptober",
+      "question": "'업토버'는 진짜일까? 10월은 항상 오를까?",
+      "questionEn": "Is 'Uptober' real?",
+      "category": "seasonality",
+      "method": "월별 복리 수익률 집계. 10월 평균이 나머지 달 대비 높은지 부트스트랩 검정.",
+      "stats": {
+        "n": 3,
+        "hits": 2,
+        "hitRate": 0.667,
+        "baselineRate": 0.543,
+        "avgReturnPct": 11.1,
+        "medianReturnPct": 2.3,
+        "pValue": 0.1255,
+        "verdict": "inconclusive"
+      },
+      "cases": [
+        {
+          "date": "2023-10",
+          "label": "2023년 10월",
+          "returnPct": 28.21,
+          "hit": true
+        },
+        {
+          "date": "2024-10",
+          "label": "2024년 10월",
+          "returnPct": 10.26,
+          "hit": true
+        },
+        {
+          "date": "2025-10",
+          "label": "2025년 10월",
+          "returnPct": -5.17,
+          "hit": false
+        }
+      ],
+      "chart": {
+        "type": "categoryBars",
+        "data": [
+          {
+            "label": "Jan",
+            "avgReturnPct": 3.24,
+            "n": 3,
+            "upRate": 0.667
+          },
+          {
+            "label": "Feb",
+            "avgReturnPct": 1.64,
+            "n": 3,
+            "upRate": 0.333
+          },
+          {
+            "label": "Mar",
+            "avgReturnPct": 3.3,
+            "n": 3,
+            "upRate": 0.667
+          },
+          {
+            "label": "Apr",
+            "avgReturnPct": 6.51,
+            "n": 3,
+            "upRate": 0.667
+          },
+          {
+            "label": "May",
+            "avgReturnPct": 4.29,
+            "n": 4,
+            "upRate": 0.75
+          },
+          {
+            "label": "Jun",
+            "avgReturnPct": -4.02,
+            "n": 4,
+            "upRate": 0.5
+          },
+          {
+            "label": "Jul",
+            "avgReturnPct": 4.54,
+            "n": 3,
+            "upRate": 0.667
+          },
+          {
+            "label": "Aug",
+            "avgReturnPct": -8.43,
+            "n": 3,
+            "upRate": 0.0
+          },
+          {
+            "label": "Sep",
+            "avgReturnPct": 4.92,
+            "n": 3,
+            "upRate": 0.667
+          },
+          {
+            "label": "Oct",
+            "avgReturnPct": 11.1,
+            "n": 3,
+            "upRate": 0.667
+          },
+          {
+            "label": "Nov",
+            "avgReturnPct": 9.41,
+            "n": 3,
+            "upRate": 0.667
+          },
+          {
+            "label": "Dec",
+            "avgReturnPct": 1.34,
+            "n": 3,
+            "upRate": 0.333
+          }
+        ]
+      },
+      "ai": {
+        "claude": {
+          "verdict": "inconclusive",
+          "confidence": "low",
+          "commentary_ko": "3년의 데이터만으로는 '업토버' 현상을 확정할 수 없습니다. 10월 평균 수익률(11.1%)이 다른 달(54.3% 상승 확률)보다 높아 보이지만, p-value 0.1255로 통계적 유의성이 부족하며, 샘플 수가 너무 적어 우연일 가능성을 배제할 수 없습니다. 2025년 10월은 오히려 -5.17% 하락했으므로, 매년 10월이 반드시 오른다는 가설은 지지되지 않습니다.",
+          "model": "claude-sonnet-4-5"
+        },
+        "openai": {
+          "verdict": "inconclusive",
+          "confidence": "low",
+          "commentary_ko": "이 데이터는 3년간의 작은 샘플 크기로 인해 '업토버' 가설을 확실히 검증하기에는 부족합니다. p-값이 0.1255로 통계적으로 유의미하지 않으며, 이는 10월의 수익률이 다른 달보다 높다는 것을 확신할 수 없음을 의미합니다. 시장의 다른 요인들이 결과에 영향을 미칠 수 있으므로, 더 긴 기간의 데이터가 필요합니다.",
+          "model": "gpt-4o"
+        },
+        "agreement": "agree"
+      }
+    }
+  ]
+}
